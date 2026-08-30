@@ -1,0 +1,2 @@
+playwright>=1.40
+fastmcp>=3.0
