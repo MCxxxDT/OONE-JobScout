@@ -4,11 +4,12 @@
 因为 playwright 的CDP会话特征会被BOSS安全JS检测并清空DOM。
 execute（打招呼）暂保留 playwright 路径，T3 前需同样改造。
 """
+import base64
 import json
 import os
 import time
 
-from . import browser, config as cfgmod, greeter, ledger, rawcdp, scorer
+from . import browser, config as cfgmod, guard, greeter, ledger, rawcdp, scorer
 
 
 def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
@@ -57,6 +58,49 @@ def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
         sess.close_tab()
         sess.close()
     return {"city": city, "found": found, "scored": scored, "guard": g.summary()}
+
+
+def login_state(cfg, poll_s=15):
+    """裸CDP开临时标签页检查BOSS登录态/风控（t1脚本与MCP server共用）。
+    历史：playwright 版 connect+goto 在已登录 profile 上会被BOSS安全JS清空页面
+    并误报"未登录"（2026-08-31 实测），故统一走裸CDP。
+    返回 {logged_in, risk, url, shot, hint, error?}；risk 非空时护栏自动 pause。"""
+    sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
+    try:
+        sess.open_tab("https://www.zhipin.com/")
+        st = None
+        for _ in range(int(poll_s)):
+            time.sleep(1)
+            st = sess.state()
+            if st and not st.get("blank") and st.get("bodyLen", 0) > 100:
+                break
+        if not st or st.get("blank") or st.get("bodyLen", 0) <= 0:
+            return {"logged_in": False, "risk": None, "url": (st or {}).get("href", ""),
+                    "shot": "", "hint": None, "error": "page blank or load failed"}
+        if st.get("captcha") or st.get("security"):
+            guard.Guard(cfg).pause("risk: login_state captcha/security")
+            return {"logged_in": False, "risk": "captcha/security", "url": st.get("href", ""),
+                    "shot": "", "hint": "页面被风控质询，人工确认后 run resume_guard"}
+        info = {}
+        try:
+            info = json.loads(sess.eval(rawcdp.LOGIN_JS) or "{}")
+        except Exception:
+            info = {}
+        shot_path = ""
+        try:
+            shot = sess._send("Page.captureScreenshot", {"format": "png"}, sid=sess.sid)
+            shot_path = cfgmod.state_path("login_state.png")
+            with open(shot_path, "wb") as f:
+                f.write(base64.b64decode(shot["data"]))
+        except Exception:
+            pass
+        logged = bool(info.get("avatar")) and not info.get("loginBtn")
+        return {"logged_in": logged, "risk": None, "url": info.get("url", st.get("href", "")),
+                "shot": shot_path,
+                "hint": None if logged else "请在调试Chrome窗口内扫码登录BOSS后重试"}
+    finally:
+        sess.close_tab()
+        sess.close()
 
 
 def build_plan(cfg, min_score=None, limit=15):

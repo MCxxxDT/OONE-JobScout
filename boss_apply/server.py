@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastmcp import FastMCP
 
 from boss_apply import config as cfgmod, flows, guard as guardmod, ledger
-from boss_apply import browser
+
 
 mcp = FastMCP("boss-apply")
 
@@ -27,20 +27,8 @@ def _g(cfg):
 
 @mcp.tool()
 def check_login() -> dict:
-    """连接调试Chrome(9222)，检查BOSS直聘登录状态与风控信号。每次开工先调用。"""
-    cfg = _cfg()
-    page = browser.get_zhipin_page(cfg)
-    page.goto("https://www.zhipin.com/", timeout=30000)
-    page.wait_for_timeout(2500)
-    ok = browser.is_logged_in(page)
-    risk = None
-    try:
-        browser.check_risk(page)
-    except browser.RiskControl as e:
-        risk = str(e)
-        _g(cfg).pause("risk: %s" % risk)
-    return {"logged_in": ok, "risk": risk, "url": page.url,
-            "hint": None if ok else "请在调试Chrome窗口内扫码登录BOSS后重试"}
+    """连接调试Chrome(9335)，检查BOSS直聘登录状态与风控信号（裸CDP，不触发反爬清空）。每次开工先调用。"""
+    return flows.login_state(_cfg())
 
 
 @mcp.tool()

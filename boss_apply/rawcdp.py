@@ -38,6 +38,14 @@ STATE_JS = """
 }))()
 """
 
+LOGIN_JS = """
+(() => JSON.stringify({
+  url: location.href,
+  avatar: !!(document.querySelector('.nav-figure') || document.querySelector('.header-nav-figure')),
+  loginBtn: !!document.querySelector('.header-login-btn') || (document.body ? /登录\\/注册/.test(document.body.innerText.slice(0, 3000)) : false)
+}))()
+"""
+
 CARD_JS = """
 (() => {
   const out = [];
