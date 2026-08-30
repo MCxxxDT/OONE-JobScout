@@ -102,6 +102,10 @@ check("plan.json 生成 3 条", plan["count"] == 3)
 
 print("== 4. 护栏 ==")
 g = guard.Guard(cfg)
+# 防重复跟发：已有 greet ok 的岗位被 filter_greeted 剔除
+ledger.append({"action": "greet", "status": "ok", "href": "/job_detail/f1", "title": "dup", "ts": "x"})
+fj = flows.filter_greeted([{"href": "/job_detail/f1", "title": "dup"}, {"href": "/job_detail/f5", "title": "keep"}])
+check("已沟通岗位不再重复执行", [j["href"] for j in fj] == ["/job_detail/f5"], str([j["href"] for j in fj]))
 ok, _ = g.check_greet("杭州")
 check("初始可沟通", ok)
 for _ in range(2):

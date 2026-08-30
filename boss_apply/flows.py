@@ -115,8 +115,16 @@ def build_plan(cfg, min_score=None, limit=15):
     }
 
 
+def filter_greeted(jobs):
+    """剔除台账中已有 greet ok 记录的岗位，防止重复跟发。"""
+    greeted = {r.get("href") for r in ledger.load_all()
+               if r.get("action") == "greet" and r.get("status") == "ok"}
+    return [j for j in jobs if not (j.get("href") and j["href"] in greeted)]
+
+
 def execute_jobs(cfg, g, jobs, max_count=10):
     """带护栏执行打招呼（裸CDP版）。任何风控信号 → 立即熔断并写台账。"""
+    jobs = filter_greeted(jobs)
     done, results = 0, []
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:

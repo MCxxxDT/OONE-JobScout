@@ -1,0 +1,50 @@
+{
+ "executed": 7,
+ "results": [
+  {
+   "ok": true,
+   "title": "Agent产品经理【Base南京B+轮独角兽企业】",
+   "company": "南京炫佳"
+  },
+  {
+   "ok": true,
+   "title": "AI产品经理",
+   "company": "淘宝闪购"
+  },
+  {
+   "ok": true,
+   "title": "AI 产品经理",
+   "company": "长安仁恒"
+  },
+  {
+   "ok": true,
+   "title": "AI Native 产品经理（Agent 方向）",
+   "company": "靖安科技"
+  },
+  {
+   "ok": true,
+   "title": "ai产品经理",
+   "company": "炜呈智能科技"
+  },
+  {
+   "ok": true,
+   "title": "AI Agent产品经理 - 杭州/北京",
+   "company": "Talking猎头"
+  },
+  {
+   "ok": true,
+   "title": "ai产品经理",
+   "company": "蚂蚁集团"
+  }
+ ],
+ "guard": {
+  "date": "2026-08-31",
+  "greet_count": 9,
+  "daily_limit": 100,
+  "city_counts": {
+   "杭州": 9
+  },
+  "search_count": 4,
+  "paused_reason": null
+ }
+}
