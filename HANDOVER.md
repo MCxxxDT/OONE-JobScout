@@ -37,6 +37,7 @@
 ```
 D:\LENOVO\Desktop\简历\boss-apply\
 ├── launch_debug_chrome.bat      # 调试Chrome启动器（9333端口+专用profile）
+├── .git / .gitignore            # git仓库已建（见第10节三板斧）；state/guard_state.json与*.png不入库
 ├── config.json                  # 全部配置：城市码/关键词/打分词表/公司池/文案/护栏参数
 ├── boss_apply\
 │   ├── rawcdp.py                # ★核心：裸CDP层（websocket直连，不enable任何CDP域）
@@ -97,9 +98,28 @@ $PY scripts/probe_readonly_rate.py   # 频率探针
 $PY scripts/t3_single_greet.py       # 单次沟通验证（有 y/N 闸）
 ```
 
-## 9. 风格要求
+## 9. 硬性行为规范
 
 - 回复用简体中文；对用户直给结论，别客套。
 - 每完成一段实质工作，追加记录到 `.workbuddy/memory/当日.md`（append-only）。
 - 交付文件用 present_files 展示。
 - 涉及真实沟通（打招呼）的动作，先扫描给用户看，再执行；不要自作主张群发。
+
+## 10. 用户三板斧原则（必须逐字遵循）
+
+**任何代码修改都要走三步：修改 → 测试 → git。**
+
+1. **修改**：动手改代码前不需要请示，但一次改动聚焦一件事。
+2. **测试**（改完立即跑，全绿才算过）：
+   ```bash
+   cd "D:/LENOVO/Desktop/简历/boss-apply"
+   PY="/d/work buddy/C-migrated/Users/LENOVO/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
+   $PY -m compileall -q boss_apply        # ① 语法/导入检查
+   $PY scripts/t0_dryrun.py               # ② 离线全链路干跑（15项断言，不连浏览器）
+   # ③ 与改动相关的专项验证（如改greeter就跑t3_single_greet.py，改flows扫描就跑T2式单页扫描）
+   ```
+3. **git**（两分支，无例外）：
+   - 测试**通过** → 存档：`git add -A && git commit -m "<改动一句话>（测试：compileall+t0+<专项> 通过）"`
+   - 测试**不通过** → 回滚：`git restore .`（必要时 `git restore --staged .` 先），回滚后重新排查，**禁止把失败状态留在工作区或带病 commit**。
+
+仓库现状：已 `git init`（main 分支），基线 commit = `3236374`（T0-T3 验收+探针通过的稳定态）。commit 身份用 `git -c user.name="zhangyetao" -c user.email="mcdt888888@163.com"`（机器未配全局身份）。运行时状态（guard_state.json/截图）在 .gitignore 里，不入库。
