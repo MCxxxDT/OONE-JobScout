@@ -36,7 +36,7 @@
 
 ```
 D:\LENOVO\Desktop\简历\boss-apply\
-├── launch_debug_chrome.bat      # 调试Chrome启动器（9333端口+专用profile）
+├── launch_debug_chrome.bat      # 调试Chrome启动器（9335端口+专用profile）
 ├── .git / .gitignore            # git仓库已建（见第10节三板斧）；state/guard_state.json与*.png不入库
 ├── config.json                  # 全部配置：城市码/关键词/打分词表/公司池/文案/护栏参数
 ├── boss_apply\
@@ -55,7 +55,8 @@ D:\LENOVO\Desktop\简历\boss-apply\
 
 ## 5. 运行环境（踩过坑，照做）
 
-- **启动调试 Chrome**：跑 `launch_debug_chrome.bat`（= 9333 端口 + `--user-data-dir=C:\Users\LENOVO\chrome-cdp-profile`）。用户登录态在此 profile 的浏览器里。
+- **启动调试 Chrome**：跑 `launch_debug_chrome.bat`（= 9335 端口 + `--user-data-dir=C:\Users\LENOVO\chrome-cdp-profile`）。用户登录态在此 profile 的浏览器里。
+- **端口迁移记录（2026-08-31）**：9333 → **9335**。原因：用户的另一个爬虫项目占用 9333，共存必冲突。同步更新 config.json cdp_endpoint / launch_debug_chrome.bat / rawcdp.py 默认参数 / diag 脚本。历史验收记录中的 9333 均为迁移前事实，不影响现状。
 - **Python 解释器**（venv，playwright/fastmcp/websocket-client 已装）：
   - Git Bash 路径：`/d/work buddy/C-migrated/Users/LENOVO/.workbuddy/binaries/python/envs/default/Scripts/python.exe`
   - 注意 `C:\Users\LENOVO\.workbuddy` 是 junction，真实路径在 `D:\work buddy\C-migrated\...`，引用要走真实路径。

@@ -1,5 +1,5 @@
 {
-  "cdp_endpoint": "http://127.0.0.1:9333",
+  "cdp_endpoint": "http://127.0.0.1:9335",
   "profile": "test",
   "daily_limit": 100,
   "search_daily_limit": 600,

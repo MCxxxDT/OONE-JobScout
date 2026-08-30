@@ -9,7 +9,7 @@ from urllib.request import urlopen
 
 import websocket
 
-CDP_HTTP = "http://127.0.0.1:9333"
+CDP_HTTP = "http://127.0.0.1:9335"
 
 ver = json.loads(urlopen(CDP_HTTP + "/json/version", timeout=5).read().decode())
 ws = websocket.create_connection(ver["webSocketDebuggerUrl"], timeout=20, suppress_origin=True)

@@ -98,7 +98,7 @@ def active_days(text):
 class RawCDP:
     """浏览器级裸CDP会话 + 一个复用标签页。"""
 
-    def __init__(self, cdp_http="http://127.0.0.1:9333"):
+    def __init__(self, cdp_http="http://127.0.0.1:9335"):
         ver = json.loads(urlopen(cdp_http + "/json/version", timeout=5).read().decode())
         self.ws = websocket.create_connection(ver["webSocketDebuggerUrl"], timeout=30, suppress_origin=True)
         self._mid = 0
