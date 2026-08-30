@@ -72,6 +72,11 @@ def score(job, detail, cfg):
         if k in company:
             return 0, "kill: company contains %r" % k
 
+    # 岗位类型门槛（仅看标题）：销售/客服/前后端/算法等非PM岗，JD关键词堆分也无效
+    for k in w.get("title_kill", []):
+        if k in title:
+            return 0, "kill: title role-gate %r" % k
+
     # boss_active: -1/None = 新版卡片无此字段（未知），放行；详情页会补验
     ba = job.get("boss_active", 999)
     if ba is not None and ba >= 0 and ba > cfg.get("boss_active_max_days", 14):

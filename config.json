@@ -33,6 +33,7 @@
     "商业化产品经理"
   ],
   "score_words": {
+    "title_kill": ["销售", "客服", "电销", "地推", "后端", "前端", "算法", "开发工程师", "测试工程师", "实施工程师", "评测工程师"],
     "strong": ["agent", "智能体", "workflow", "prompt", "coze", "dify", "fastmcp", "mcp", "trae", "cursor", "claude code", "vibe coding", "大模型应用", "llm", "ai产品", "产品助理", "编排", "工具链", "agent harness", "fde", "ai native", "多模态"],
     "medium": ["需求分析", "原型", "prd", "用户调研", "数据分析", "商业化", "变现", "增长", "私域", "to b", "tob", "b端", "saas"],
     "weak": ["模型训练", "算法研究", "运维", "sre", "devops", "销售", "客服", "电话销售", "地推", "c++", "嵌入式"],

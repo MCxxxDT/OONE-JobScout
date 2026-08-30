@@ -76,6 +76,14 @@ check("离散届别列表26/28届被拒", s_slash == 0, "=%.1f" % s_slash)
 s_conf, _ = scorer.score({"title": "AI产品经理", "company": "某科技", "salary": "", "tags": "", "boss_active": 0},
                          "负责第28届创新大赛的产品组织，Agent方向。", cfg)
 check("'第28届大赛'不误杀", s_conf > 0, "=%.1f" % s_conf)
+s_sales, _ = scorer.score({"title": "销售（AI、大模型方向）", "company": "阿里云计算有限公司",
+                           "salary": "30-60K·15薪", "tags": "", "boss_active": 0},
+                          "负责AI与大模型产品的agent/智能体/prompt方案落地。", cfg)
+check("销售岗JD堆分仍被title_kill拦", s_sales == 0, "=%.1f" % s_sales)
+s_dev, _ = scorer.score({"title": "大模型后端开发", "company": "某技术公司",
+                         "salary": "12-16K", "tags": "", "boss_active": 0},
+                        "负责大模型Agent后端开发，workflow编排。", cfg)
+check("后端开发岗被title_kill拦", s_dev == 0, "=%.1f" % s_dev)
 
 print("== 2. 台账与去重 ==")
 for j in FAKE:
