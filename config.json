@@ -8,6 +8,7 @@
   "page_wait_ms": 3000,
   "boss_active_max_days": 14,
   "min_score": 8,
+  "target_jie": 27,
   "empty_rounds_switch": 3,
   "salary_range": [3, 30],
   "blacklist_companies": [],

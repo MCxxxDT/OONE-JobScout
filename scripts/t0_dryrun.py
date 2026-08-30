@@ -38,6 +38,14 @@ FAKE = [
      "company": "语核科技（上海）有限公司", "salary": "8-12K", "tags": "",
      "boss_active": 3,
      "detail": "负责Agent应用产品规划，熟悉MCP、FastMCP、workflow编排，商业化场景落地。"},
+    {"href": "/job_detail/f6", "city": "杭州", "title": "AI产品经理（限28届）",
+     "company": "某互联网科技有限公司", "salary": "20-35K", "tags": "",
+     "boss_active": 1,
+     "detail": "负责Agent产品的设计与落地，熟悉MCP与workflow编排。"},
+    {"href": "/job_detail/f7", "city": "上海", "title": "Agent产品经理",
+     "company": "某智能科技有限公司", "salary": "10-15K", "tags": "",
+     "boss_active": 2,
+     "detail": "负责Agent应用产品规划，欢迎26-28届在校生投递，熟悉workflow编排。"},
 ]
 
 fails = []
@@ -61,6 +69,13 @@ check("外包公司一票否决(公司名)", scores["/job_detail/f2"] == 0)
 check("BOSS不活跃一票否决", scores["/job_detail/f3"] == 0)
 check("算法训练方向被压分", scores["/job_detail/f4"] < cfg["min_score"], "=%.1f" % scores["/job_detail/f4"])
 check("语核Agent岗高分通过", scores["/job_detail/f5"] >= 12, "=%.1f" % scores["/job_detail/f5"])
+check("限28届岗一票否决", scores["/job_detail/f6"] == 0, "=%.1f" % scores["/job_detail/f6"])
+check("26-28届范围岗放行(含27)", scores["/job_detail/f7"] >= cfg["min_score"], "=%.1f" % scores["/job_detail/f7"])
+s_slash, _ = scorer.score({"title": "AI产品经理（26/28届）", "company": "某科技", "salary": "", "tags": "", "boss_active": 0}, "", cfg)
+check("离散届别列表26/28届被拒", s_slash == 0, "=%.1f" % s_slash)
+s_conf, _ = scorer.score({"title": "AI产品经理", "company": "某科技", "salary": "", "tags": "", "boss_active": 0},
+                         "负责第28届创新大赛的产品组织，Agent方向。", cfg)
+check("'第28届大赛'不误杀", s_conf > 0, "=%.1f" % s_conf)
 
 print("== 2. 台账与去重 ==")
 for j in FAKE:
@@ -70,12 +85,12 @@ ledger.append({"action": "scan", "city": "杭州", "score": 5.0, "title": "AI产
                "company": "旧记录", "href": "/job_detail/f1"})  # 同岗位旧低分记录
 pend = ledger.pending(cfg)
 check("同岗位保留最高分", all(p["score"] > 5 for p in pend if p["href"] == "/job_detail/f1"))
-check("计划只含达标岗", [p["href"] for p in pend] == ["/job_detail/f1", "/job_detail/f5"],
+check("计划只含达标岗", [p["href"] for p in pend] == ["/job_detail/f1", "/job_detail/f5", "/job_detail/f7"],
       str([p["href"] for p in pend]))
 
 print("== 3. 计划生成 ==")
 plan = flows.build_plan(cfg)
-check("plan.json 生成 2 条", plan["count"] == 2)
+check("plan.json 生成 3 条", plan["count"] == 3)
 
 print("== 4. 护栏 ==")
 g = guard.Guard(cfg)

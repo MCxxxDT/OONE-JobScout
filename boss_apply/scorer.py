@@ -3,6 +3,31 @@ import re
 
 SALARY_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[-–~]\s*(\d+(?:\.\d+)?)\s*([Kk万])")
 
+# 届别标注：数字(段) + 届，如 28届 / 2028届 / 26-28届 / 26/27/28届。(?<!第) 避开"第28届大赛"
+JIE_TOKEN_RE = re.compile(r"(?<!第)(\d{2,4}(?:\s*[-~/、,，]\s*\d{2,4})*)\s*届")
+
+
+def jie_excludes(text, target=27):
+    """岗位明确标注的毕业届别不含 target → True（27届用户应跳过28届岗）。
+    范围写法（26-28届/26~28届）按连续区间展开，含 target 则放行；
+    斜杠/顿号列表按离散点处理（26/28届 = 排除27）；无届别标注 → False。"""
+    t = text or ""
+    if "届" not in t:
+        return False
+    nums = []
+    for m in JIE_TOKEN_RE.finditer(t):
+        part = m.group(1)
+        ns = [int(x) for x in re.findall(r"\d{2,4}", part)]
+        ns = [n % 100 if n >= 1000 else n for n in ns]
+        ns = [n for n in ns if 20 <= n <= 35]  # 合理届别窗口，滤掉 salary 26-28K 之类
+        if not ns:
+            continue
+        if len(ns) >= 2 and re.search(r"[-~]", part):
+            nums.extend(range(min(ns), max(ns) + 1))
+        else:
+            nums.extend(ns)
+    return bool(nums) and target not in nums
+
 
 def salary_k(text):
     """返回 (lo, hi)，单位 K/月；日薪/时薪等无法解析时返回 (None, None)。"""
@@ -61,6 +86,10 @@ def score(job, detail, cfg):
     for b in cfg.get("blacklist_companies", []):
         if b and b in (job.get("company") or ""):
             return 0, "blacklisted company"
+
+    # 届别不符（如只收28届而用户27届）：标题或JD明确标注且范围不含目标届 → 一票否决
+    if jie_excludes((title or "") + "\n" + (detail or ""), cfg.get("target_jie", 27)):
+        return 0, "kill: 届别标注不含%d届" % cfg.get("target_jie", 27)
 
     s = 0.0
     reasons = []
