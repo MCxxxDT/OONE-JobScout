@@ -97,11 +97,44 @@ def _probe_js():
 """
 
 
+def _pick_conversation_js(company):
+    """消息中心会话定位：优先按公司名匹配，缺省取最新一条（刚建连的会话排最前）。"""
+    return """
+(() => {
+  const company = %s;
+  const lis = Array.from(document.querySelectorAll('li'));
+  const isConv = (li) => {
+    const t = li.innerText || '';
+    return t.length > 12 && /\\d{1,2}:\\d{2}/.test(t);
+  };
+  let target = null, picked = 'none';
+  if (company) {
+    for (const li of lis) {
+      if ((li.innerText || '').indexOf(company) >= 0 && isConv(li)) { target = li; picked = 'company'; break; }
+    }
+  }
+  if (!target) {
+    for (const li of lis) {
+      if (isConv(li)) { target = li; picked = 'newest'; break; }
+    }
+  }
+  if (!target) return JSON.stringify({r: 'notfound'});
+  const head = (target.innerText || '').slice(0, 46);
+  target.click();
+  return JSON.stringify({r: 'clicked', picked: picked, head: head});
+})()
+""" % json.dumps(company or "", ensure_ascii=False)
+
+
 def send_greeting_raw(sess, job, cfg):
     """裸CDP版打招呼（调用前调用方需已导航到职位详情页且 wait_ready 通过）。
     注意：点击"立即沟通"即可能建立沟通关系，视为消耗一次机会。
+    2026-08-31 改版适配：点击后页内聊天面板不再出现，聊天界面改为
+    /web/geek/chat（曾观察到新标签页形式，且该标签页短命会自关）。
+    故统一路径 = 点按钮(建连+BOSS默认招呼) → 本标签页导航到消息中心
+    → 按公司名点开会话(找不到则取最新一条,适用于刚建连场景) → 跟发自定义文案。
     步骤全部带埋点，任一步失败抛异常供上层记台账。"""
-    # 1) 找到并点击 立即沟通
+    # 1) 找到并点击 立即沟通/继续沟通
     r1 = _ev(sess, """
 (() => {
   const btns = [];
@@ -121,17 +154,38 @@ def send_greeting_raw(sess, job, cfg):
     if not (isinstance(r1, dict) and r1.get("r") == "clicked"):
         raise RuntimeError("start-chat button not found: %r" % (r1,))
 
-    # 等待聊天面板（自包含定位，不依赖注入状态）；若出现确定类弹窗（首次沟通确认）自动点一次
-    info = None
+    # 2) 页内面板兜底探测3秒（若BOSS A/B仍返回页内面板则直接用）
     confirmed = False
-    for i in range(14):
-        time.sleep(1)
+    info = None
+    for i in range(6):
+        time.sleep(0.5)
         info = _ev(sess, _probe_js())
         if isinstance(info, dict) and info.get("inputTag"):
             break
-        if isinstance(info, dict) and info.get("sureBtn") and not confirmed:
-            confirmed = True
-            sess.eval("(() => { const b = document.querySelector('.btn-sure-v2'); if (b) { b.click(); return 'ok'; } return 'miss'; })()")
+    inpage = isinstance(info, dict) and info.get("inputTag")
+    conv_head = None
+    if not inpage:
+        # 3) 主路径：消息中心 /web/geek/chat → 点开会话
+        sess.nav(rawcdp.BASE + "/web/geek/chat")
+        sess.wait_ready(want_cards=False, timeout_s=12)
+        clicked = None
+        for i in range(8):
+            time.sleep(1)
+            clicked = _ev(sess, _pick_conversation_js((job.get("company") or "").strip()))
+            if isinstance(clicked, dict) and clicked.get("r") == "clicked":
+                break
+        if not (isinstance(clicked, dict) and clicked.get("r") == "clicked"):
+            raise RuntimeError("conversation not found on chat page: %r" % (clicked,))
+        conv_head = clicked.get("head")
+        info = None
+        for i in range(12):
+            time.sleep(1)
+            info = _ev(sess, _probe_js())
+            if isinstance(info, dict) and info.get("inputTag"):
+                break
+            if isinstance(info, dict) and info.get("sureBtn") and not confirmed:
+                confirmed = True
+                sess.eval("(() => { const b = document.querySelector('.btn-sure-v2'); if (b) { b.click(); return 'ok'; } return 'miss'; })()")
     if not (isinstance(info, dict) and info.get("inputTag")):
         dump = sess.eval("""(() => JSON.stringify({href: location.href.slice(0, 90),
   bodyTail: (document.body ? document.body.innerText : '').slice(-300).replace(/\\n/g, '|'),
@@ -186,5 +240,5 @@ def send_greeting_raw(sess, job, cfg):
     # 5) 发送后验证（输入框被清空 = 常见成功信号；最终以人工查看消息列表为准）
     time.sleep(1.5)
     post = _ev(sess, _probe_js())
-    return {"clicked": r1.get("cls"), "chat_href": info.get("href"), "filled_len": r3.get("len"),
-            "send_via": r4.get("via"), "post": post}
+    return {"clicked": r1.get("cls"), "chat_href": info.get("href"), "conv": conv_head,
+            "filled_len": r3.get("len"), "send_via": r4.get("via"), "post": post}
