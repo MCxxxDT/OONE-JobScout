@@ -34,7 +34,7 @@ STATE_JS = """
   bodyLen: document.body ? document.body.innerText.length : -1,
   cards: document.querySelectorAll('li.job-card-box, li:has(.job-name)').length,
   captcha: !!(document.querySelector('#nc_1_wrapper') || document.querySelector('.nc-container') || document.querySelector("iframe[src*='captcha']")),
-  security: /security-check|web\\/common\\/security/.test(location.href)
+  security: /security-check|web\\/common\\/security|passport\\/zp\\/verify/.test(location.href)
 }))()
 """
 
