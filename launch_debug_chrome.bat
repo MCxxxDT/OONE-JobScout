@@ -6,8 +6,9 @@ rem Port history: 9222 deprecated (Chrome 136 default-profile port trap), 9333 t
 set CHROME=C:\Program Files\Google\Chrome\Application\chrome.exe
 set PROFILE=C:\Users\LENOVO\chrome-cdp-profile
 
-echo Starting Chrome (CDP port 9335, profile %PROFILE%) ...
-start "" "%CHROME%" --remote-debugging-port=9335 --user-data-dir=%PROFILE% --no-first-run --no-default-browser-check --disable-background-networking
+rem 2026-08-31: --remote-allow-origins=* 让 CDP 客户端（含不 suppress_origin 的第三方工具，
+rem 如 eatmoreduck scraper）能连上 Chrome 136+（默认拒绝带 Origin 的调试 WS）
+start "" "%CHROME%" --remote-debugging-port=9335 --user-data-dir=%PROFILE% --no-first-run --no-default-browser-check --disable-background-networking --remote-allow-origins=*
 
 echo.
 echo Verify: open http://127.0.0.1:9335/json/version in any browser tab.
