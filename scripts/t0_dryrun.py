@@ -124,6 +124,17 @@ g.resume()
 ok, _ = g.check_greet("上海")
 check("解除恢复", ok)
 
+print("== 5. 风控判定纯函数（rawcdp，2026-08-31 采纳 eatmoreduck 词表）==")
+from boss_apply import rawcdp as _raw
+c_ok, _ = _raw.classify_joblist_response({"code": 0, "zpData": {"jobList": [{"salaryDesc": "20-40K"}]}})
+check("code0+明文薪资=ok", c_ok == "ok")
+c_r1, _ = _raw.classify_joblist_response({"code": 37, "message": "环境存在异常"})
+check("code37 风控拒停", c_r1 == "restricted")
+c_r2, _ = _raw.classify_joblist_response({"code": 999, "message": "操作太频繁"})
+check("未知码按关键字兜底风控", c_r2 == "restricted")
+c_em, _ = _raw.classify_joblist_response({"code": 0, "zpData": {"jobList": []}})
+check("空 jobList 判 empty", c_em == "empty")
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

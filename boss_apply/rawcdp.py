@@ -11,7 +11,16 @@ BOSS 安全JS检测到该特征后清空页面DOM（URL保留或跳about:blank�
 - 一个 RawCDP 会话 = 一条浏览器级 WebSocket + 一个复用的标签页
 - search_jobs / fetch_detail 均为导航+轮询+一次性 evaluate 提取
 - 内置空页检测（被清空=质询未过）：自动重试一次，再失败抛 RiskControl（护栏熔断）
+
+2026-08-31 升级（采纳 eatmoreduck/boss-zhipin-scraper #53 教训）：
+- 列表主路径改为【被动捕获】：Network.enable 旁听页面自身发出的
+  /wapi/zpgeek/search/joblist.json 响应（零注入请求）。程序注入的同步 XHR
+  与页面自身请求特征不同，会被 BOSS 风控识别为异常环境（code 37）。
+- 风控判定升级：code∈{31,37} 或 message 命中关键字（环境存在异常/访问频繁/
+  操作太频繁/安全校验/滑块/验证）→ RESTRICTED → raise RiskControl（护栏熔断）。
+- DOM+注入 fetch 保留为彻底兜底；捕获失败自动降级，行为不回退。
 """
+import base64
 import json
 import re
 import time
@@ -24,6 +33,12 @@ from .browser import RiskControl
 
 BASE = "https://www.zhipin.com"
 LIST_URL = BASE + "/web/geek/job?query={q}&city={c}&page={p}"
+
+API_JOB_LIST_PATH = "/wapi/zpgeek/search/joblist.json"
+
+# 风控码（会随平台策略变化，码表追不上时按 message 关键字兜底）
+RESTRICTED_CODES = {31, 37}
+RESTRICTED_KEYWORDS = ("环境存在异常", "访问频繁", "操作太频繁", "安全校验", "滑块", "验证")
 
 ACTIVE_RE = re.compile(r"(刚刚活跃|今日活跃|\d+日内活跃|本周活跃|本月活跃|月内活跃|在线)")
 
@@ -103,6 +118,66 @@ def active_days(text):
     return -1
 
 
+def classify_joblist_response(data):
+    """判定 joblist 响应：ok / empty / restricted / unauthenticated（采纳 eatmoreduck 风控词表）。"""
+    code = None
+    if isinstance(data, dict):
+        try:
+            code = int(data.get("code")) if data.get("code") is not None else None
+        except (TypeError, ValueError):
+            code = None
+        message = str(data.get("message") or data.get("msg") or "")
+        if isinstance(code, int) and code in RESTRICTED_CODES:
+            return "restricted", "code=%r %s" % (code, message)
+        if code != 0:
+            hit = next((k for k in RESTRICTED_KEYWORDS if k in message), None)
+            if hit:
+                return "restricted", "code=%r msg含%r" % (code, hit)
+            return "response_error", "code=%r %s" % (code, message)
+        zp = data.get("zpData")
+        if not isinstance(zp, dict):
+            return "response_error", "缺少 zpData"
+        lst = zp.get("jobList")
+        if not isinstance(lst, list):
+            return "response_error", "缺少 jobList"
+        if not lst:
+            return "empty", "jobList 为空"
+        if any((j.get("salaryDesc") or "").strip() for j in lst if isinstance(j, dict)):
+            return "ok", ""
+        return "unauthenticated", "无明文薪资（疑似未登录）"
+    return "response_error", "响应非 JSON 对象"
+
+
+def map_api_jobs(data, keyword=""):
+    """把 joblist.json 原始条目映射为与 DOM 卡片一致的 job 字段（薪资直接取明文 salaryDesc）。"""
+    if not isinstance(data, dict):
+        return []
+    lst = (data.get("zpData") or {}).get("jobList") or []
+    out = []
+    for o in lst:
+        if not isinstance(o, dict):
+            continue
+        eid = str(o.get("encryptJobId") or "")
+        if not eid:
+            continue
+        loc = "·".join(x for x in (o.get("cityName"), o.get("areaDistrict"), o.get("businessDistrict")) if x)
+        tags = ",".join(x for x in (o.get("jobExperience"), o.get("jobDegree")) if x)
+        # bossOnline 仅列表级字段：在线=0，缺失=未知(-1)放行，详情页会补验
+        active = 0 if o.get("bossOnline") else -1
+        out.append({
+            "title": o.get("jobName") or "",
+            "href": "/job_detail/%s.html" % eid,
+            "salary": o.get("salaryDesc") or "",
+            "company": o.get("brandName") or "",
+            "area": loc,
+            "tags": tags,
+            "raw": "",
+            "boss_active": active,
+            "keyword": keyword,
+        })
+    return out
+
+
 class RawCDP:
     """浏览器级裸CDP会话 + 一个复用标签页。"""
 
@@ -112,6 +187,8 @@ class RawCDP:
         self._mid = 0
         self.tab_id = None
         self.sid = None
+        self.events = []  # CDP 事件缓冲（被动捕获用；_send 等待响应期间到达的事件入此）
+        self._passive_disabled = False  # 自适应金丝雀：本环境若取不到旁听响应体则本会话禁用被动捕获
 
     # ---- 低层 ----
     def _send(self, method, params=None, sid=None):
@@ -127,7 +204,35 @@ class RawCDP:
                 if "error" in data:
                     raise RuntimeError("%s: %s" % (method, json.dumps(data["error"], ensure_ascii=False)[:200]))
                 return data.get("result", {})
+            # 非本次响应的事件消息：入缓冲供被动捕获，不丢弃
+            if "method" in data:
+                self.events.append(data)
         raise TimeoutError(method)
+
+    def drain_events(self, duration):
+        """在 duration 秒内持续接收并缓冲 CDP 事件（不发送任何命令）。
+        用于等待页面自身发出的请求完成（Network 域事件）。"""
+        deadline = time.time() + duration
+        try:
+            while True:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    return
+                self.ws.settimeout(min(0.6, remaining))
+                try:
+                    raw = self.ws.recv()
+                except websocket.WebSocketTimeoutException:
+                    continue
+                except Exception:
+                    break
+                try:
+                    r = json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if "method" in r:
+                    self.events.append(r)
+        finally:
+            self.ws.settimeout(30)
 
     def open_tab(self, url="about:blank"):
         self.tab_id = self._send("Target.createTarget", {"url": url})["targetId"]
@@ -156,6 +261,110 @@ class RawCDP:
     def close(self):
         try:
             self.ws.close()
+        except Exception:
+            pass
+
+    # ---- 被动捕获（Network 域旁听，零注入请求）----
+    def enable_network(self):
+        return self._send("Network.enable", sid=self.sid)
+
+    def disable_network(self):
+        try:
+            self._send("Network.disable", sid=self.sid)
+        except Exception:
+            pass
+
+    def _completed_joblist_rids(self):
+        """只统计本会话（sessionId 匹配）已完成的 joblist 请求，避免浏览器级
+        WS 收到其他标签页的同路径请求导致 getResponseBody 报 No data found。"""
+        req, fin = {}, set()
+        for ev in self.events:
+            if ev.get("sessionId") != self.sid:
+                continue
+            m = ev.get("method", "")
+            p = ev.get("params", {})
+            if m == "Network.requestWillBeSent":
+                url = (p.get("request") or {}).get("url", "")
+                if API_JOB_LIST_PATH in url:
+                    req[p.get("requestId")] = True
+            elif m == "Network.loadingFinished":
+                fin.add(p.get("requestId"))
+        return [rid for rid in req if rid in fin]
+
+    def _get_response_body(self, request_id):
+        try:
+            r = self._send("Network.getResponseBody", {"requestId": request_id}, sid=self.sid)
+        except Exception:
+            return None
+        res = r.get("result", {}) if isinstance(r, dict) else {}
+        body = res.get("body", "")
+        if res.get("base64Encoded"):
+            try:
+                body = base64.b64decode(body).decode("utf-8", errors="replace")
+            except (ValueError, TypeError):
+                return None
+        return body
+
+    def capture_joblist_response(self, timeout=25):
+        """被动捕获下一次完成的 joblist 响应并解析 JSON；超时返回 None。
+        调用前需 enable_network() 并已触发页面自身请求（如导航）。"""
+        deadline = time.time() + timeout
+        consumed = set()
+        while time.time() < deadline:
+            for rid in self._completed_joblist_rids():
+                if rid in consumed:
+                    continue
+                consumed.add(rid)
+                body = self._get_response_body(rid)
+                if body:
+                    try:
+                        return json.loads(body)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+            remain = deadline - time.time()
+            if remain > 0:
+                self.drain_events(min(0.6, remain))
+        return None
+
+    def _try_passive_search(self, url):
+        """Network 旁听版搜索：返回 joblist dict / None（None=走 DOM 兜底）。
+        restricted（code 31/37 或 message 命中风控关键字）→ raise RiskControl（护栏熔断）。
+        自适应金丝雀：Chrome 151 实测旁听响应体常被修剪（getResponseBody 返回空串），
+        故每会话仅首次尝试（timeout 8s）；取不到体即置 _passive_disabled，后续页零开销走 DOM。"""
+        if self._passive_disabled:
+            return None
+        self.events = []
+        try:
+            self.enable_network()
+            # 焦点仿真：后台标签页在页面看来保持「可见且有焦点」，否则 BOSS 会
+            # 延迟甚至不发列表 API 请求（采纳 eatmoreduck create_page_session 做法）
+            self._focus_emulation(True)
+            self.nav(url)
+            data = self.capture_joblist_response(timeout=8)
+        finally:
+            self._focus_emulation(False)
+            self.disable_network()
+        if data is None:
+            self._passive_disabled = True  # 金丝雀判定：本环境取不到旁听体，本会话降级
+            return None
+        verdict, info = classify_joblist_response(data)
+        if verdict == "restricted":
+            raise RiskControl("boss restricted: %s" % info)
+        if verdict in ("ok", "empty"):
+            return data
+        # 捕获到但判定非可用（如 unauthenticated/response_error）→ 走 DOM 兜底重验
+        return None
+
+    def _focus_emulation(self, enabled):
+        try:
+            self._send("Emulation.setFocusEmulationEnabled", {"enabled": enabled}, sid=self.sid)
+            if enabled:
+                self._send("Page.addScriptToEvaluateOnNewDocument", {
+                    "source": "Object.defineProperty(document,'hidden',{get:()=>false});"
+                              "Object.defineProperty(document,'visibilityState',{get:()=>'visible'});"
+                              "Object.defineProperty(document,'webkitHidden',{get:()=>false});"
+                              "Object.defineProperty(document,'webkitVisibilityState',{get:()=>'visible'});",
+                }, sid=self.sid)
         except Exception:
             pass
 
@@ -204,6 +413,18 @@ class RawCDP:
 
     def search_jobs(self, keyword, city_code, page_no=1):
         url = LIST_URL.format(q=quote(keyword), c=city_code, p=page_no)
+        # 主路径：被动捕获页面自身的 joblist 响应（零注入请求，采纳 eatmoreduck #53 教训）
+        try:
+            data = self._try_passive_search(url)
+            if data is not None:
+                jobs = map_api_jobs(data, keyword)
+                if jobs:
+                    return jobs
+        except RiskControl:
+            raise
+        except Exception:
+            pass  # 捕获异常 → 走 DOM 兜底，不降级能力
+        # 兜底：DOM 卡片解析 + 注入 fetch 回填薪资（保持历史行为）
         for attempt in (1, 2):
             self.nav(url)
             st = self.wait_ready(want_cards=True, timeout_s=15)
