@@ -64,22 +64,21 @@ def run_cycle(cfg, engine, args):
         return {"status": "error", "error": inbox.get("error")}
 
     all_convs = inbox.get("all", [])
-    needs_reply = inbox.get("needs_reply", [])
-    needs_human = inbox.get("needs_human", [])
-    print(f"  [巡检汇总] 消息列表共 {len(all_convs)} 项 | 待回复: {len(needs_reply)} 项 | 索要联系方式转人工: {len(needs_human)} 项")
+    # 全自主无人值守：汇总所有待回复与平台检测会话（去重）
+    pool = inbox.get("needs_reply", []) + inbox.get("needs_human", [])
+    seen = set()
+    all_pending = []
+    for c in pool:
+        k = c.get("who", "")
+        if k and k not in seen:
+            seen.add(k)
+            all_pending.append(c)
 
-    # 记录 inbox 层的 needs_human
-    for h in needs_human:
-        ledger.append({
-            "action": "human_alert",
-            "company": h.get("who"),
-            "last_msg": h.get("last_msg"),
-            "reason": "inbox_privacy_filter",
-        })
+    print(f"  [巡检汇总] 消息列表共 {len(all_convs)} 项 | 待处理活跃会话: {len(all_pending)} 项")
 
     # 3. 过滤时效（默认仅处理 24 小时以内的新消息）
     candidates = []
-    for c in needs_reply:
+    for c in all_pending:
         t_str = c.get("time", "")
         if air.is_recent_message(t_str, max_age_hours=args.max_age_hours):
             candidates.append(c)
@@ -88,7 +87,7 @@ def run_cycle(cfg, engine, args):
 
     print(f"  [时效筛选] 24小时内待处理活跃候选: {len(candidates)} 项")
 
-    # 4. 逐条决策与处理
+    # 4. 逐条决策与处理（全自主推进，绝不因敏感意图阻断）
     replied_count = 0
     for conv in candidates:
         if replied_count >= args.max_replies_per_cycle:
@@ -104,25 +103,25 @@ def run_cycle(cfg, engine, args):
         decision = engine.decide_and_generate(conv)
         action = decision.get("action")
         reason = decision.get("reason")
+        notice = decision.get("notice")
         reply_text = decision.get("reply_text", "")
         source = decision.get("source", "unknown")
 
-        if action == "needs_human":
-            print(f"  [决策: 转人工] 原因: {reason}")
+        if notice:
+            print(f"  [📢异步提醒] {notice}")
             ledger.append({
-                "action": "human_alert",
+                "action": "notice_alert",
                 "company": who,
+                "notice": notice,
                 "last_msg": last_msg,
-                "reason": reason,
             })
-            continue
 
         if action == "skip":
             print(f"  [决策: 跳过] 原因: {reason}")
             continue
 
         if action == "reply":
-            print(f"  [决策: 建议回复] 来源: {source} | 理由: {reason}")
+            print(f"  [决策: 自动太极回复] 来源: {source} | 理由: {reason}")
             print(f"  [回复文案] {reply_text}")
 
             if args.dry_run:

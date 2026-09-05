@@ -202,25 +202,34 @@ check("8月旧消息被拦截", not _air.is_recent_message("08月31日", max_age
 # AI 意图判定与回复生成
 ai_engine = _air.AIReplyEngine(cfg)
 
-# 场景 1: 索要微信 -> 必须转人工 needs_human
+# 场景 1: 索要微信 -> 全自主太极推回平台并索要JD，异步输出 notice
 r_wx = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "方便加个微信详聊吗？"})
-check("HR索微信判定为needs_human", r_wx["action"] == "needs_human", str(r_wx))
+check("HR索微信全自主推进不阻断", r_wx["action"] == "reply", str(r_wx))
+check("HR索微信生成异步提醒notice", bool(r_wx.get("notice")))
+check("HR索微信回复推回平台且索要JD", "平台" in r_wx["reply_text"] and "JD" in r_wx["reply_text"])
+check("HR索微信回复通过隐私强校验", not _gr.privacy_blocked(r_wx["reply_text"]))
 
-# 场景 2: 索要电话 -> 必须转人工 needs_human
+# 场景 2: 索要电话 -> 全自主太极推回平台并索要JD，异步输出 notice
 r_phone = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "留下你的手机号码，明天HR联系你"})
-check("HR索电话判定为needs_human", r_phone["action"] == "needs_human", str(r_phone))
+check("HR索电话全自主推进不阻断", r_phone["action"] == "reply", str(r_phone))
+check("HR索电话生成异步提醒notice", bool(r_phone.get("notice")))
+check("HR索电话回复通过隐私强校验", not _gr.privacy_blocked(r_phone["reply_text"]))
 
-# 场景 3: 线下/指定时间面试邀约 -> 必须转人工 needs_human
+# 场景 3: 线下/指定时间面试邀约 -> 全自主太极表达弹性并反索详细安排，异步输出 notice
 r_interview = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "明天下午2点来公司现场面试可以吗"})
-check("邀约线下面试判定为needs_human", r_interview["action"] == "needs_human", str(r_interview))
+check("邀约线下面试全自主推进不阻断", r_interview["action"] == "reply", str(r_interview))
+check("邀约面试生成异步提醒notice", bool(r_interview.get("notice")))
+check("邀约面试太极表达弹性与索要JD", "弹性" in r_interview["reply_text"] and "JD" in r_interview["reply_text"])
+check("邀约面试回复通过隐私强校验", not _gr.privacy_blocked(r_interview["reply_text"]))
 
-# 场景 4: 字节商家BD校招推介 -> 三不原则：表达开放、反索JD、不承诺到岗
+# 场景 4: 字节商家BD校招推介（含线下面试宣讲） -> 全自主太极回应、反索JD与安排，输出 notice
 r_byte = ai_engine.decide_and_generate({
     "who": "蒋先生字节跳动招聘HR",
-    "last_msg": "同学你好~我们公司已开启27届校招，有几个商家BD的岗位形式校招，做商家拓展与团购toB，感兴趣投递一份简历呀~"
+    "last_msg": "同学你好~我司已开启27届校招工作。商家BD是我司的正式校招岗位，预计9月中旬我们会在杭州开展校招宣讲会及线下面试，不方便到线下的同学也有线上面试的机会，感兴趣可以投份简历呀~"
 })
-check("字节BD岗意图判为reply", r_byte["action"] == "reply", str(r_byte))
-check("字节太极回复索要JD且表达开放", "JD" in r_byte["reply_text"] and "开放" in r_byte["reply_text"])
+check("字节宣讲面试岗全自主推进", r_byte["action"] == "reply", str(r_byte))
+check("字节宣讲面试生成异步提醒notice", bool(r_byte.get("notice")))
+check("字节太极回复索要JD且表达弹性", "JD" in r_byte["reply_text"] and "弹性" in r_byte["reply_text"])
 check("字节回复无死到岗承诺", "随时可到岗" not in r_byte["reply_text"])
 check("字节回复不含隐私敏感词", not _gr.privacy_blocked(r_byte["reply_text"]))
 

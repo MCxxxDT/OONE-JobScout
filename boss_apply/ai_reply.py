@@ -27,13 +27,19 @@ CANDIDATE_PROFILE = {
     "business_highlights": "曾带200+人校园团队实现单月GMV破10万、复购80%、私域月沉淀5000+，具备较强商业化与ToB沟通能力",
 }
 
-# 高敏感意图关键词（必须拦截转人工）
-SENSITIVE_PATTERNS = [
+# 细分敏感意图模式（不阻断，采用太极回复并在后台异步提醒用户）
+CONTACT_PATTERNS = [
     re.compile(r"(?:加|留|给|发|换)\s*个?\s*(?:微信|vx|v号|联系方式|手机|电话)", re.I),
     re.compile(r"1[3-9]\d{9}"),
     re.compile(r"(?:微信号|手机号|电话号|联系电话|邮箱|发送到邮箱|发一份pdf)", re.I),
+]
+
+INTERVIEW_PATTERNS = [
     re.compile(r"(?:明天|后天|下周|今晚|上午|下午)?\s*\d{1,2}(?:点|:00|半)\s*(?:来|进行)?\s*(?:面试|线下面|沟通)", re.I),
-    re.compile(r"(?:腾讯会议|钉钉会议|飞书会议|线上会议|来公司面试|现场面|线下面试|面试地址)", re.I),
+    re.compile(r"(?:腾讯会议|钉钉会议|飞书会议|线上会议|来公司面试|现场面|线下面试|面试地址|宣讲会)", re.I),
+]
+
+SALARY_PATTERNS = [
     re.compile(r"(?:薪资待遇|期望薪资|底薪|提成|能接受.*薪资)", re.I),
 ]
 
@@ -92,7 +98,7 @@ def is_recent_message(time_str: str, max_age_hours: int = 24) -> bool:
 
 
 class AIReplyEngine:
-    """智能会话决策与回复生成引擎。"""
+    """智能会话决策与回复生成引擎（全自主无人值守 + 异步提醒）。"""
 
     def __init__(self, cfg: Optional[dict] = None, profile: Optional[dict] = None):
         self.cfg = cfg or {}
@@ -104,65 +110,77 @@ class AIReplyEngine:
     def decide_and_generate(self, conv: dict) -> dict:
         """输入会话信息（含 who, last_msg, time 等），输出决策与回复文案：
         {
-            "action": "reply" | "needs_human" | "skip",
+            "action": "reply" | "skip",
             "reply_text": str,
             "reason": str,
+            "notice": str (可选异步提醒),
             "source": "rule" | "llm" | "template"
         }
+        全自主原则：绝不因为敏感话题阻断执行；自动太极应对并反索JD，同时输出 notice 提醒用户。
         """
         last_msg = (conv.get("last_msg") or "").strip()
         who = conv.get("who") or ""
 
-        # 1. 基础门禁：无实质内容
+        # 1. 基础门禁：无实质内容跳过
         if not last_msg:
             return {"action": "skip", "reply_text": "", "reason": "消息为空", "source": "rule"}
 
-        # 2. 隐私与敏感意图拦截（强制转人工）
-        if greeter.privacy_blocked(last_msg):
+        # 2. 索要联系方式意图（微信/手机/电话/邮箱等）：不阻断，太极引导留存平台并反索JD
+        if greeter.privacy_blocked(last_msg) or any(pat.search(last_msg) for pat in CONTACT_PATTERNS):
+            reply = (
+                "您好！非常感谢您的关注与认可。目前在平台沟通也比较方便及时，方便先在平台发一份岗位的详细JD供我了解一下吗？"
+                "若后续推进合适再进一步深入沟通，谢谢您的理解！"
+            )
             return {
-                "action": "needs_human",
-                "reply_text": "",
-                "reason": "命中隐私安全词表（含手机/微信联系方式）",
-                "source": "rule",
+                "action": "reply",
+                "reply_text": reply,
+                "reason": "HR索要联系方式，太极引导留存平台沟通并反客为主索要JD",
+                "notice": "HR索要联系方式（微信/电话），系统已自动太极应对并反索JD。如您需要直接私聊对方，可人工介入！",
+                "source": "template",
             }
 
-        for pat in SENSITIVE_PATTERNS:
-            if pat.search(last_msg):
-                return {
-                    "action": "needs_human",
-                    "reply_text": "",
-                    "reason": "命中高敏感意图（索要联系方式/面试邀约/薪资谈判）",
-                    "source": "rule",
-                }
+        # 3. 面试邀约 / 宣讲会 / 约具体时间：不阻断，太极表达弹性并反索详细安排
+        if any(pat.search(last_msg) for pat in INTERVIEW_PATTERNS):
+            reply = (
+                "您好！非常感谢您的关注与宣讲面试安排。目前学业与实习时间相对具备弹性，方便发一份该岗位的详细JD与具体安排供我拜读了解一下吗？"
+                "期待后续进一步沟通交流，谢谢！"
+            )
+            return {
+                "action": "reply",
+                "reply_text": reply,
+                "reason": "HR提及宣讲/面试，太极表达弹性并反客为主索要JD与安排",
+                "notice": "HR提及线下面试/宣讲会，系统已自动表达弹性并索要详细JD，绝不擅自承诺到场。如需具体对接，可人工介入！",
+                "source": "template",
+            }
 
-        # 3. 尝试调用大模型生成（若可用且有效）
+        # 4. 薪资待遇询问：不阻断，太极表达开放并反索JD
+        if any(pat.search(last_msg) for pat in SALARY_PATTERNS):
+            reply = (
+                "您好！非常感谢您的关注。关于待遇细节，目前主要看重业务与团队匹配度，持积极开放态度。"
+                "方便发一份岗位详细JD供我深入了解一下吗？谢谢！"
+            )
+            return {
+                "action": "reply",
+                "reply_text": reply,
+                "reason": "HR询问待遇细节，太极表达开放并反索JD",
+                "notice": "HR询问薪资待遇，系统已自动太极回应并索要JD，可人工接管！",
+                "source": "template",
+            }
+
+        # 5. 尝试调用大模型生成（若配置且有效）
         llm_res = self._try_llm_generate(conv)
         if llm_res and llm_res.get("action"):
-            # 严格二次校验 LLM 生成的内容
             reply_text = (llm_res.get("reply_text") or "").strip()
-            if llm_res["action"] == "reply" and reply_text:
-                if greeter.privacy_blocked(reply_text):
-                    return {
-                        "action": "needs_human",
-                        "reply_text": "",
-                        "reason": "大模型生成文案含联系方式，安全拦截转人工",
-                        "source": "rule",
-                    }
+            if reply_text and not greeter.privacy_blocked(reply_text):
                 return {
                     "action": "reply",
                     "reply_text": reply_text[:120],
-                    "reason": llm_res.get("reason") or "大模型生成",
-                    "source": "llm",
-                }
-            elif llm_res["action"] in ("needs_human", "skip"):
-                return {
-                    "action": llm_res["action"],
-                    "reply_text": "",
-                    "reason": llm_res.get("reason") or "大模型意图判定",
+                    "reason": llm_res.get("reason") or "大模型生成太极回复",
+                    "notice": llm_res.get("notice") or "",
                     "source": "llm",
                 }
 
-        # 4. 高质量确定性模板自动降级
+        # 6. 高质量确定性模板自动响应
         return self._generate_template_reply(conv)
 
     def _generate_template_reply(self, conv: dict) -> dict:
