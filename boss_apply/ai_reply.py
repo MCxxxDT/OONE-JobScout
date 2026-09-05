@@ -20,11 +20,11 @@ CANDIDATE_PROFILE = {
     "school": "福建师范大学",
     "major": "数字媒体技术",
     "grad_year": 2027,
-    "grade_desc": "2027届在读",
-    "availability": "随时可到岗，可长期实习6个月以上，每周到岗5天",
-    "target_roles": "AI产品经理 / Agent产品 / 大模型应用产品 / 商业化产品 / 实习",
-    "tech_highlights": "熟练FastMCP、Coze智能体中台编排、Trae原生Skills、CDP自动化、Python与系统工程",
-    "business_highlights": "曾带200+人校园团队实现单月GMV破10万、复购80%、私域月沉淀5000+，具备较强商业化与ToB沟通能力",
+    "grade_desc": "2027届应届在读生（毕业班）",
+    "availability": "常驻杭州，随时可全职到岗，保证每周到岗5天，可长期全职实习6个月以上直冲校招转正",
+    "target_roles": "AI产品经理 / Agent产品 / 大模型应用产品 / 商业化产品 / 2027届校招",
+    "tech_highlights": "熟练FastMCP标准Server架构、Coze智能体中台编排、Trae原生Skills、CDP自动化、Python与微内核系统工程",
+    "business_highlights": "15个月全职操盘200+人校园团队、单月GMV破10万、复购80%，具备过硬商业化嗅觉与即战力",
 }
 
 # 细分敏感意图模式（不阻断，采用太极回复并在后台异步提醒用户）
