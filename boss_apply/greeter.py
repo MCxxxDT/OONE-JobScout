@@ -134,11 +134,6 @@ def _probe_js():
   };
   const inp = pick();
   const send = document.querySelector('.btn-send, .btn-sendmsg');
-  return JSON.stringify({
-    href: location.href.slice(0, 100),
-    inputTag: inp ? (inp.tagName + '|' + String(inp.className || '').slice(0, 40)) : null,
-    inputLen: inp ? String(inp.value || inp.textContent || '').length : -1,
-    sendDisabled: send ? /disabled/.test(String(send.className)) : null,
   const hasSureDialog = () => {
     const dialogs = document.querySelectorAll('.dialog-wrap, .boss-dialog, .dialog-container');
     for (const d of dialogs) {
