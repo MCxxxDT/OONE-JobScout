@@ -95,6 +95,13 @@ Trae 同理，把 `server.py` 注册为 stdio MCP server 即可。
 - BOSS 活跃度 >14 天直接跳过（投了也是石沉大海）
 - 页面被回退/掉线 → 当天停投（get_jobs 作者血泪原话）
 
+## 维护备注
+
+- **城市码校准**：BOSS 城市码可能调整（开源社区曾踩坑：成都 101270100 曾与长沙 101250100 错配）。校准方式：调试 Chrome 打开 BOSS 职位搜索页，从 URL `city=` 读真实值，与 config.json 比对。
+- **风控节奏**：沟通维度叠加搜索量会加速风控（2026-08-31 实测 43 次搜索+10 沟通即触发验证）→ 搜索与打招呼建议分时段/分天，`search_daily_limit` 目标下调至 30-40/日。
+- **现状与竞品对比评估**：见 `docs/COMPARISON.md`（2026-08-31，含浏览器核实数据、插件化可行性、多账号扩量方案）。
+- **已知维护点**见下节；BOSS 前端改版时优先核对 `scraper.parse_card` 与 `greeter.py` 的 CHAT/SEND 选择器。
+
 ## 已知维护点
 
 1. **选择器失效**：BOSS 前端改版频繁。列表解析在 `scraper.parse_card`，沟通弹窗在 `greeter.py` 的 `CHAT_SELECTORS/SEND_SELECTORS`。T3 失败时优先核对这两处。
