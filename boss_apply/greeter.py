@@ -147,7 +147,9 @@ def _probe_js():
 
 
 def _pick_conversation_js(company):
-    """消息中心会话定位：优先按公司名匹配，缺省取最新一条。
+    """消息中心会话定位：优先按公司名匹配；company 为空才取最新一条。
+    严格匹配（审计补丁#3）：指定公司未命中时直接返回 notfound，严禁退回 newest，
+    防止把回复发给最新会话的无关 HR。
     不直接 el.click()（BOSS 列表项对合成 click 无响应，2026-08-31 实测），
     返回元素视口坐标，由调用方走 CDP Input.dispatchMouseEvent 派发受信任点击。"""
     return """
@@ -163,6 +165,7 @@ def _pick_conversation_js(company):
     for (const li of lis) {
       if ((li.innerText || '').indexOf(company) >= 0 && isConv(li)) { target = li; picked = 'company'; break; }
     }
+    if (!target) return JSON.stringify({r: 'notfound', picked: 'company_missing', company: company});
   }
   if (!target) {
     for (const li of lis) {
@@ -242,6 +245,8 @@ def _open_conversation_input(sess, company, poll_s=12):
     for i in range(8):
         time.sleep(1)
         clicked = _ev(sess, _pick_conversation_js(company))
+        if isinstance(clicked, dict) and clicked.get("r") == "notfound":
+            return None, None  # 指定公司未命中：立即中止，不轮询不兜底，交由上层抛异常记台账
         if isinstance(clicked, dict) and clicked.get("r") == "found":
             _trusted_click(sess, int(clicked["x"]), int(clicked["y"]))
             clicked["r"] = "clicked"

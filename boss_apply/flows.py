@@ -11,6 +11,15 @@ import time
 
 from . import browser, config as cfgmod, guard, greeter, ledger, rawcdp, scorer
 
+# 消息中心会话列表提取（裸CDP一次性 evaluate，从 scripts/chat_check.py 迁入）
+CHAT_LIST_JS = """
+(() => {
+  const isConv = (li) => { const t = li.innerText || ''; return t.length > 12 && /\\d{1,2}:\\d{2}/.test(t); };
+  return JSON.stringify(Array.from(document.querySelectorAll('li')).filter(isConv)
+    .map(li => (li.innerText || '').slice(0, 200)));
+})()
+"""
+
 
 def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
     """只读扫描一个城市（裸CDP）：搜索→(可选)抓详情→打分→写台账。不发送任何沟通。"""
@@ -142,6 +151,60 @@ def parse_conv(raw, openers):
             "last_msg": preview[:120],
             "needs_reply_guess": bool(preview) and not from_us,
             "needs_human": greeter.privacy_blocked(preview)}
+
+
+def chat_inbox(cfg):
+    """消息中心只读巡检（裸CDP，零发送）。返回 needs_reply（待回复）/needs_human
+    （索要联系方式，禁止代发）/all。verify/安全页 → pause 护栏并返回 error
+    （与 login_state 行为对齐，人工确认后 resume_guard）。"""
+    ops = greeter.self_openers(cfg) or (greeter.NATIVE_DEFAULT_OPENER,)
+    sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
+    try:
+        sess.open_tab(rawcdp.BASE + "/web/geek/chat")
+        st = None
+        for _ in range(15):
+            time.sleep(1)
+            st = sess.state()
+            if st and not st.get("blank") and st.get("bodyLen", 0) > 100:
+                break
+        if st and (st.get("captcha") or st.get("security")):
+            guard.Guard(cfg).pause("risk: chat_inbox captcha/security")
+            return {"error": "verify/security page", "state": st}
+        v = sess.eval(CHAT_LIST_JS)
+        raws = json.loads(v) if v else []
+        convs = [c for c in (parse_conv(r, ops) for r in raws) if c]
+        return {"count": len(convs),
+                "needs_human": [c for c in convs if c["needs_human"]],
+                "needs_reply": [c for c in convs if c["needs_reply_guess"] and not c["needs_human"]],
+                "all": convs}
+    finally:
+        sess.close_tab()
+        sess.close()
+
+
+def chat_reply(cfg, company, text):
+    """按公司名回复 HR 一条消息（经 greeter.send_message_via_chat），写台账 action=reply。
+    隐私红线：文案含联系方式意图 → 拒绝发送（blocked_privacy），转人工。
+    公司未在会话列表命中时 greeter 层直接抛异常中止，绝不退回最新会话（审计补丁#3）。"""
+    if greeter.privacy_blocked(text):
+        ledger.append({"action": "reply", "status": "blocked_privacy", "company": company,
+                       "text_head": (text or "")[:120],
+                       "note": "文案含联系方式（电话/微信等），拒绝代发，转人工回复"})
+        return {"ok": False, "blocked": "privacy", "company": company}
+    sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
+    try:
+        sess.open_tab()
+        r = greeter.send_message_via_chat(sess, company, text)
+        ledger.append({"action": "reply", "status": "ok", "company": company,
+                       "text_head": (text or "")[:120], "conv": r.get("conv")})
+        return {"ok": True, "company": company, "result": r}
+    except Exception as e:
+        ledger.append({"action": "reply", "status": "failed", "company": company,
+                       "error": str(e)[:200]})
+        return {"ok": False, "company": company, "error": str(e)[:300]}
+    finally:
+        sess.close_tab()
+        sess.close()
 
 
 def execute_jobs(cfg, g, jobs, max_count=10):
