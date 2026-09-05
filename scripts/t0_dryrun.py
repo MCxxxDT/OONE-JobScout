@@ -252,6 +252,29 @@ check("回答2027届且说明时间弹性", "2027" in r_avail["reply_text"] and 
 check("反客为主索要岗位JD", "JD" in r_avail["reply_text"])
 check("不给死承诺(无随时到岗)", "随时可到岗" not in r_avail["reply_text"])
 
+# 场景 7: 询问常驻地/本地/能否线下 -> 真诚告知在福州、看好江浙沪、提议初试线上
+r_loc = ai_engine.decide_and_generate({
+    "who": "杭州某独角兽HR",
+    "last_msg": "请问你现在在杭州吗，可以接受线下面试吗？"
+})
+check("询问常驻地与能否线下判为reply", r_loc["action"] == "reply", str(r_loc))
+check("真诚说明常驻福州", "福州" in r_loc["reply_text"])
+check("表达意向奔赴江浙沪", "江浙沪" in r_loc["reply_text"])
+check("提议初试线上推进", "线上" in r_loc["reply_text"])
+check("询问地点生成异步提醒notice", bool(r_loc.get("notice")))
+check("询问地点回复不含隐私敏感词", not _gr.privacy_blocked(r_loc["reply_text"]))
+
+# 场景 8: 询问期望薪资 -> 说明跨城江浙沪需覆盖租房生活底线、反索JD
+r_sal = ai_engine.decide_and_generate({
+    "who": "上海某AI科技HR",
+    "last_msg": "同学你好，请问你的期望薪资是多少？对实习待遇有什么要求？"
+})
+check("询问薪资待遇判为reply", r_sal["action"] == "reply", str(r_sal))
+check("说明覆盖租房与生活开销底线", "租房" in r_sal["reply_text"] and "生活" in r_sal["reply_text"])
+check("索要JD深入了解", "JD" in r_sal["reply_text"])
+check("询问薪资生成异步提醒notice", bool(r_sal.get("notice")))
+check("询问薪资回复不含隐私敏感词", not _gr.privacy_blocked(r_sal["reply_text"]))
+
 print("== 10. 岗位详情提取与 FastMCP 工具 (get_active_job_detail) ==")
 from boss_apply import server as _srv
 
