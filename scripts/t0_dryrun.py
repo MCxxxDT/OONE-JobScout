@@ -172,6 +172,74 @@ check("原生默认招呼结尾→不需回复", bool(c4) and not c4["needs_repl
 c5 = flows.parse_conv("08月31日|秦女士淘宝闪购校招HR|[送达]|" + g0, ops)
 check("历史日期会话解析正确且自家发言不需回复", bool(c5) and c5["time"] == "08月31日" and not c5["needs_reply_guess"])
 
+print("== 9. AI 回复引擎与守护时间闸门（ai_reply）==")
+import datetime as _dt
+from boss_apply import ai_reply as _air
+
+# 时间闸门
+t_active = _dt.datetime(2026, 9, 6, 14, 0, 0)
+t_night = _dt.datetime(2026, 9, 6, 0, 30, 0)
+t_boundary_start = _dt.datetime(2026, 9, 6, 9, 30, 0)
+t_boundary_end = _dt.datetime(2026, 9, 6, 20, 30, 0)
+t_outside_early = _dt.datetime(2026, 9, 6, 9, 29, 0)
+t_outside_late = _dt.datetime(2026, 9, 6, 20, 31, 0)
+
+check("工作时间内判定放行", _air.is_active_hour(t_active, "09:30-20:30"))
+check("工作时间起始边界放行", _air.is_active_hour(t_boundary_start, "09:30-20:30"))
+check("工作时间结束边界放行", _air.is_active_hour(t_boundary_end, "09:30-20:30"))
+check("早于工作时间拦截", not _air.is_active_hour(t_outside_early, "09:30-20:30"))
+check("晚于工作时间拦截", not _air.is_active_hour(t_outside_late, "09:30-20:30"))
+check("凌晨时段拦截", not _air.is_active_hour(t_night, "09:30-20:30"))
+check("夜间计算距离下一工作时段为正数", _air.seconds_until_next_active(t_night, "09:30-20:30") > 3600)
+
+# 消息时效
+check("当天HH:MM时间放行", _air.is_recent_message("23:19"))
+check("刚刚/分钟前放行", _air.is_recent_message("10分钟前"))
+check("昨天在24h范围内放行", _air.is_recent_message("昨天 15:20", max_age_hours=24))
+check("历史日期被拦截", not _air.is_recent_message("09月01日", max_age_hours=24))
+check("8月旧消息被拦截", not _air.is_recent_message("08月31日", max_age_hours=24))
+
+# AI 意图判定与回复生成
+ai_engine = _air.AIReplyEngine(cfg)
+
+# 场景 1: 索要微信 -> 必须转人工 needs_human
+r_wx = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "方便加个微信详聊吗？"})
+check("HR索微信判定为needs_human", r_wx["action"] == "needs_human", str(r_wx))
+
+# 场景 2: 索要电话 -> 必须转人工 needs_human
+r_phone = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "留下你的手机号码，明天HR联系你"})
+check("HR索电话判定为needs_human", r_phone["action"] == "needs_human", str(r_phone))
+
+# 场景 3: 线下/指定时间面试邀约 -> 必须转人工 needs_human
+r_interview = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "明天下午2点来公司现场面试可以吗"})
+check("邀约线下面试判定为needs_human", r_interview["action"] == "needs_human", str(r_interview))
+
+# 场景 4: 字节商家BD校招推介 -> 匹配BD与商业化背景回复
+r_byte = ai_engine.decide_and_generate({
+    "who": "蒋先生字节跳动招聘HR",
+    "last_msg": "同学你好~我们公司已开启27届校招，有几个商家BD的岗位形式校招，做商家拓展与团购toB，感兴趣投递一份简历呀~"
+})
+check("字节BD岗意图判为reply", r_byte["action"] == "reply", str(r_byte))
+check("字节回复含2027与商业化亮点", "2027" in r_byte["reply_text"] and "GMV" in r_byte["reply_text"])
+check("字节回复不含隐私敏感词", not _gr.privacy_blocked(r_byte["reply_text"]))
+
+# 场景 5: 沉心传媒招呼与简历意向 -> 标准友好回复
+r_chen = ai_engine.decide_and_generate({
+    "who": "高先生沉心传媒招聘者",
+    "last_msg": "张烨韬，同学你好。我们是沉心传媒HR，看了你的简历比较感兴趣，想跟你沟通一下"
+})
+check("沉心传媒招呼意图判为reply", r_chen["action"] == "reply", str(r_chen))
+check("沉心回复表达兴趣与2027到岗", "2027" in r_chen["reply_text"] and "实习" in r_chen["reply_text"])
+check("沉心回复不含隐私敏感词", not _gr.privacy_blocked(r_chen["reply_text"]))
+
+# 场景 6: 询问届别与到岗时间
+r_avail = ai_engine.decide_and_generate({
+    "who": "某大厂HR",
+    "last_msg": "请问你是几届的？每周能来几天，最快什么时候到岗？"
+})
+check("询问到岗意图判为reply", r_avail["action"] == "reply", str(r_avail))
+check("回答明确提及可实习6个月每周5天", "6个月" in r_avail["reply_text"] and "5天" in r_avail["reply_text"])
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
