@@ -169,6 +169,10 @@ c3 = flows.parse_conv("14:03|王先生某公司HR|方便留个微信吗", ops)
 check("HR索微信→转人工", bool(c3) and c3["needs_human"])
 c4 = flows.parse_conv("16:53|华先生Talking猎头顾问|[送达]|您好，我是27年毕业生，对岗位很感兴趣", ops)
 check("原生默认招呼结尾→不需回复", bool(c4) and not c4["needs_reply_guess"])
+c5 = flows.parse_conv("09月01日|陈海缘高顿教育集团人事|你好呀，我们这边最近在招管培生", ops)
+check("跨天日期格式(09月01日)解析正确", bool(c5) and c5["time"] == "09月01日" and c5["needs_reply_guess"])
+c6 = flows.parse_conv("1|09月01日|童女士杭州有钱鲸网络科技招聘者|你好，请问考虑么？", ops)
+check("前置未读角标剥离后解析正确", bool(c6) and c6["time"] == "09月01日" and c6["needs_reply_guess"])
 
 shutil.rmtree(DRY, ignore_errors=True)
 

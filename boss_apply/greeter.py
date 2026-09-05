@@ -158,7 +158,7 @@ def _pick_conversation_js(company):
   const lis = Array.from(document.querySelectorAll('li'));
   const isConv = (li) => {
     const t = li.innerText || '';
-    return t.length > 12 && /\\d{1,2}:\\d{2}/.test(t);
+    return t.length > 12 && (/\\d{1,2}:\\d{2}/.test(t) || /\\d{1,2}月\\d{1,2}日/.test(t) || /昨天|前天|\\d{4}年/.test(t));
   };
   let target = null, picked = 'none';
   if (company) {
