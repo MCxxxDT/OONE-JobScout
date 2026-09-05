@@ -135,6 +135,19 @@ check("未知码按关键字兜底风控", c_r2 == "restricted")
 c_em, _ = _raw.classify_joblist_response({"code": 0, "zpData": {"jobList": []}})
 check("空 jobList 判 empty", c_em == "empty")
 
+print("== 6. 隐私校验（精细化词表，审计补丁#2）==")
+from boss_apply import greeter as _gr
+check("内置文案全部过隐私校验",
+      all(not _gr.privacy_blocked(t) for ts in cfg["greeting"].values() for t in ts))
+check("11位手机号被拦截", _gr.privacy_blocked("打我电话13812345678"))
+check("加个微信被拦截", _gr.privacy_blocked("加个微信聊"))
+check("留个微信被拦截", _gr.privacy_blocked("方便留个微信吗"))
+check("微信号被拦截", _gr.privacy_blocked("你微信号多少"))
+check("微信联系被拦截", _gr.privacy_blocked("咱们微信联系"))
+check("企业微信业务词不误伤", not _gr.privacy_blocked("熟悉企业微信协同办公"))
+check("微信小程序业务词不误伤", not _gr.privacy_blocked("负责微信小程序全栈开发"))
+check("微信生态业务词不误伤", not _gr.privacy_blocked("做过微信生态商业化"))
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

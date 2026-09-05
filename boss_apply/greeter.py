@@ -4,6 +4,7 @@ send_message_via_chat = 消息中心按公司名发消息（回复 HR 用）。
 2026-08-31 适配：BOSS 聊天界面已迁移至 /web/geek/chat（详情页内嵌面板不再出现）。"""
 import json
 import random
+import re
 import time
 
 from . import rawcdp
@@ -14,11 +15,31 @@ SEND_SELECTORS = [".btn-send", "button:has-text('发送')"]
 
 CHAT_URL = "/web/geek/chat"
 
+# 隐私红线（精细化词表，审计补丁#2）：仅匹配"索要/提供联系方式"意图，
+# 不裸匹配"微信"——保护 企业微信/微信小程序/微信生态 等业务词。flows.chat_reply 与本文件同源复用。
+PRIVACY_RE = re.compile(
+    r"1[3-9]\d{9}"                              # 11位手机号
+    r"|\d{3,4}-?\d{7,8}"                        # 座机/长号
+    r"|(?:加|留|给)\s*个?\s*微信"                 # 加微信/留个微信/给我微信
+    r"|微信号"                                   # 微信号
+    r"|微信(?:联系|沟通|详聊)"                    # 微信联系/微信沟通/微信详聊
+    r"|手机号码?|电话|联系方式"                    # 手机(号)/电话/联系方式
+    r"|(?:加|留)\s*个?\s*联系",                  # 加联系/留个联系
+    re.I,
+)
+
+
+def privacy_blocked(text):
+    """True=文案含联系方式意图，禁止 agent 代发（转人工）。"""
+    return bool(PRIVACY_RE.search(text or ""))
+
 
 def greeting_text(cfg, job):
     profile = cfg.get("profile", "test")
     templates = (cfg.get("greeting", {}) or {}).get(profile) or cfg["greeting"]["test"]
     t = random.choice(templates)
+    if privacy_blocked(t):
+        raise RuntimeError("greeting template contains contact info (privacy), profile=%r" % profile)
     return t.replace("{job}", job.get("title") or "该岗位")
 
 
