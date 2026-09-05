@@ -65,6 +65,21 @@ def stats() -> dict:
 
 
 @mcp.tool()
+def chat_inbox() -> dict:
+    """消息中心只读巡检：needs_reply=待回复会话，needs_human=HR索要联系方式（禁止代发，转人工）。
+    agent 回复前必须先调用本工具，并与台账 action=reply 历史交叉核对防重复；回复前点开会话核实全文。"""
+    return flows.chat_inbox(_cfg())
+
+
+@mcp.tool()
+def chat_reply(company: str, text: str) -> dict:
+    """按公司名回复 HR 一条消息。文案含电话/微信等联系方式会被拒绝(blocked_privacy)转人工；
+    公司未命中会话列表即中止，绝不发给其他会话；发送以输入框清零为成功标准。
+    回复文案不得编造经历或承诺到岗时间以外的条件。"""
+    return flows.chat_reply(_cfg(), company, text)
+
+
+@mcp.tool()
 def resume_guard() -> dict:
     """人工确认页面无风控后，解除暂停状态。"""
     g = _g(_cfg())
