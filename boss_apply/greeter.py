@@ -139,7 +139,21 @@ def _probe_js():
     inputTag: inp ? (inp.tagName + '|' + String(inp.className || '').slice(0, 40)) : null,
     inputLen: inp ? String(inp.value || inp.textContent || '').length : -1,
     sendDisabled: send ? /disabled/.test(String(send.className)) : null,
-    sureBtn: !!document.querySelector('.btn-sure-v2'),
+  const hasSureDialog = () => {
+    const dialogs = document.querySelectorAll('.dialog-wrap, .boss-dialog, .dialog-container');
+    for (const d of dialogs) {
+      if (/contact/i.test(d.className) || (d.innerText || '').includes('电话') || (d.innerText || '').includes('微信')) continue;
+      const b = d.querySelector('.btn-sure, .btn-sure-v2, button.sure');
+      if (b && (b.offsetWidth || b.offsetHeight || b.getClientRects().length)) return true;
+    }
+    return false;
+  };
+  return JSON.stringify({
+    href: location.href.slice(0, 100),
+    inputTag: inp ? (inp.tagName + '|' + String(inp.className || '').slice(0, 40)) : null,
+    inputLen: inp ? String(inp.value || inp.textContent || '').length : -1,
+    sendDisabled: send ? /disabled/.test(String(send.className)) : null,
+    sureBtn: hasSureDialog(),
     bodyLen: document.body ? document.body.innerText.length : 0
   });
 })()
@@ -234,7 +248,20 @@ _ENTER_JS = """
 })()
 """
 
-_SURE_JS = "(() => { const b = document.querySelector('.btn-sure-v2'); if (b) { b.click(); return 'ok'; } return 'miss'; })()"
+_SURE_JS = """
+(() => {
+  const dialogs = document.querySelectorAll('.dialog-wrap, .boss-dialog, .dialog-container');
+  for (const d of dialogs) {
+    if (/contact/i.test(d.className) || (d.innerText || '').includes('电话') || (d.innerText || '').includes('微信')) continue;
+    const b = d.querySelector('.btn-sure, .btn-sure-v2, button.sure');
+    if (b && (b.offsetWidth || b.offsetHeight || b.getClientRects().length)) {
+      b.click();
+      return 'ok';
+    }
+  }
+  return 'miss';
+})()
+"""
 
 
 def _open_conversation_input(sess, company, poll_s=12):
@@ -259,18 +286,14 @@ def _open_conversation_input(sess, company, poll_s=12):
         info = _ev(sess, _probe_js())
         if isinstance(info, dict) and info.get("inputTag"):
             return info, head
-        if isinstance(info, dict) and info.get("sureBtn"):
-            sess.eval(_SURE_JS)
     return None, head
 
 
 def _do_send(sess):
-    """弹窗点掉 → 按钮优先（disabled则等1s重试）→ 回车兜底。返回 r4 dict。"""
-    _ev(sess, _SURE_JS)
+    """按钮优先（disabled则等1s重试）→ 回车兜底。返回 r4 dict。"""
     r = _ev(sess, _SEND_JS)
     if isinstance(r, dict) and r.get("r") == "btn_disabled_wait":
         time.sleep(1.0)
-        _ev(sess, _SURE_JS)
         r = _ev(sess, _SEND_JS)
         if isinstance(r, dict) and r.get("r") == "btn_disabled_wait":
             r = _ev(sess, _ENTER_JS)
