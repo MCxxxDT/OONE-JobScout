@@ -24,7 +24,7 @@ if r.get("risk"):
     sys.exit(2)
 print("风控信号: 无")
 if r.get("logged_in"):
-    print("登录状态: 已登录 ✓")
+    print("登录状态: 已登录 [OK]")
     print()
     print("T1 通过。下一步可跑 t2_readonly_scan.py")
     sys.exit(0)

@@ -12,13 +12,9 @@ import time
 from . import browser, config as cfgmod, guard, greeter, ledger, rawcdp, scorer
 
 # 消息中心会话列表提取（裸CDP一次性 evaluate，从 scripts/chat_check.py 迁入）
-# 兼容当天时间（HH:MM）与跨天日期（MM月DD日/昨天/前天/YYYY年）
 CHAT_LIST_JS = """
 (() => {
-  const isConv = (li) => {
-    const t = li.innerText || '';
-    return t.length > 12 && (/\\d{1,2}:\\d{2}/.test(t) || /\\d{1,2}月\\d{1,2}日/.test(t) || /昨天|前天|\\d{4}年/.test(t));
-  };
+  const isConv = (li) => { const t = li.innerText || ''; return t.length > 12 && /(?:\\d{1,2}:\\d{2}|\\d{1,2}月\\d{1,2}日|昨天|\\d{4}年)/.test(t); };
   return JSON.stringify(Array.from(document.querySelectorAll('li')).filter(isConv)
     .map(li => (li.innerText || '').slice(0, 200)));
 })()
@@ -136,17 +132,13 @@ def filter_greeted(jobs):
 
 
 def parse_conv(raw, openers):
-    """消息中心会话行 → 结构化。
-    兼容今天时间（02:42）与跨天日期（09月01日/昨天），兼容前置未读角标（如 '1|09月01日|...'）。
+    """消息中心会话行 → 结构化。raw 形如 '02:42|赵先生新美虹星总经理|[送达]|您好，…'。
     from_us=最后一条以 openers 任一前缀开头（含原生默认招呼，见 greeter.self_openers）；
     needs_human=最后一条含联系方式意图（greeter.privacy_blocked，索要或发送均拦截）。"""
-    parts = [p.strip() for p in raw.replace("\n", "|").split("|") if p.strip()]
+    parts = [p for p in raw.replace("\n", "|").split("|") if p != ""]
     if len(parts) < 2:
         return None
-    # 滤掉前置未读数角标（如 "1"）
-    if parts[0].isdigit() and len(parts) > 2:
-        parts = parts[1:]
-    time_s = parts[0] if (":" in parts[0] or "月" in parts[0] or "年" in parts[0] or "天" in parts[0]) else ""
+    time_s = parts[0] if any(k in parts[0] for k in (":", "月", "年", "昨天")) else ""
     who = parts[1] if len(parts) > 1 else ""
     rest = parts[2:]
     status = ""
