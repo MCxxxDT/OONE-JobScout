@@ -7,7 +7,7 @@ import random
 import re
 import time
 
-from . import rawcdp
+from . import ledger, rawcdp
 from .browser import check_risk
 
 CHAT_SELECTORS = [".chat-input", ".dialog-chat textarea", "textarea.chat-input", ".chat-conversation textarea", ".chat-input textarea"]
@@ -32,6 +32,29 @@ PRIVACY_RE = re.compile(
 def privacy_blocked(text):
     """True=文案含联系方式意图，禁止 agent 代发（转人工）。"""
     return bool(PRIVACY_RE.search(text or ""))
+
+
+# BOSS 账号原生默认招呼（不在 config 模板中：点击"立即沟通"时平台自动发出，
+# 会成为新会话的最后一条消息，必须保底识别为自家发言，否则被误判待回复）。
+NATIVE_DEFAULT_OPENER = "您好，我是27年毕业生"
+
+
+def self_openers(cfg, head_len=14):
+    """自家话术前缀集合：config 各 profile 招呼语取 {job} 前稳定段
+    + 台账 reply 文本头 + BOSS 原生默认招呼保底（审计补丁#1）。
+    消息中心据此判定"最后一条是否我方发言"；切 profile/改文案自动跟随。
+    reply 文本头入库截 120 字，head_len 取 14 保证前缀稳定。"""
+    ops = set()
+    for templates in (cfg.get("greeting") or {}).values():
+        for t in templates or []:
+            head = (t or "").split("{job}")[0].strip()
+            if head:
+                ops.add(head[:head_len])
+    for r in ledger.load_all():
+        if r.get("action") == "reply" and r.get("text_head"):
+            ops.add(r["text_head"].strip()[:head_len])
+    ops.add(NATIVE_DEFAULT_OPENER[:head_len])
+    return tuple(o for o in ops if o)
 
 
 def greeting_text(cfg, job):

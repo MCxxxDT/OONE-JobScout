@@ -148,6 +148,18 @@ check("企业微信业务词不误伤", not _gr.privacy_blocked("熟悉企业微
 check("微信小程序业务词不误伤", not _gr.privacy_blocked("负责微信小程序全栈开发"))
 check("微信生态业务词不误伤", not _gr.privacy_blocked("做过微信生态商业化"))
 
+print("== 7. 自家话术识别（self_openers，审计补丁#1）==")
+ops = _gr.self_openers(cfg)
+g0 = cfg["greeting"]["test"][0]
+check("test招呼语前缀可自识别", any(g0.startswith(o) for o in ops))
+r0 = cfg["greeting"]["real"][0]
+ops_real = _gr.self_openers(dict(cfg, profile="real"))
+check("real招呼语前缀可自识别(切real不误判)", any(r0.startswith(o) for o in ops_real))
+ledger.append({"action": "reply", "status": "ok", "company": "dryrun",
+               "text_head": "您好！感谢您的关注与招呼，方便发一下JD"})
+check("台账reply文本头进openers", "您好！感谢您的关注与招呼，方" in _gr.self_openers(cfg))
+check("BOSS原生默认招呼保底", "您好，我是27年毕业生" in _gr.self_openers(cfg))
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
