@@ -199,81 +199,96 @@ check("昨天在24h范围内放行", _air.is_recent_message("昨天 15:20", max_
 check("历史日期被拦截", not _air.is_recent_message("09月01日", max_age_hours=24))
 check("8月旧消息被拦截", not _air.is_recent_message("08月31日", max_age_hours=24))
 
-# AI 意图判定与回复生成
-ai_engine = _air.AIReplyEngine(cfg)
+# AI 意图判定与纯 Agent 驱动回复校验
+print("  --- 纯 Agent 架构校验：无可用 Agent 时坚决不使用模板降级，全权转人工 ---")
+ai_engine_raw = _air.AIReplyEngine(cfg)
+ai_engine_raw.openrouter_key = ""
+ai_engine_raw.openai_key = ""
 
-# 场景 1: 索要微信 -> 全自主太极推回平台并索要JD，异步输出 notice
-r_wx = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "方便加个微信详聊吗？"})
-check("HR索微信全自主推进不阻断", r_wx["action"] == "reply", str(r_wx))
-check("HR索微信生成异步提醒notice", bool(r_wx.get("notice")))
-check("HR索微信回复推回平台且索要JD", "平台" in r_wx["reply_text"] and "JD" in r_wx["reply_text"])
-check("HR索微信回复通过隐私强校验", not _gr.privacy_blocked(r_wx["reply_text"]))
+check("彻底废除确定性模板降级函数", not hasattr(ai_engine_raw, "_generate_template_reply"))
 
-# 场景 2: 索要电话 -> 全自主太极推回平台并索要JD，异步输出 notice
-r_phone = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "留下你的手机号码，明天HR联系你"})
-check("HR索电话全自主推进不阻断", r_phone["action"] == "reply", str(r_phone))
-check("HR索电话生成异步提醒notice", bool(r_phone.get("notice")))
-check("HR索电话回复通过隐私强校验", not _gr.privacy_blocked(r_phone["reply_text"]))
+r_no_agent = ai_engine_raw.decide_and_generate({"who": "测试HR", "last_msg": "方便加个微信详聊吗？"})
+check("无Agent可用时转人工处理", r_no_agent["action"] == "needs_human", str(r_no_agent))
+check("无Agent可用时严禁返回死板模板文案", r_no_agent["reply_text"] == "")
+check("无Agent可用时生成人工接管提醒notice", bool(r_no_agent.get("notice")))
+check("无Agent可用时理由注明转人工", "转人工" in r_no_agent["reason"])
+check("消息来源标识为人工转交", r_no_agent["source"] == "human_handoff")
 
-# 场景 3: 线下/指定时间面试邀约 -> 全自主太极表达弹性并反索详细安排，异步输出 notice
-r_interview = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "明天下午2点来公司现场面试可以吗"})
-check("邀约线下面试全自主推进不阻断", r_interview["action"] == "reply", str(r_interview))
-check("邀约面试生成异步提醒notice", bool(r_interview.get("notice")))
-check("邀约面试太极表达弹性与索要JD", "弹性" in r_interview["reply_text"] and "JD" in r_interview["reply_text"])
-check("邀约面试回复通过隐私强校验", not _gr.privacy_blocked(r_interview["reply_text"]))
+r_empty = ai_engine_raw.decide_and_generate({"who": "测试HR", "last_msg": "  "})
+check("空消息直接跳过", r_empty["action"] == "skip")
 
-# 场景 4: 字节商家BD校招推介（含线下面试宣讲） -> 全自主太极回应、反索JD与安排，输出 notice
-r_byte = ai_engine.decide_and_generate({
-    "who": "蒋先生字节跳动招聘HR",
-    "last_msg": "同学你好~我司已开启27届校招工作。商家BD是我司的正式校招岗位，预计9月中旬我们会在杭州开展校招宣讲会及线下面试，不方便到线下的同学也有线上面试的机会，感兴趣可以投份简历呀~"
-})
-check("字节宣讲面试岗全自主推进", r_byte["action"] == "reply", str(r_byte))
-check("字节宣讲面试生成异步提醒notice", bool(r_byte.get("notice")))
-check("字节太极回复索要JD且表达弹性", "JD" in r_byte["reply_text"] and "弹性" in r_byte["reply_text"])
-check("字节回复无死到岗承诺", "随时可到岗" not in r_byte["reply_text"])
-check("字节回复不含隐私敏感词", not _gr.privacy_blocked(r_byte["reply_text"]))
-
-# 场景 5: 沉心传媒招呼与简历意向 -> 三不原则：礼貌互动、索要JD
-r_chen = ai_engine.decide_and_generate({
-    "who": "高先生沉心传媒招聘者",
-    "last_msg": "张烨韬，同学你好。我们是沉心传媒HR，看了你的简历比较感兴趣，想跟你沟通一下"
-})
-check("沉心传媒招呼意图判为reply", r_chen["action"] == "reply", str(r_chen))
-check("沉心太极回复索要JD且表达开放", "JD" in r_chen["reply_text"] and "开放" in r_chen["reply_text"])
-check("沉心回复不含隐私敏感词", not _gr.privacy_blocked(r_chen["reply_text"]))
-
-# 场景 6: 询问届别与到岗时间 -> 三不原则：回答届别但强调时间弹性，反索JD不给死承诺
-r_avail = ai_engine.decide_and_generate({
-    "who": "某大厂HR",
-    "last_msg": "请问你是几届的？每周能来几天，最快什么时候到岗？"
-})
-check("询问到岗意图判为reply", r_avail["action"] == "reply", str(r_avail))
-check("回答2027届且说明时间弹性", "2027" in r_avail["reply_text"] and "弹性" in r_avail["reply_text"])
-check("反客为主索要岗位JD", "JD" in r_avail["reply_text"])
-check("不给死承诺(无随时到岗)", "随时可到岗" not in r_avail["reply_text"])
-
-# 场景 7: 询问常驻地/本地/能否线下 -> 真诚告知在福州、看好江浙沪、提议初试线上
-r_loc = ai_engine.decide_and_generate({
+print("  --- Agent 决策 Prompt 构建校验 ---")
+prompt_test = ai_engine_raw.build_agent_prompt({
     "who": "杭州某独角兽HR",
-    "last_msg": "请问你现在在杭州吗，可以接受线下面试吗？"
+    "last_msg": "你现在在杭州吗？期望薪资多少？"
 })
-check("询问常驻地与能否线下判为reply", r_loc["action"] == "reply", str(r_loc))
-check("真诚说明常驻福州", "福州" in r_loc["reply_text"])
-check("表达意向奔赴江浙沪", "江浙沪" in r_loc["reply_text"])
-check("提议初试线上推进", "线上" in r_loc["reply_text"])
-check("询问地点生成异步提醒notice", bool(r_loc.get("notice")))
-check("询问地点回复不含隐私敏感词", not _gr.privacy_blocked(r_loc["reply_text"]))
+check("Prompt注入张烨韬画像", "张烨韬" in prompt_test and "2027" in prompt_test)
+check("Prompt包含常驻福州", "福州" in prompt_test)
+check("Prompt包含核心意向江浙沪", "江浙沪" in prompt_test)
+check("Prompt包含薪资租房生活底线", "生活" in prompt_test and "租房" in prompt_test)
+check("Prompt包含三不原则", "三不原则" in prompt_test)
+check("Prompt包含反索JD心法", "JD" in prompt_test)
+check("Prompt包含初试线上提议", "线上" in prompt_test)
+check("Prompt包含严禁泄露手机号", "手机号" in prompt_test)
 
-# 场景 8: 询问期望薪资 -> 说明跨城江浙沪需覆盖租房生活底线、反索JD
-r_sal = ai_engine.decide_and_generate({
-    "who": "上海某AI科技HR",
-    "last_msg": "同学你好，请问你的期望薪资是多少？对实习待遇有什么要求？"
-})
-check("询问薪资待遇判为reply", r_sal["action"] == "reply", str(r_sal))
-check("说明覆盖租房与生活开销底线", "租房" in r_sal["reply_text"] and "生活" in r_sal["reply_text"])
-check("索要JD深入了解", "JD" in r_sal["reply_text"])
-check("询问薪资生成异步提醒notice", bool(r_sal.get("notice")))
-check("询问薪资回复不含隐私敏感词", not _gr.privacy_blocked(r_sal["reply_text"]))
+print("  --- Agent 驱动拟人动态回复与安全红线门禁校验 ---")
+def mock_agent(conv, prompt):
+    msg = conv.get("last_msg", "")
+    if "微信" in msg:
+        return {
+            "action": "reply",
+            "reply_text": "您好！在平台沟通比较方便及时，方便先发一份岗位详细JD供我拜读了解一下吗？谢谢！",
+            "reason": "Agent引导平台沟通并索要JD",
+            "notice": "HR索要微信，Agent已太极留存平台并索要JD"
+        }
+    if "杭州" in msg or "线下" in msg:
+        return {
+            "action": "reply",
+            "reply_text": "您好！我目前常驻福州，因为非常看好江浙沪及贵司该方向，随时可奔赴到岗！初试方便先线上进行吗？谢谢！",
+            "reason": "Agent真诚告知在福州并提议线上初试",
+            "notice": "HR询问地点，Agent已告知在福州并提议线上"
+        }
+    if "期望薪资" in msg:
+        return {
+            "action": "reply",
+            "reply_text": "您好！考虑跨城赴江浙沪全职实习，主要希望能覆盖当地基础租房与生活开销；核心最看重业务匹配度，方便发一份JD吗？",
+            "reason": "Agent说明生活底线并索JD"
+        }
+    return {
+        "action": "reply",
+        "reply_text": "您好！感谢您的关注，我对该方向很有兴趣，方便发一份岗位详细JD深入了解一下吗？谢谢！",
+        "reason": "Agent通用动态回复"
+    }
+
+ai_engine_agent = _air.AIReplyEngine(cfg, agent_generator=mock_agent)
+
+# 场景 A: 索要微信
+r_agent_wx = ai_engine_agent.decide_and_generate({"who": "测试HR", "last_msg": "方便加个微信详聊吗？"})
+check("Agent驱动处理微信索要判为reply", r_agent_wx["action"] == "reply")
+check("Agent回复文案通过隐私强校验", not _gr.privacy_blocked(r_agent_wx["reply_text"]))
+check("Agent回复文案反索JD", "JD" in r_agent_wx["reply_text"])
+
+# 场景 B: 询问地点与能否线下
+r_agent_loc = ai_engine_agent.decide_and_generate({"who": "杭州HR", "last_msg": "请问你现在在杭州吗，可以接受线下面试吗？"})
+check("Agent驱动地点询问判为reply", r_agent_loc["action"] == "reply")
+check("Agent回复说明常驻福州", "福州" in r_agent_loc["reply_text"])
+check("Agent回复提议线上初试", "线上" in r_agent_loc["reply_text"])
+check("Agent回复通过隐私强校验", not _gr.privacy_blocked(r_agent_loc["reply_text"]))
+
+# 场景 C: 询问薪资与生活底线
+r_agent_sal = ai_engine_agent.decide_and_generate({"who": "上海HR", "last_msg": "请问你的期望薪资是多少？"})
+check("Agent驱动薪资询问判为reply", r_agent_sal["action"] == "reply")
+check("Agent回复体现租房与生活底线", "生活" in r_agent_sal["reply_text"] and "租房" in r_agent_sal["reply_text"])
+check("Agent回复通过隐私强校验", not _gr.privacy_blocked(r_agent_sal["reply_text"]))
+
+# 场景 D: 安全红线门禁（若 Agent 输出包含真实手机号，强制转人工）
+def leaking_agent(conv, prompt):
+    return {"action": "reply", "reply_text": "请联系我电话13812345678详聊"}
+
+r_agent_leak = ai_engine_agent.decide_and_generate({"who": "测试HR", "last_msg": "电话多少"}, agent_generator=leaking_agent)
+check("Agent泄露手机号被安全门禁拦截转人工", r_agent_leak["action"] == "needs_human")
+check("门禁转人工清空发信文案", r_agent_leak["reply_text"] == "")
+check("来源标识为privacy_guard", r_agent_leak["source"] == "privacy_guard")
 
 print("== 10. 岗位详情提取与 FastMCP 工具 (get_active_job_detail) ==")
 from boss_apply import server as _srv

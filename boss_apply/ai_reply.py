@@ -1,10 +1,10 @@
 """AI 智能决策与回复引擎。
-负责：
-1. 会话意图识别（reply / needs_human / skip）；
-2. 候选人画像注入与拟人回复文案生成；
-3. 大模型调用（OpenRouter/OpenAI）与高质量确定性模板自动降级；
+纯 Agent / 大模型智能驱动架构：
+1. 彻底废除任何确定性模板降级引擎；
+2. 若有可用 Agent / 大模型驱动，按沟通策略 Prompt 动态拟人生成高情商回复；
+3. 若无法调用 Agent 进行回复，则全权告知人工进行处理（action: "needs_human"）；
 4. 工作时间闸门（Active Hours Gate）与消息时效过滤；
-5. 隐私红线与人工门禁（索要电话/微信/约面坚决转人工）。
+5. 隐私红线安全门禁（电话/微信意图二次强校验）。
 """
 import datetime
 import json
@@ -105,25 +105,51 @@ def is_recent_message(time_str: str, max_age_hours: int = 24) -> bool:
 
 
 class AIReplyEngine:
-    """智能会话决策与回复生成引擎（全自主无人值守 + 异步提醒）。"""
+    """纯 Agent / 大模型驱动的会话决策与回复生成引擎（彻底废除确定性模板降级）。"""
 
-    def __init__(self, cfg: Optional[dict] = None, profile: Optional[dict] = None):
+    def __init__(
+        self,
+        cfg: Optional[dict] = None,
+        profile: Optional[dict] = None,
+        agent_generator: Optional[Any] = None,
+    ):
         self.cfg = cfg or {}
         self.profile = dict(CANDIDATE_PROFILE, **(profile or {}))
+        self.agent_generator = agent_generator
         self.openrouter_key = os.getenv("OPENROUTER_API_KEY") or ""
         self.openai_key = os.getenv("OPENAI_API_KEY") or ""
         self.openai_base = os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
 
-    def decide_and_generate(self, conv: dict) -> dict:
-        """输入会话信息（含 who, last_msg, time 等），输出决策与回复文案：
-        {
-            "action": "reply" | "skip",
-            "reply_text": str,
-            "reason": str,
-            "notice": str (可选异步提醒),
-            "source": "rule" | "llm" | "template"
-        }
-        全自主原则：绝不因为敏感话题阻断执行；自动太极应对并反索JD，同时输出 notice 提醒用户。
+    def build_agent_prompt(self, conv: dict) -> str:
+        """根据当前会话构建供 Agent/大模型思考的标准化决策 Prompt 与心法。"""
+        who = conv.get("who") or "HR"
+        last_msg = (conv.get("last_msg") or "").strip()
+        return (
+            f"【候选人真实画像】\n"
+            f"- 姓名：{self.profile['name']}\n"
+            f"- 学历与专业：{self.profile['school']} · {self.profile['major']}\n"
+            f"- 毕业届别与状态：{self.profile['grade_desc']}（目前2026年9月处于秋招黄金期，毕业设计已交付，无在校日常课程）\n"
+            f"- 常驻地与意向城市：目前常驻【{self.profile['current_city']}】，核心意向奔赴【{self.profile['target_region']}】发展\n"
+            f"- 到岗与稳定性：{self.profile['availability']}\n"
+            f"- 薪资底线诉求：{self.profile['salary_requirement']}\n"
+            f"- 核心优势：全栈MCP/Agent工程落地经验 + 200人团队月操盘10万GMV的商业化即战力\n\n"
+            f"【当前HR与最新消息】\n"
+            f"- 对话方：{who}\n"
+            f"- HR最新消息：\"{last_msg}\"\n\n"
+            f"【Agent 沟通策略与心法】\n"
+            f"1. 问常驻地 / 能否线下面试（如在杭州吗/在本地吗/人在哪/接受线下吗）：真诚告知目前常驻福州，表达强烈意向奔赴江浙沪，并提议初试先通过线上（腾讯会议等方式）高效推进，合适随时到岗；\n"
+            f"2. 问期望薪资（如期望薪资是多少/对实习待遇有什么要求）：说明考虑跨城前往江浙沪全职实习，主要希望能覆盖当地基础租房与生活开销（如日薪180-250左右或有房补即可）；核心依然最看重业务与团队匹配度，并索要详细JD；\n"
+            f"3. 索要联系方式（微信/电话/邮箱）：引导留存平台沟通更及时，反客为主索要岗位详细JD；\n"
+            f"4. 邀约面试 / 问到岗时间：说明学业与时间相对具备弹性，主动索要岗位JD与具体安排，绝不擅自承诺死时间；\n"
+            f"5. 三不原则：不承诺（时间保留弹性）、不拒绝（保持积极开放）、不负责（主动索要详细JD互相了解）；\n"
+            f"6. 绝对隐私红线：严禁在文案中输出真实11位手机号、座机电话、微信号或外部链接。\n\n"
+            f"请输出纯 JSON 格式：\n"
+            f'{{"action": "reply"|"needs_human"|"skip", "reason": "理由", "reply_text": "50-100字拟人高情商回复（表达开放，反索JD）"}}'
+        )
+
+    def decide_and_generate(self, conv: dict, agent_generator: Optional[Any] = None) -> dict:
+        """输入会话信息，驱动 Agent 生成回复。
+        若无可用 Agent 或生成失败，坚决不使用确定性模板降级，全权告知人工进行处理。
         """
         last_msg = (conv.get("last_msg") or "").strip()
         who = conv.get("who") or ""
@@ -132,135 +158,69 @@ class AIReplyEngine:
         if not last_msg:
             return {"action": "skip", "reply_text": "", "reason": "消息为空", "source": "rule"}
 
-        # 2. 索要联系方式意图（微信/手机/电话/邮箱等）：不阻断，太极引导留存平台并反索JD
-        if greeter.privacy_blocked(last_msg) or any(pat.search(last_msg) for pat in CONTACT_PATTERNS):
-            reply = (
-                "您好！非常感谢您的关注与认可。目前在平台沟通也比较方便及时，方便先在平台发一份岗位的详细JD供我了解一下吗？"
-                "若后续推进合适再进一步深入沟通，谢谢您的理解！"
-            )
-            return {
-                "action": "reply",
-                "reply_text": reply,
-                "reason": "HR索要联系方式，太极引导留存平台沟通并反客为主索要JD",
-                "notice": "HR索要联系方式（微信/电话），系统已自动太极应对并反索JD。如您需要直接私聊对方，可人工介入！",
-                "source": "template",
-            }
+        prompt = self.build_agent_prompt(conv)
+        gen = agent_generator or self.agent_generator
 
-        # 3. 询问常驻地点 / 是否在本地 / 能否线下面试：真诚告知常驻福州，表达强烈赴江浙沪意愿，提议线上初试
-        if any(pat.search(last_msg) for pat in LOCATION_PATTERNS):
-            reply = (
-                "您好！我目前常驻福州，因为非常看好江浙沪以及贵司该方向的发展，如果有合适的机会可以随时奔赴到岗！"
-                "为了更高效推进，初试方便先通过线上（腾讯会议等方式）进行吗？非常期待能有深入交流的机会，谢谢您！"
-            )
-            return {
-                "action": "reply",
-                "reply_text": reply,
-                "reason": "HR询问常驻地点或能否线下面试，真诚告知在福州并表达奔赴意向，提议线上初试",
-                "notice": "HR询问常驻地点或能否线下面试，系统已告知常驻福州并提议线上初试。如需进一步对接，可人工介入！",
-                "source": "template",
-            }
+        # 2. 尝试调用 Agent 生成（函数钩子或大模型 API）
+        agent_res = None
+        if gen:
+            try:
+                import inspect
+                sig = inspect.signature(gen)
+                if len(sig.parameters) >= 2:
+                    agent_res = gen(conv, prompt)
+                else:
+                    agent_res = gen(conv)
+            except Exception:
+                agent_res = None
 
-        # 4. 面试邀约 / 宣讲会 / 约具体时间：不阻断，太极表达弹性并反索详细安排
-        if any(pat.search(last_msg) for pat in INTERVIEW_PATTERNS):
-            reply = (
-                "您好！非常感谢您的关注与宣讲面试安排。目前学业与实习时间相对具备弹性，方便发一份该岗位的详细JD与具体安排供我拜读了解一下吗？"
-                "期待后续进一步沟通交流，谢谢！"
-            )
-            return {
-                "action": "reply",
-                "reply_text": reply,
-                "reason": "HR提及宣讲/面试，太极表达弹性并反客为主索要JD与安排",
-                "notice": "HR提及线下面试/宣讲会，系统已自动表达弹性并索要详细JD，绝不擅自承诺到场。如需具体对接，可人工介入！",
-                "source": "template",
-            }
+        if not agent_res:
+            agent_res = self._try_llm_generate(conv, prompt)
 
-        # 5. 薪资待遇询问：不阻断，太极表达覆盖异地生活底线并反索JD
-        if any(pat.search(last_msg) for pat in SALARY_PATTERNS):
-            reply = (
-                "您好！非常感谢您的关注。关于待遇，考虑到后续跨城前往江浙沪全职实习，主要希望能覆盖在当地的基础租房与生活开销（如日薪180-250左右或有房补即可）；"
-                "核心依然最看重业务与团队匹配度。方便发一份岗位详细JD供我深入了解一下吗？谢谢！"
-            )
-            return {
-                "action": "reply",
-                "reply_text": reply,
-                "reason": "HR询问待遇细节，太极表达异地生活覆盖底线并反索JD",
-                "notice": "HR询问薪资待遇，系统已自动说明异地生活租房底线并索要JD，可人工接管！",
-                "source": "template",
-            }
+        # 3. Agent 成功产出回复时的处理与门禁
+        if isinstance(agent_res, dict) and agent_res.get("action"):
+            act = agent_res.get("action")
+            if act == "reply":
+                reply_text = (agent_res.get("reply_text") or "").strip()
+                if not reply_text:
+                    pass  # 回复为空，落入人工处理
+                elif greeter.privacy_blocked(reply_text):
+                    # Agent 产出文案触犯隐私红线（如泄露手机号/电话），安全门禁强制转人工
+                    return {
+                        "action": "needs_human",
+                        "reply_text": "",
+                        "reason": "Agent生成文案包含联系方式/电话隐私，安全门禁拦截并转人工",
+                        "notice": f"HR [{who}] 发来消息: \"{last_msg}\"，Agent回复文案包含敏感联系方式，已拦截并转人工！",
+                        "source": "privacy_guard",
+                    }
+                else:
+                    return {
+                        "action": "reply",
+                        "reply_text": reply_text[:120],
+                        "reason": agent_res.get("reason") or "Agent智能生成拟人回复",
+                        "notice": agent_res.get("notice") or "",
+                        "source": agent_res.get("source") or "agent",
+                    }
+            elif act in ("needs_human", "skip"):
+                return agent_res
 
-        # 5. 尝试调用大模型生成（若配置且有效）
-        llm_res = self._try_llm_generate(conv)
-        if llm_res and llm_res.get("action"):
-            reply_text = (llm_res.get("reply_text") or "").strip()
-            if reply_text and not greeter.privacy_blocked(reply_text):
-                return {
-                    "action": "reply",
-                    "reply_text": reply_text[:120],
-                    "reason": llm_res.get("reason") or "大模型生成太极回复",
-                    "notice": llm_res.get("notice") or "",
-                    "source": "llm",
-                }
+        # 4. 无法通过 Agent 进行回复时：坚决废除确定性模板降级，全权告知人工进行处理
+        notice_msg = f"HR [{who}] 发来消息: \"{last_msg}\"，当前无法通过 Agent 进行智能回复，请人工查看并处理！"
+        return {
+            "action": "needs_human",
+            "reply_text": "",
+            "reason": "无法调用 Agent/大模型进行智能回复（已禁用确定性模板降级），转人工处理",
+            "notice": notice_msg,
+            "source": "human_handoff",
+        }
 
-        # 6. 高质量确定性模板自动响应
-        return self._generate_template_reply(conv)
-
-    def _generate_template_reply(self, conv: dict) -> dict:
-        """根据 HR 消息上下文生成【不承诺、不拒绝、不负责】的太极风格回复：
-        - 不承诺：绝不说死到岗时间和硬性周期，保留学业弹性；
-        - 不拒绝：对任何岗位/业务方向均表达开放态度与良好兴趣；
-        - 不负责：把球踢回给 HR，主动索要详细 JD 和业务信息互相了解。
-        """
-        msg = conv.get("last_msg") or ""
-
-        # 场景 A: 岗位推荐/校招/BD/商业化/销售场景
-        if any(k in msg for k in ("BD", "bd", "销售", "商家", "拓展", "商务", "业务")):
-            reply = (
-                "您好！非常感谢您的关注与推荐。看到贵司该方向业务很有活力，我持积极开放的态度。"
-                "方便发一下岗位的详细JD或业务侧重点供我拜读了解一下吗？期待后续进一步沟通交流，谢谢！"
-            )
-            return {"action": "reply", "reply_text": reply, "reason": "商业化/BD岗位太极回应并索要JD", "source": "template"}
-
-        # 场景 B: 询问届别 / 到岗时间 / 实习周期
-        if any(k in msg for k in ("几届", "毕业时间", "到岗", "实习多久", "每周几天", "多久可以入职")):
-            reply = (
-                "您好！我是2027届在读，目前学业与实习时间相对具备弹性。"
-                "具体到岗节奏与实习安排，可根据咱们后续沟通情况再深入商议。方便先发一份岗位JD了解一下吗？谢谢！"
-            )
-            return {"action": "reply", "reply_text": reply, "reason": "到岗与学业弹性回应并反索JD", "source": "template"}
-
-        # 场景 C: HR 发来打招呼 / 表达对简历感兴趣 / 邀请沟通
-        if any(k in msg for k in ("感兴趣", "沟通一下", "聊聊", "你好", "推荐", "投递", "校招", "同学")):
-            reply = (
-                "您好！非常感谢您的关注与招呼。我对贵司的发展方向很感兴趣，也持积极开放的交流态度。"
-                "方便发一份该岗位的详细JD供我了解一下吗？非常期待能有互相了解的机会，谢谢！"
-            )
-            return {"action": "reply", "reply_text": reply, "reason": "标准HR招呼太极回应并索要JD", "source": "template"}
-
-        # 场景 D: 通用兜底
-        reply = (
-            "您好！感谢您的关注与招呼。我对贵司该方向很有兴趣，方便先发一份岗位的详细JD供我拜读了解一下吗？谢谢！"
-        )
-        return {"action": "reply", "reply_text": reply, "reason": "通用太极回应并索要JD", "source": "template"}
-
-    def _try_llm_generate(self, conv: dict) -> Optional[dict]:
-        """尝试使用大模型 API 生成（若配置且可用）。贯彻【不承诺、不拒绝、不负责】原则。"""
+    def _try_llm_generate(self, conv: dict, prompt: Optional[str] = None) -> Optional[dict]:
+        """尝试使用大模型 API 作为 Agent 生成回复。"""
         if not (self.openrouter_key or self.openai_key):
             return None
 
-        prompt = (
-            f"求职者背景：张烨韬，福建师大数媒技术专业（2027届应届在读，毕业班无在校课）。\n"
-            f"当前常驻：福建省福州市；核心意向城市：江浙沪（杭州、上海等）。合适机会随时奔赴全职到岗（保证每周5天满勤）。\n"
-            f"薪资底线：实习薪资须能覆盖江浙沪当地基础租房与生活开销（日薪180-250+或月薪4k-6k+，或有房补）。\n"
-            f"HR信息：{conv.get('who')}\n"
-            f"HR最新消息：\"{conv.get('last_msg')}\"\n\n"
-            f"请遵循沟通策略回复：\n"
-            f"1. 若HR询问常驻地/是否在本地/能否线下面试：真诚告知目前常驻福州，表达强烈意向奔赴江浙沪，并提议初试线上（腾讯会议等）进行；\n"
-            f"2. 若HR询问薪资待遇：说明跨城前往江浙沪全职实习需覆盖当地基础生活租房开销，核心依然最看重业务匹配度，并索要JD；\n"
-            f"3. 三不原则：不盲目给死到岗承诺，不生硬拒绝，主动索要详细JD把球踢回给HR；\n"
-            f"4. 绝不透露任何手机号、微信号、邮箱或外部链接。\n\n"
-            f"请返回纯 JSON 格式：\n"
-            f'{{"action": "reply"|"needs_human"|"skip", "reason": "理由", "reply_text": "50-80字拟人高情商回复（索要JD，表达开放）"}}'
-        )
+        if not prompt:
+            prompt = self.build_agent_prompt(conv)
 
         try:
             import requests
@@ -278,7 +238,7 @@ class AIReplyEngine:
             payload = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "你是一名求职助理，代表求职者回复招聘平台的HR消息。严格输出纯JSON。"},
+                    {"role": "system", "content": "你是一名求职助理 Agent，代表求职者回复招聘平台HR消息。严格输出纯JSON。"},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,

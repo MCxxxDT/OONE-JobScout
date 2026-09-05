@@ -120,6 +120,17 @@ def run_cycle(cfg, engine, args):
             print(f"  [决策: 跳过] 原因: {reason}")
             continue
 
+        if action == "needs_human":
+            print(f"  [决策: 无法通过Agent回复 -> 转人工处理] 原因: {reason}")
+            ledger.append({
+                "action": "needs_human",
+                "company": who,
+                "last_msg": last_msg,
+                "reason": reason,
+                "notice": notice,
+            })
+            continue
+
         if action == "reply":
             print(f"  [决策: 自动太极回复] 来源: {source} | 理由: {reason}")
             print(f"  [回复文案] {reply_text}")
