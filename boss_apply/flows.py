@@ -122,6 +122,28 @@ def filter_greeted(jobs):
     return [j for j in jobs if not (j.get("href") and j["href"] in greeted)]
 
 
+def parse_conv(raw, openers):
+    """消息中心会话行 → 结构化。raw 形如 '02:42|赵先生新美虹星总经理|[送达]|您好，…'。
+    from_us=最后一条以 openers 任一前缀开头（含原生默认招呼，见 greeter.self_openers）；
+    needs_human=最后一条含联系方式意图（greeter.privacy_blocked，索要或发送均拦截）。"""
+    parts = [p for p in raw.replace("\n", "|").split("|") if p != ""]
+    if len(parts) < 2:
+        return None
+    time_s = parts[0] if ":" in parts[0] else ""
+    who = parts[1] if len(parts) > 1 else ""
+    rest = parts[2:]
+    status = ""
+    if rest and rest[0].startswith("["):
+        status = rest[0]
+        rest = rest[1:]
+    preview = "|".join(rest)
+    from_us = any(preview.startswith(op) for op in (openers or ()))
+    return {"time": time_s, "who": who, "status": status,
+            "last_msg": preview[:120],
+            "needs_reply_guess": bool(preview) and not from_us,
+            "needs_human": greeter.privacy_blocked(preview)}
+
+
 def execute_jobs(cfg, g, jobs, max_count=10):
     """带护栏执行打招呼（裸CDP版）。任何风控信号 → 立即熔断并写台账。"""
     jobs = filter_greeted(jobs)

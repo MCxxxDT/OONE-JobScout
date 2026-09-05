@@ -160,6 +160,16 @@ ledger.append({"action": "reply", "status": "ok", "company": "dryrun",
 check("台账reply文本头进openers", "您好！感谢您的关注与招呼，方" in _gr.self_openers(cfg))
 check("BOSS原生默认招呼保底", "您好，我是27年毕业生" in _gr.self_openers(cfg))
 
+print("== 8. 会话解析（flows.parse_conv）==")
+c1 = flows.parse_conv("02:42|赵先生新美虹星总经理|[送达]|" + g0, ops)
+check("自家招呼结尾→不需回复", bool(c1) and not c1["needs_reply_guess"] and not c1["needs_human"])
+c2 = flows.parse_conv("14:03|秦女士淘宝闪购校招HR|你好，方便聊聊吗", ops)
+check("HR最后发言→待回复", bool(c2) and c2["needs_reply_guess"] and not c2["needs_human"])
+c3 = flows.parse_conv("14:03|王先生某公司HR|方便留个微信吗", ops)
+check("HR索微信→转人工", bool(c3) and c3["needs_human"])
+c4 = flows.parse_conv("16:53|华先生Talking猎头顾问|[送达]|您好，我是27年毕业生，对岗位很感兴趣", ops)
+check("原生默认招呼结尾→不需回复", bool(c4) and not c4["needs_reply_guess"])
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
