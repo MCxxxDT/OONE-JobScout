@@ -80,6 +80,21 @@ def chat_reply(company: str, text: str) -> dict:
 
 
 @mcp.tool()
+def exchange_wechat(company: str) -> dict:
+    """按公司名在消息中心点开会话，并点击官方【换微信】按钮发起官方交换请求。
+    【Agent使用准则】：仅用于 Tier 1 理想目标企业（大厂/AI独角兽核心研发或产品团队，非销售地推苦力），
+    且 HR 表达出积极沟通意向或索要微信时调用。严禁对普通/地推销售岗滥用！"""
+    return flows.chat_exchange_wechat(_cfg(), company)
+
+
+@mcp.tool()
+def send_resume(company: str) -> dict:
+    """按公司名在消息中心点开会话，并点击官方【发简历】按钮推送在线/附件简历卡片供 HR 预览。
+    【Agent使用准则】：用于 HR 索要简历或表达浓厚意向时主动推送。"""
+    return flows.chat_send_resume(_cfg(), company)
+
+
+@mcp.tool()
 def resume_guard() -> dict:
     """人工确认页面无风控后，解除暂停状态。"""
     g = _g(_cfg())

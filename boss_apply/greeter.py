@@ -324,6 +324,68 @@ def send_message_via_chat(sess, company, text, poll_s=12):
     return {"conv": head, "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
 
 
+def exchange_wechat_via_chat(sess, company, poll_s=12):
+    """消息中心按公司名点开会话并点击【换微信】官方原生按钮。
+    发起官方请求交换微信卡片，HR同意后平台合规交换。"""
+    info, head = _open_conversation_input(sess, (company or "").strip(), poll_s)
+    if not info:
+        raise RuntimeError("conversation/input not found for %r (head=%r)" % (company, head))
+    click_res = _ev(sess, """
+(() => {
+  const btn = document.querySelector('.btn-weixin');
+  if (!btn) return JSON.stringify({r: 'notfound'});
+  if (btn.classList.contains('unable')) return JSON.stringify({r: 'already_sent'});
+  btn.click();
+  return JSON.stringify({r: 'clicked'});
+})()
+""")
+    if not (isinstance(click_res, dict) and click_res.get("r") in ("clicked", "already_sent")):
+        raise RuntimeError("click btn-weixin failed: %r" % (click_res,))
+    if click_res.get("r") == "already_sent":
+        return {"status": "already_sent", "company": company, "conv": head}
+    time.sleep(1.0)
+    # 确认弹窗（若出现确认交换微信弹窗则点击确认）
+    _ev(sess, """
+(() => {
+  const b = document.querySelector('.panel-contact .btn-sure, .panel-contact .btn-sure-v2, .boss-dialog .btn-sure');
+  if (b) { b.click(); return 'confirmed'; }
+  return 'no_dialog';
+})()
+""")
+    return {"status": "ok", "action": "exchange_wechat", "company": company, "conv": head}
+
+
+def send_resume_via_chat(sess, company, poll_s=12):
+    """消息中心按公司名点开会话并点击【发简历】官方原生按钮。
+    直接将在线/附件简历卡片推送给 HR 在线预览。"""
+    info, head = _open_conversation_input(sess, (company or "").strip(), poll_s)
+    if not info:
+        raise RuntimeError("conversation/input not found for %r (head=%r)" % (company, head))
+    click_res = _ev(sess, """
+(() => {
+  const btns = Array.from(document.querySelectorAll('.toolbar-btn'));
+  const btn = btns.find(b => (b.innerText || '').trim() === '发简历');
+  if (!btn) return JSON.stringify({r: 'notfound'});
+  if (btn.classList.contains('unable')) return JSON.stringify({r: 'already_sent'});
+  btn.click();
+  return JSON.stringify({r: 'clicked'});
+})()
+""")
+    if not (isinstance(click_res, dict) and click_res.get("r") in ("clicked", "already_sent")):
+        raise RuntimeError("click send_resume failed: %r" % (click_res,))
+    if click_res.get("r") == "already_sent":
+        return {"status": "already_sent", "company": company, "conv": head}
+    time.sleep(1.0)
+    _ev(sess, """
+(() => {
+  const b = document.querySelector('.boss-dialog .btn-sure, .dialog-container .btn-sure');
+  if (b) { b.click(); return 'confirmed'; }
+  return 'no_dialog';
+})()
+""")
+    return {"status": "ok", "action": "send_resume", "company": company, "conv": head}
+
+
 def send_greeting_raw(sess, job, cfg):
     """裸CDP版打招呼（调用前调用方需已导航到职位详情页且 wait_ready 通过）。
     注意：点击"立即沟通"即可能建立沟通关系，视为消耗一次机会。
