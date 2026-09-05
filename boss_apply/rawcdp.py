@@ -469,11 +469,16 @@ class RawCDP:
             self.nav(url)
             st = self.wait_ready(want_cards=False, timeout_s=12)
             if st:
-                v = self.eval(DETAIL_JS)
-                try:
-                    d = json.loads(v) if v else {}
-                except Exception:
-                    d = {}
+                d = {}
+                for _ in range(8):
+                    v = self.eval(DETAIL_JS)
+                    try:
+                        d = json.loads(v) if v else {}
+                    except Exception:
+                        d = {}
+                    if d.get("text") and len(d["text"]) > 100:
+                        break
+                    time.sleep(0.5)
                 return d.get("text", ""), active_days(d.get("active", ""))
             if attempt == 1:
                 time.sleep(2)

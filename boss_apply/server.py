@@ -95,6 +95,15 @@ def send_resume(company: str) -> dict:
 
 
 @mcp.tool()
+def get_active_job_detail(company: str = "") -> dict:
+    """获取当前激活会话（或按公司点开的会话）关联的完整岗位详情。
+    包含岗位名称、薪资、地点、学历要求、经验要求、以及岗位职责和任职要求的完整JD全文。
+    【Agent使用准则】：在对任何HR回复前，必须先调用此工具获取真实JD，深度研判岗位职责与含金量
+    （如识别是大模型产品/Agent核心研发，还是披着大厂外衣的销售地推苦力），据此执行精准的见人下菜碟策略。"""
+    return flows.chat_job_detail(_cfg(), company)
+
+
+@mcp.tool()
 def resume_guard() -> dict:
     """人工确认页面无风控后，解除暂停状态。"""
     g = _g(_cfg())

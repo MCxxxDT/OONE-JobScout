@@ -447,3 +447,51 @@ def send_greeting_raw(sess, job, cfg):
 
     return {"clicked": r1.get("cls"), "chat_href": info.get("href"), "conv": conv_head,
             "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
+
+
+ACTIVE_JOB_JS = """
+(() => {
+  const pos = document.querySelector('.chat-position-content');
+  const c = (pos && pos.__vue__) ? pos.__vue__.conversation$ : null;
+  if (c && c.encryptJobId) {
+    return JSON.stringify({
+      encryptJobId: c.encryptJobId,
+      jobId: c.jobId,
+      securityId: c.securityId || '',
+      brandName: c.brandName || c.companyName || '',
+      companyName: c.companyName || c.brandName || '',
+      positionName: c.positionName || c.jobName || '',
+      salaryDesc: c.salaryDesc || '',
+      lowSalary: c.lowSalary,
+      highSalary: c.highSalary,
+      degreeName: c.degreeName || '',
+      experienceName: c.experienceName || '',
+      locationName: c.locationName || '',
+      href: '/job_detail/' + c.encryptJobId + '.html' + (c.securityId ? ('?securityId=' + encodeURIComponent(c.securityId)) : '')
+    });
+  }
+  if (pos) {
+    const name = (pos.querySelector('.position-name') || {}).innerText || '';
+    const sal = (pos.querySelector('.salary') || {}).innerText || '';
+    const city = (pos.querySelector('.city') || {}).innerText || '';
+    if (name) {
+      return JSON.stringify({
+        positionName: name.trim(),
+        salaryDesc: sal.trim(),
+        locationName: city.trim(),
+        fallback: true
+      });
+    }
+  }
+  return JSON.stringify({r: 'no_active_job'});
+})()
+"""
+
+
+def get_active_conversation_job(sess):
+    """提取当前消息中心激活会话的职位元数据（包括 encryptJobId、薪资、城市、学历经验与详情链接）。"""
+    res = _ev(sess, ACTIVE_JOB_JS)
+    if isinstance(res, dict) and (res.get("encryptJobId") or res.get("positionName")):
+        return res
+    return None
+

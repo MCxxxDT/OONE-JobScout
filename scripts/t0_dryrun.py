@@ -252,6 +252,32 @@ check("回答2027届且说明时间弹性", "2027" in r_avail["reply_text"] and 
 check("反客为主索要岗位JD", "JD" in r_avail["reply_text"])
 check("不给死承诺(无随时到岗)", "随时可到岗" not in r_avail["reply_text"])
 
+print("== 10. 岗位详情提取与 FastMCP 工具 (get_active_job_detail) ==")
+from boss_apply import server as _srv
+
+check("ACTIVE_JOB_JS 语法存在", "chat-position-content" in _gr.ACTIVE_JOB_JS)
+check("ACTIVE_JOB_JS 覆盖 encryptJobId 字段", "encryptJobId" in _gr.ACTIVE_JOB_JS)
+check("ACTIVE_JOB_JS 覆盖 salaryDesc 字段", "salaryDesc" in _gr.ACTIVE_JOB_JS)
+check("ACTIVE_JOB_JS 包含 DOM fallback", "fallback: true" in _gr.ACTIVE_JOB_JS)
+
+class MockSess:
+    def __init__(self, val):
+        self.val = val
+    def eval(self, js):
+        return self.val
+
+s_ok = MockSess(json.dumps({"encryptJobId": "test_eid", "positionName": "AI产品经理", "companyName": "淘宝闪购"}))
+parsed_job = _gr.get_active_conversation_job(s_ok)
+check("get_active_conversation_job 正确提取有效岗位", parsed_job and parsed_job.get("encryptJobId") == "test_eid")
+
+s_none = MockSess(json.dumps({"r": "no_active_job"}))
+check("get_active_conversation_job 无岗位时返回 None", _gr.get_active_conversation_job(s_none) is None)
+
+# 验证 FastMCP 注册了 get_active_job_detail
+import asyncio
+mcp_tool_names = [t.name for t in asyncio.run(_srv.mcp.list_tools())]
+check("FastMCP 注册了 get_active_job_detail", "get_active_job_detail" in mcp_tool_names, str(mcp_tool_names))
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
@@ -259,3 +285,4 @@ if fails:
     print("结果: %d 项失败 -> %s" % (len(fails), fails))
     sys.exit(1)
 print("结果: 全部通过。管线可用，等待 T1(登录态) 接入。")
+

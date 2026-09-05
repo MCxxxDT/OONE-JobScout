@@ -243,6 +243,65 @@ def chat_send_resume(cfg, company):
         sess.close()
 
 
+def chat_job_detail(cfg, company=None, fetch_jd=True):
+    """获取会话关联岗位的完整元数据与JD详情（只读操作，零发送）。
+    若指定 company 则点开该公司的会话；若未指定则直接提取当前激活会话。
+    若 fetch_jd=True 且拿到 href，则在独立后台标签页中加载并抓取完整的岗位职责与任职要求。
+    供 Agent 在制定回复策略或'见人下菜碟'时全面研判岗位含金量。"""
+    company_name = (company or "").strip()
+    sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
+    try:
+        sess.open_tab(rawcdp.BASE + "/web/geek/chat")
+        for _ in range(12):
+            time.sleep(1)
+            st = sess.state()
+            if st and not st.get("blank") and st.get("bodyLen", 0) > 100:
+                break
+        if company_name:
+            info, head = greeter._open_conversation_input(sess, company_name)
+            if not info:
+                return {"ok": False, "company": company_name, "error": "conversation not found for %r" % company_name}
+        else:
+            info, head = greeter._open_conversation_input(sess, "")
+            if not info:
+                return {"ok": False, "company": "", "error": "no conversation found in chat inbox"}
+
+        job_info = greeter.get_active_conversation_job(sess)
+        if not job_info:
+            return {"ok": False, "company": company_name, "error": "no active job found in conversation"}
+
+        sess.close_tab()
+
+        jd_text = ""
+        boss_active = -1
+        if fetch_jd and job_info.get("href"):
+            sess.open_tab()
+            jd_text, boss_active = sess.fetch_detail(job_info)
+            sess.close_tab()
+
+        return {
+            "ok": True,
+            "company": company_name or job_info.get("companyName") or "",
+            "job": {
+                "title": job_info.get("positionName") or job_info.get("title") or "",
+                "company": job_info.get("companyName") or job_info.get("brandName") or "",
+                "salary": job_info.get("salaryDesc") or "",
+                "city": job_info.get("locationName") or "",
+                "degree": job_info.get("degreeName") or "",
+                "experience": job_info.get("experienceName") or "",
+                "href": job_info.get("href") or "",
+                "encryptJobId": job_info.get("encryptJobId") or "",
+                "jd_text": jd_text,
+                "boss_active": boss_active
+            }
+        }
+    except Exception as e:
+        return {"ok": False, "company": company_name, "error": str(e)[:300]}
+    finally:
+        sess.close_tab()
+        sess.close()
+
+
 def execute_jobs(cfg, g, jobs, max_count=10):
     """带护栏执行打招呼（裸CDP版）。任何风控信号 → 立即熔断并写台账。"""
     jobs = filter_greeted(jobs)
