@@ -1027,3 +1027,7 @@
 {"action": "dryrun_reply", "company": "高先生沉心传媒招聘者", "last_msg": "嗨，同学你好。我是沉心传媒的HR，对于您的简历比较感兴趣。方便沟通一下吗？", "reply_text": "您好！非常感谢您的关注与招呼。我对贵司的发展方向非常感兴趣，我是2027届在读，可实习6个月以上每周到岗5天，期待能与您进一步沟通！", "source": "template", "reason": "标准HR招呼与意向响应", "ts": "2026-09-06 00:33:29"}
 {"action": "human_alert", "company": "蒋先生字节跳动招聘HR", "last_msg": "同学你好~我司已开启27届校招工作。商家BD是我司的正式校招岗位，预计9月中旬我们会在杭州开展校招宣讲会及线下面试，不方便到线下的同学也有线上面试的机会，感兴趣可以投份简历呀~", "reason": "命中高敏感意图（索要联系方式/面试邀约/薪资谈判）", "ts": "2026-09-06 00:33:29"}
 {"action": "daemon_cycle_summary", "timestamp": "2026-09-06 00:33:26", "scanned": 22, "candidates": 2, "replied": 1, "dry_run": true, "ts": "2026-09-06 00:33:29"}
+{"action": "human_alert", "company": "华先生Talking猎头顾问", "last_msg": "华先生的手机号：*****", "reason": "inbox_privacy_filter", "ts": "2026-09-06 01:17:57"}
+{"action": "dryrun_reply", "company": "高先生沉心传媒招聘者", "last_msg": "嗨，同学你好。我是沉心传媒的HR，对于您的简历比较感兴趣。方便沟通一下吗？", "reply_text": "您好！非常感谢您的关注与招呼。我对贵司的发展方向很感兴趣，也持积极开放的交流态度。方便发一份该岗位的详细JD供我了解一下吗？非常期待能有互相了解的机会，谢谢！", "source": "template", "reason": "标准HR招呼太极回应并索要JD", "ts": "2026-09-06 01:17:59"}
+{"action": "human_alert", "company": "蒋先生字节跳动招聘HR", "last_msg": "同学你好~我司已开启27届校招工作。商家BD是我司的正式校招岗位，预计9月中旬我们会在杭州开展校招宣讲会及线下面试，不方便到线下的同学也有线上面试的机会，感兴趣可以投份简历呀~", "reason": "命中高敏感意图（索要联系方式/面试邀约/薪资谈判）", "ts": "2026-09-06 01:17:59"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-06 01:17:56", "scanned": 22, "candidates": 2, "replied": 1, "dry_run": true, "ts": "2026-09-06 01:17:59"}

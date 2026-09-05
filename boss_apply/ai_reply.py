@@ -166,51 +166,59 @@ class AIReplyEngine:
         return self._generate_template_reply(conv)
 
     def _generate_template_reply(self, conv: dict) -> dict:
-        """根据 HR 消息上下文与关键词，生成精准贴合的拟人回复。"""
+        """根据 HR 消息上下文生成【不承诺、不拒绝、不负责】的太极风格回复：
+        - 不承诺：绝不说死到岗时间和硬性周期，保留学业弹性；
+        - 不拒绝：对任何岗位/业务方向均表达开放态度与良好兴趣；
+        - 不负责：把球踢回给 HR，主动索要详细 JD 和业务信息互相了解。
+        """
         msg = conv.get("last_msg") or ""
-        grad_year = self.profile.get("grad_year", 2027)
 
-        # 场景 A: 岗位推荐/校招/BD/商业化场景
-        if any(k in msg for k in ("BD", "bd", "销售", "商家", "拓展", "商务")):
+        # 场景 A: 岗位推荐/校招/BD/商业化/销售场景
+        if any(k in msg for k in ("BD", "bd", "销售", "商家", "拓展", "商务", "业务")):
             reply = (
-                f"您好！感谢您的关注与推荐。我是福建师大{grad_year}届在读，可实习6个月以上且每周到岗5天。"
-                f"之前带过200人校园团队做过单月10万+GMV业务，对贵司商业拓展方向很感兴趣，期待能有进一步沟通机会，谢谢！"
+                "您好！非常感谢您的关注与推荐。看到贵司该方向业务很有活力，我持积极开放的态度。"
+                "方便发一下岗位的详细JD或业务侧重点供我拜读了解一下吗？期待后续进一步沟通交流，谢谢！"
             )
-            return {"action": "reply", "reply_text": reply, "reason": "匹配商业化/BD岗位推荐场景", "source": "template"}
+            return {"action": "reply", "reply_text": reply, "reason": "商业化/BD岗位太极回应并索要JD", "source": "template"}
 
         # 场景 B: 询问届别 / 到岗时间 / 实习周期
         if any(k in msg for k in ("几届", "毕业时间", "到岗", "实习多久", "每周几天", "多久可以入职")):
             reply = (
-                f"您好！我是{grad_year}届在读，随时可到岗，可长期实习6个月以上且保证每周到岗5天，期待与您详细沟通！"
+                "您好！我是2027届在读，目前学业与实习时间相对具备弹性。"
+                "具体到岗节奏与实习安排，可根据咱们后续沟通情况再深入商议。方便先发一份岗位JD了解一下吗？谢谢！"
             )
-            return {"action": "reply", "reply_text": reply, "reason": "回答届别与到岗实习周期", "source": "template"}
+            return {"action": "reply", "reply_text": reply, "reason": "到岗与学业弹性回应并反索JD", "source": "template"}
 
         # 场景 C: HR 发来打招呼 / 表达对简历感兴趣 / 邀请沟通
         if any(k in msg for k in ("感兴趣", "沟通一下", "聊聊", "你好", "推荐", "投递", "校招", "同学")):
             reply = (
-                f"您好！非常感谢您的关注与招呼。我对贵司的发展方向非常感兴趣，我是{grad_year}届在读，可实习6个月以上每周到岗5天，期待能与您进一步沟通！"
+                "您好！非常感谢您的关注与招呼。我对贵司的发展方向很感兴趣，也持积极开放的交流态度。"
+                "方便发一份该岗位的详细JD供我了解一下吗？非常期待能有互相了解的机会，谢谢！"
             )
-            return {"action": "reply", "reply_text": reply, "reason": "标准HR招呼与意向响应", "source": "template"}
+            return {"action": "reply", "reply_text": reply, "reason": "标准HR招呼太极回应并索要JD", "source": "template"}
 
-        # 场景 D: 通用兜底表达兴趣并询问详细 JD
+        # 场景 D: 通用兜底
         reply = (
-            f"您好！感谢关注。我对贵司该方向很感兴趣，我是{grad_year}届在读，可稳定实习6个月以上，方便发一下岗位的详细JD吗？谢谢！"
+            "您好！感谢您的关注与招呼。我对贵司该方向很有兴趣，方便先发一份岗位的详细JD供我拜读了解一下吗？谢谢！"
         )
-        return {"action": "reply", "reply_text": reply, "reason": "通用友好回应并询问JD", "source": "template"}
+        return {"action": "reply", "reply_text": reply, "reason": "通用太极回应并索要JD", "source": "template"}
 
     def _try_llm_generate(self, conv: dict) -> Optional[dict]:
-        """尝试使用大模型 API 进行意图识别与回复文案生成（若 API 无法接通则返回 None）。"""
+        """尝试使用大模型 API 生成（若配置且可用）。贯彻【不承诺、不拒绝、不负责】原则。"""
         if not (self.openrouter_key or self.openai_key):
             return None
 
         prompt = (
-            f"求职者画像：姓名【{self.profile['name']}】，{self.profile['school']}{self.profile['major']}（{self.profile['grade_desc']}）。\n"
-            f"到岗情况：{self.profile['availability']}。\n"
-            f"技术与业务亮点：{self.profile['tech_highlights']}；{self.profile['business_highlights']}。\n\n"
-            f"当前 HR 信息：{conv.get('who')}\n"
-            f"HR 最新消息：\"{conv.get('last_msg')}\"\n\n"
-            f"请判断意图并按以下 JSON 格式返回（不带 markdown 标记）：\n"
-            f'{{"action": "reply"|"needs_human"|"skip", "reason": "分类理由", "reply_text": "拟人回复文案（50-100字，亲切得体真诚，杜绝AI套话，绝对不留电话微信）"}}'
+            f"求职者背景：张烨韬，福建师大数媒技术专业（2027届在读）。\n"
+            f"HR信息：{conv.get('who')}\n"
+            f"HR最新消息：\"{conv.get('last_msg')}\"\n\n"
+            f"请遵循【三不原则】回复：\n"
+            f"1. 不承诺：绝不说死到岗时间（不说随时到岗）、绝不保证每周必来几天或能做多久，只提时间相对弹性；\n"
+            f"2. 不拒绝：对岗位与方向保持积极、礼貌、开放态度，绝不生硬拒绝；\n"
+            f"3. 不负责：主动索要详细JD或业务侧重点，把球踢回给HR互相了解；\n"
+            f"4. 绝不透露任何手机号、微信号、邮箱或外部链接。\n\n"
+            f"请返回纯 JSON 格式：\n"
+            f'{{"action": "reply"|"needs_human"|"skip", "reason": "理由", "reply_text": "50-80字拟人太极回复（索要JD，表达开放，不承诺具体时间）"}}'
         )
 
         try:

@@ -214,31 +214,34 @@ check("HR索电话判定为needs_human", r_phone["action"] == "needs_human", str
 r_interview = ai_engine.decide_and_generate({"who": "测试HR", "last_msg": "明天下午2点来公司现场面试可以吗"})
 check("邀约线下面试判定为needs_human", r_interview["action"] == "needs_human", str(r_interview))
 
-# 场景 4: 字节商家BD校招推介 -> 匹配BD与商业化背景回复
+# 场景 4: 字节商家BD校招推介 -> 三不原则：表达开放、反索JD、不承诺到岗
 r_byte = ai_engine.decide_and_generate({
     "who": "蒋先生字节跳动招聘HR",
     "last_msg": "同学你好~我们公司已开启27届校招，有几个商家BD的岗位形式校招，做商家拓展与团购toB，感兴趣投递一份简历呀~"
 })
 check("字节BD岗意图判为reply", r_byte["action"] == "reply", str(r_byte))
-check("字节回复含2027与商业化亮点", "2027" in r_byte["reply_text"] and "GMV" in r_byte["reply_text"])
+check("字节太极回复索要JD且表达开放", "JD" in r_byte["reply_text"] and "开放" in r_byte["reply_text"])
+check("字节回复无死到岗承诺", "随时可到岗" not in r_byte["reply_text"])
 check("字节回复不含隐私敏感词", not _gr.privacy_blocked(r_byte["reply_text"]))
 
-# 场景 5: 沉心传媒招呼与简历意向 -> 标准友好回复
+# 场景 5: 沉心传媒招呼与简历意向 -> 三不原则：礼貌互动、索要JD
 r_chen = ai_engine.decide_and_generate({
     "who": "高先生沉心传媒招聘者",
     "last_msg": "张烨韬，同学你好。我们是沉心传媒HR，看了你的简历比较感兴趣，想跟你沟通一下"
 })
 check("沉心传媒招呼意图判为reply", r_chen["action"] == "reply", str(r_chen))
-check("沉心回复表达兴趣与2027到岗", "2027" in r_chen["reply_text"] and "实习" in r_chen["reply_text"])
+check("沉心太极回复索要JD且表达开放", "JD" in r_chen["reply_text"] and "开放" in r_chen["reply_text"])
 check("沉心回复不含隐私敏感词", not _gr.privacy_blocked(r_chen["reply_text"]))
 
-# 场景 6: 询问届别与到岗时间
+# 场景 6: 询问届别与到岗时间 -> 三不原则：回答届别但强调时间弹性，反索JD不给死承诺
 r_avail = ai_engine.decide_and_generate({
     "who": "某大厂HR",
     "last_msg": "请问你是几届的？每周能来几天，最快什么时候到岗？"
 })
 check("询问到岗意图判为reply", r_avail["action"] == "reply", str(r_avail))
-check("回答明确提及可实习6个月每周5天", "6个月" in r_avail["reply_text"] and "5天" in r_avail["reply_text"])
+check("回答2027届且说明时间弹性", "2027" in r_avail["reply_text"] and "弹性" in r_avail["reply_text"])
+check("反客为主索要岗位JD", "JD" in r_avail["reply_text"])
+check("不给死承诺(无随时到岗)", "随时可到岗" not in r_avail["reply_text"])
 
 shutil.rmtree(DRY, ignore_errors=True)
 
