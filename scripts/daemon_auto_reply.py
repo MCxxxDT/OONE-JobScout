@@ -135,7 +135,14 @@ def run_cycle(cfg, engine, args):
                 },
                 dry_run=args.dry_run,
             )
-            print(f"  [呼叫人工] 状态: {'仿真留痕' if args.dry_run else ('已推送飞书' if alert_res.get('feishu_sent') else f'未发送/报错({alert_res.get(\"feishu_error\")})')}")
+            if args.dry_run:
+                status_str = "仿真留痕"
+            elif alert_res.get("feishu_sent"):
+                status_str = "已推送飞书"
+            else:
+                err_msg = alert_res.get("feishu_error") or "未配置Webhook"
+                status_str = f"未发送 ({err_msg})"
+            print(f"  [呼叫人工] 状态: {status_str}")
             continue
 
         if action == "reply":
