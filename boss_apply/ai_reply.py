@@ -116,9 +116,17 @@ class AIReplyEngine:
         self.cfg = cfg or {}
         self.profile = dict(CANDIDATE_PROFILE, **(profile or {}))
         self.agent_generator = agent_generator
-        self.openrouter_key = os.getenv("OPENROUTER_API_KEY") or ""
-        self.openai_key = os.getenv("OPENAI_API_KEY") or ""
-        self.openai_base = os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+        llm_cfg = self.cfg.get("llm") or {}
+        if llm_cfg.get("api_key"):
+            self.openai_key = llm_cfg["api_key"]
+            self.openai_base = llm_cfg.get("base_url") or "https://api.openai.com/v1"
+            self.llm_model = llm_cfg.get("model") or "gpt-4o-mini"
+            self.openrouter_key = llm_cfg.get("openrouter_key") or ""
+        else:
+            self.openrouter_key = os.getenv("OPENROUTER_API_KEY") or ""
+            self.openai_key = os.getenv("OPENAI_API_KEY") or ""
+            self.openai_base = os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+            self.llm_model = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
 
     def build_agent_prompt(self, conv: dict) -> str:
         """根据当前会话构建供 Agent/大模型思考的标准化决策 Prompt 与心法。"""
@@ -223,17 +231,18 @@ class AIReplyEngine:
             prompt = self.build_agent_prompt(conv)
 
         try:
-            import requests
+            import urllib.request
 
-            headers = {"Content-Type": "application/json"}
+            headers = {"Content-Type": "application/json", "User-Agent": "boss-apply/1.0"}
             if self.openrouter_key:
                 url = "https://openrouter.ai/api/v1/chat/completions"
                 headers["Authorization"] = f"Bearer {self.openrouter_key}"
-                model = "deepseek/deepseek-chat"
+                model = self.llm_model if self.llm_model != "gpt-4o-mini" else "deepseek/deepseek-chat"
             else:
-                url = f"{self.openai_base}/chat/completions"
+                base = self.openai_base.rstrip("/")
+                url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
                 headers["Authorization"] = f"Bearer {self.openai_key}"
-                model = "gpt-4o-mini"
+                model = self.llm_model
 
             payload = {
                 "model": model,
@@ -242,18 +251,21 @@ class AIReplyEngine:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,
-                "max_tokens": 200,
+                "max_tokens": 1800,
             }
 
-            resp = requests.post(url, headers=headers, json=payload, timeout=6)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
-                content = re.sub(r"^```json\s*", "", content)
-                content = re.sub(r"```$", "", content).strip()
-                parsed = json.loads(content)
-                if isinstance(parsed, dict) and "action" in parsed:
-                    return parsed
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                if resp.status == 200:
+                    resp_data = json.loads(resp.read().decode("utf-8"))
+                    msg = resp_data["choices"][0]["message"]
+                    content = (msg.get("content") or "").strip()
+                    content = re.sub(r"^```json\s*", "", content)
+                    content = re.sub(r"```$", "", content).strip()
+                    parsed = json.loads(content)
+                    if isinstance(parsed, dict) and "action" in parsed:
+                        return parsed
         except Exception:
             pass
         return None

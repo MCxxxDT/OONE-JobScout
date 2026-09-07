@@ -229,6 +229,17 @@ check("消息来源标识为人工转交", r_no_agent["source"] == "human_handof
 r_empty = ai_engine_raw.decide_and_generate({"who": "测试HR", "last_msg": "  "})
 check("空消息直接跳过", r_empty["action"] == "skip")
 
+print("  --- LLM 外部服务商配置与直连引擎校验 ---")
+ai_engine_llm = _air.AIReplyEngine(cfg)
+check("LLM从config读取api_key", bool(ai_engine_llm.openai_key))
+check("LLM从config读取base_url", "askdiandian" in ai_engine_llm.openai_base)
+check("LLM从config读取model", ai_engine_llm.llm_model == "dots3-note-prev")
+
+llm_gen = ai_engine_llm._try_llm_generate({"who": "高先生沉心传媒招聘者", "last_msg": "方便沟通一下吗？"})
+check("LLM直连生成结构化回复", bool(llm_gen and llm_gen.get("action") == "reply"))
+check("LLM直连回复非空", bool(llm_gen and llm_gen.get("reply_text")))
+check("LLM直连回复通过隐私红线", not _gr.privacy_blocked((llm_gen or {}).get("reply_text", "")))
+
 print("  --- Agent 决策 Prompt 构建校验 ---")
 prompt_test = ai_engine_raw.build_agent_prompt({
     "who": "杭州某独角兽HR",

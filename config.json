@@ -58,6 +58,12 @@
       ]
     }
   },
+  "llm": {
+    "provider": "Dots Studio",
+    "base_url": "https://note3-prev-api.askdiandian.com/v1",
+    "model": "dots3-note-prev",
+    "api_key": "ak_SJi0DGb3itXirwu661pgXxDinz3GB"
+  },
   "notify": {
     "feishu_webhook": "",
     "enable_sound": true,
