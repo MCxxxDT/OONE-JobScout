@@ -29,7 +29,7 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from boss_apply import ai_reply as air, config as cfgmod, flows, ledger
+from boss_apply import ai_reply as air, config as cfgmod, feishu_bot, flows, ledger
 
 
 def run_cycle(cfg, engine, args):
@@ -121,14 +121,21 @@ def run_cycle(cfg, engine, args):
             continue
 
         if action == "needs_human":
-            print(f"  [决策: 无法通过Agent回复 -> 转人工处理] 原因: {reason}")
-            ledger.append({
-                "action": "needs_human",
-                "company": who,
-                "last_msg": last_msg,
-                "reason": reason,
-                "notice": notice,
-            })
+            print(f"  [决策: 无法通过Agent回复 -> 触发飞书交互卡片呼叫人工] 原因: {reason}")
+            alert_res = feishu_bot.send_human_alert(
+                cfg=cfg,
+                alert_data={
+                    "company": who,
+                    "last_msg": last_msg,
+                    "reason": reason,
+                    "notice": notice,
+                    "suggested_reply": reply_text or decision.get("suggested_reply"),
+                    "time_str": conv.get("time"),
+                    "job_title": conv.get("title") or conv.get("job"),
+                },
+                dry_run=args.dry_run,
+            )
+            print(f"  [呼叫人工] 状态: {'仿真留痕' if args.dry_run else ('已推送飞书' if alert_res.get('feishu_sent') else f'未发送/报错({alert_res.get(\"feishu_error\")})')}")
             continue
 
         if action == "reply":

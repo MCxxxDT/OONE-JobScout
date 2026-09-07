@@ -316,6 +316,102 @@ import asyncio
 mcp_tool_names = [t.name for t in asyncio.run(_srv.mcp.list_tools())]
 check("FastMCP 注册了 get_active_job_detail", "get_active_job_detail" in mcp_tool_names, str(mcp_tool_names))
 
+print("== 11. 飞书可交互卡片与呼叫人工 (feishu_bot) ==")
+from boss_apply import feishu_bot as _fb
+
+# 1. 结构与渲染测试 (带推荐回复)
+card_with_reply = _fb.build_interactive_card(
+    company="阿里巴巴（中国）网络技术有限公司",
+    last_msg="方便发一份附件简历吗？",
+    reason="HR索要附件简历，建议一键发送",
+    suggested_reply="您好！附件简历已发送，请查收，期待沟通！",
+    time_str="14:30",
+    job_title="AI产品经理",
+)
+
+check("卡片类型为 interactive", card_with_reply.get("msg_type") == "interactive")
+card_body = card_with_reply.get("card", {})
+check("卡片标题包含人工决策提醒", "待人工决策" in card_body.get("header", {}).get("title", {}).get("content", ""))
+check("卡片主题色为橙色预警", card_body.get("header", {}).get("template") == "orange")
+
+elements = card_body.get("elements", [])
+check("卡片包含主要信息元素与按钮组", len(elements) >= 5)
+
+action_elem = [e for e in elements if e.get("tag") == "action"]
+check("卡片包含交互动作区", len(action_elem) == 1)
+btns = action_elem[0].get("actions", [])
+check("卡片包含4个交互按钮", len(btns) == 4)
+
+btn_actions = [b.get("value", {}).get("action") for b in btns]
+check("按钮包含 reply/exchange_wechat/send_resume/ignore",
+      btn_actions == ["reply", "exchange_wechat", "send_resume", "ignore"])
+check("首选回复按钮为 primary 样式", btns[0].get("type") == "primary")
+check("忽略按钮为 danger 样式", btns[3].get("type") == "danger")
+
+# 2. 结构测试 (不带推荐回复)
+card_no_reply = _fb.build_interactive_card(
+    company="某初创公司",
+    last_msg="你好",
+    reason="打招呼无需回复",
+)
+btns_no_reply = [e for e in card_no_reply["card"]["elements"] if e.get("tag") == "action"][0]["actions"]
+check("无推荐回复时只有3个按钮", len(btns_no_reply) == 3)
+check("首个按钮为换微信", btns_no_reply[0]["value"]["action"] == "exchange_wechat")
+
+# 3. dry-run 模式下的呼叫人工留痕测试
+alert_res = _fb.send_human_alert(
+    cfg=cfg,
+    alert_data={
+        "company": "测试科技",
+        "last_msg": "下周一能来线下面试吗？",
+        "reason": "需要人工确认面试时间",
+        "suggested_reply": "您好！方便先线上交流吗？",
+        "time_str": "15:00",
+    },
+    dry_run=True,
+)
+check("send_human_alert dry-run 返回 ok", alert_res.get("ok") is True)
+check("send_human_alert dry-run 未触发外部发送", alert_res.get("feishu_sent") is False)
+
+# 检查 dry-run 留痕文件
+card_log_path = cfgmod.state_path("feishu_cards.jsonl")
+check("feishu_cards.jsonl 成功创建", os.path.exists(card_log_path))
+with open(card_log_path, "r", encoding="utf-8") as f:
+    logged_cards = [json.loads(line) for line in f if line.strip()]
+check("feishu_cards.jsonl 包含记录", len(logged_cards) > 0)
+check("留痕包含测试科技", logged_cards[-1].get("company") == "测试科技")
+
+# 4. handle_card_action 交互回调派发测试
+# 4.1 参数缺失
+res_missing = _fb.handle_card_action(cfg, {"action": "reply"})
+check("缺失 company 报错", res_missing.get("ok") is False)
+
+# 4.2 忽略动作
+res_ignore = _fb.handle_card_action(cfg, {"action": "ignore", "company": "测试科技"})
+check("ignore 动作处理成功", res_ignore.get("ok") is True and res_ignore.get("action") == "ignore")
+
+# 4.3 模拟 flows 交互回调 (通过 monkeypatch 验证 dispatch 正确)
+orig_reply = flows.chat_reply
+orig_wechat = flows.chat_exchange_wechat
+orig_resume = flows.chat_send_resume
+try:
+    flows.chat_reply = lambda c, comp, txt: {"ok": True, "mock": "reply", "comp": comp, "txt": txt}
+    flows.chat_exchange_wechat = lambda c, comp: {"ok": True, "mock": "exchange_wechat", "comp": comp}
+    flows.chat_send_resume = lambda c, comp: {"ok": True, "mock": "send_resume", "comp": comp}
+
+    res_reply = _fb.handle_card_action(cfg, {"action": "reply", "company": "测试科技", "text": "回复测试"})
+    check("handle_card_action 派发 reply", res_reply.get("ok") is True and res_reply["result"]["mock"] == "reply")
+
+    res_wx = _fb.handle_card_action(cfg, {"action": "exchange_wechat", "company": "测试科技"})
+    check("handle_card_action 派发 exchange_wechat", res_wx.get("ok") is True and res_wx["result"]["mock"] == "exchange_wechat")
+
+    res_cv = _fb.handle_card_action(cfg, {"action": "send_resume", "company": "测试科技"})
+    check("handle_card_action 派发 send_resume", res_cv.get("ok") is True and res_cv["result"]["mock"] == "send_resume")
+finally:
+    flows.chat_reply = orig_reply
+    flows.chat_exchange_wechat = orig_wechat
+    flows.chat_send_resume = orig_resume
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
@@ -323,4 +419,5 @@ if fails:
     print("结果: %d 项失败 -> %s" % (len(fails), fails))
     sys.exit(1)
 print("结果: 全部通过。管线可用，等待 T1(登录态) 接入。")
+
 
