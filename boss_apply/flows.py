@@ -7,6 +7,7 @@ execute（打招呼）暂保留 playwright 路径，T3 前需同样改造。
 import base64
 import json
 import os
+import re
 import time
 
 from . import browser, config as cfgmod, guard, greeter, ledger, rawcdp, scorer
@@ -131,10 +132,17 @@ def filter_greeted(jobs):
     return [j for j in jobs if not (j.get("href") and j["href"] in greeted)]
 
 
+# 平台系统回显消息（简历送达回执/对方已同意等），非 HR 真实发言，不应视为待回复
+SYSTEM_MSG_RE = re.compile(r"^您的附件简历|已发送给(?:Boss|对方)|^对方已同意")
+# 短促礼貌结束语（精确匹配，HR 独发即视为对话自然闭环）
+CLOSING_WORDS = ("谢谢", "感谢", "好的", "好嘞", "收到", "嗯嗯", "ok", "OK")
+
+
 def parse_conv(raw, openers):
     """消息中心会话行 → 结构化。raw 形如 '02:42|赵先生新美虹星总经理|[送达]|您好，…'。
     from_us=最后一条以 openers 任一前缀开头（含原生默认招呼，见 greeter.self_openers）；
-    needs_human=最后一条含联系方式意图（greeter.privacy_blocked，索要或发送均拦截）。"""
+    needs_human=最后一条含联系方式意图（greeter.privacy_blocked，索要或发送均拦截）；
+    系统回显（审计补丁#4）与短结束语（审计补丁#5）不判待回复。"""
     parts = [p for p in raw.replace("\n", "|").split("|") if p != ""]
     if len(parts) < 2:
         return None
@@ -147,9 +155,11 @@ def parse_conv(raw, openers):
         rest = rest[1:]
     preview = "|".join(rest)
     from_us = any(preview.startswith(op) for op in (openers or ()))
+    is_system = bool(SYSTEM_MSG_RE.search(preview))
+    is_closing = preview in CLOSING_WORDS
     return {"time": time_s, "who": who, "status": status,
             "last_msg": preview[:120],
-            "needs_reply_guess": bool(preview) and not from_us,
+            "needs_reply_guess": bool(preview) and not from_us and not is_system and not is_closing,
             "needs_human": greeter.privacy_blocked(preview)}
 
 

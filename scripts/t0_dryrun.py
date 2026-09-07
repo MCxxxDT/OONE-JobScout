@@ -172,6 +172,18 @@ check("原生默认招呼结尾→不需回复", bool(c4) and not c4["needs_repl
 c5 = flows.parse_conv("08月31日|秦女士淘宝闪购校招HR|[送达]|" + g0, ops)
 check("历史日期会话解析正确且自家发言不需回复", bool(c5) and c5["time"] == "08月31日" and not c5["needs_reply_guess"])
 
+# 审计补丁#4/#5：系统回显与短结束语不判待回复（2026-09-07 实测误判修复）
+c_sys1 = flows.parse_conv("08月31日|王女士靖安科技CHO|您的附件简历 简历 已发送给Boss点击查看附件", ops)
+check("系统回显(简历已发送给Boss)不判待回复", bool(c_sys1) and not c_sys1["needs_reply_guess"])
+c_sys2 = flows.parse_conv("08月31日|顾女士成都福客人工智能科技高级招聘专员|对方已同意，您的附件简历已发送给对方", ops)
+check("系统回显(对方已同意)不判待回复", bool(c_sys2) and not c_sys2["needs_reply_guess"])
+c_close = flows.parse_conv("08月31日|罗女士肯德基招聘主管|[已读]|谢谢", ops)
+check("短促结束语(谢谢)视为对话闭环", bool(c_close) and not c_close["needs_reply_guess"])
+c_keep = flows.parse_conv("09月01日|韩女士杭州壹网壹创招聘HR|现在在杭州吗，可以接受线下面试吗", ops)
+check("真实HR提问仍判待回复", bool(c_keep) and c_keep["needs_reply_guess"])
+c_long = flows.parse_conv("09月05日|某公司HR|谢谢，期待您的回复", ops)
+check("长句含谢谢不误判闭环", bool(c_long) and c_long["needs_reply_guess"])
+
 print("== 9. AI 回复引擎与守护时间闸门（ai_reply）==")
 import datetime as _dt
 from boss_apply import ai_reply as _air
