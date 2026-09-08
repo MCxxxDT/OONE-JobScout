@@ -280,15 +280,15 @@ class AIReplyEngine:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,
-                # 推理模型（dots3-note-prev 等）会先输出 reasoning_content（思考过程，
-                # 实测一次占 ~1500+ token）再输出正文 content；额度不足时 content 被
-                # 截断/为空导致 JSON 解析失败。4096 保证思考+正文完整产出。
-                "max_tokens": 4096,
+                # 推理模型（dots3-note-prev 等）深度思考默认开启，思考过程（reasoning_content）
+                # 与正文共享 max_tokens 输出额度，实测思考可达 3000+ token；8192 留足余量。
+                "max_tokens": 8192,
             }
 
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers)
-            with urllib.request.urlopen(req, timeout=25) as resp:
+            # 深度思考出字慢（实测一次决策 15-40s），25s 超时是偶发失败主因，放宽至 60s
+            with urllib.request.urlopen(req, timeout=60) as resp:
                 if resp.status == 200:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     msg = resp_data["choices"][0]["message"]
