@@ -280,7 +280,10 @@ class AIReplyEngine:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,
-                "max_tokens": 1800,
+                # 推理模型（dots3-note-prev 等）会先输出 reasoning_content（思考过程，
+                # 实测一次占 ~1500+ token）再输出正文 content；额度不足时 content 被
+                # 截断/为空导致 JSON 解析失败。4096 保证思考+正文完整产出。
+                "max_tokens": 4096,
             }
 
             data = json.dumps(payload).encode("utf-8")
