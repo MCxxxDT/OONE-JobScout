@@ -98,7 +98,8 @@ if (-not $chromeAlive) {
 
 # 3. 启动守护脚本（仅显式传参时透传，否则由 config.json daemon 段决定：
 #    active_hours / max_age_hours / soft_close_hard_limit / interval）
-$daemonArgs = @("scripts/daemon_auto_reply.py")
+# -u：关闭 stdout 块缓冲（管道下默认块缓冲会导致 daemon.log 延迟成块落盘，台账为准但日志滞后）
+$daemonArgs = @("-u", "scripts/daemon_auto_reply.py")
 
 if ($Once) {
     $daemonArgs += "--once"
