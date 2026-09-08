@@ -1151,6 +1151,16 @@ finally:
     flows.chat_job_detail = _orig_cjd25
 
 
+print("== 26. 凌晨时窗红线（2026-09-09 热修：00:00-活跃开始前硬休眠零发送）==")
+import datetime as _dt26
+import daemon_auto_reply as _dam26
+_k26 = _dam26._out_of_window_kind
+check("凌晨00:00硬休眠", _k26(_dt26.datetime(2026, 9, 9, 0, 0), "09:30-22:00", "23:30") == "hard_sleep")
+check("凌晨03:00硬休眠", _k26(_dt26.datetime(2026, 9, 9, 3, 0), "09:30-22:00", "23:30") == "hard_sleep")
+check("早08:59硬休眠", _k26(_dt26.datetime(2026, 9, 9, 8, 59), "09:30-22:00", "23:30") == "hard_sleep")
+check("晚22:30软收工", _k26(_dt26.datetime(2026, 9, 9, 22, 30), "09:30-22:00", "23:30") == "soft_close")
+check("晚23:35硬休眠", _k26(_dt26.datetime(2026, 9, 9, 23, 35), "09:30-22:00", "23:30") == "hard_sleep")
+
 
 
 

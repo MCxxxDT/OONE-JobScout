@@ -148,6 +148,21 @@ def _parse_hhmm(s, default):
         return default
 
 
+def _out_of_window_kind(now, active_hours, soft_close_hard_limit):
+    """非活跃时段分类（2026-09-09 凌晨红线热修）：
+    hard_sleep = 硬上限（默认 23:30）之后，或次日凌晨至活跃窗口开始之前——一律零发送；
+    soft_close = 活跃窗口结束（如 22:00）至硬上限之间——处理完活跃会话再下线。
+    原实现仅判 >= 硬上限：凌晨 00:00-09:30 误入软收工分支，若彼时存在活跃会话
+    会在 9:30 前发送消息，违反"早上9:30以前不发送"红线。"""
+    try:
+        ah_start = _parse_hhmm(str(active_hours).split("-")[0], datetime.time(9, 30))
+    except Exception:
+        ah_start = datetime.time(9, 30)
+    if now.time() >= _parse_hhmm(str(soft_close_hard_limit), datetime.time(23, 30)) or now.time() < ah_start:
+        return "hard_sleep"
+    return "soft_close"
+
+
 # ---------------------------------------------------------------------------
 # 护栏熔断核查（补全项 c）
 # ---------------------------------------------------------------------------
@@ -254,8 +269,11 @@ def run_cycle(cfg, engine, args, st=None):
         hours = secs / 3600.0
         if args.dry_run:
             print(f"  [时间闸门-仿真] 当前处于非工作时段（{args.active_hours}），由于指定了 --dry-run，继续仿真评估...")
-        elif now.time() >= _parse_hhmm(args.soft_close_hard_limit, datetime.time(23, 30)):
-            print(f"  [软收工-硬上限] 已过 {args.soft_close_hard_limit}，无论如何休眠（防彻夜运转）。")
+        elif _out_of_window_kind(now, args.active_hours, args.soft_close_hard_limit) == "hard_sleep":
+            if now.time() >= _parse_hhmm(args.soft_close_hard_limit, datetime.time(23, 30)):
+                print(f"  [软收工-硬上限] 已过 {args.soft_close_hard_limit}，无论如何休眠（防彻夜运转）。")
+            else:
+                print(f"  [时间闸门-凌晨红线] 活跃窗口开始前（{args.active_hours.split('-')[0]} 前）零发送，硬休眠。")
             _gate_sleep(cfg, args, now_str, secs)
             return {"status": "outside_active_hours", "wait_seconds": secs}
         else:
