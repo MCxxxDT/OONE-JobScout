@@ -36,7 +36,7 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from boss_apply import ai_reply as air, config as cfgmod, feishu_bot, flows, guard as guardmod, ledger
+from boss_apply import ai_reply as air, browser as behav, config as cfgmod, feishu_bot, flows, guard as guardmod, ledger
 
 
 # ---------------------------------------------------------------------------

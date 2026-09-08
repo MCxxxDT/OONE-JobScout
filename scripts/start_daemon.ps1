@@ -22,7 +22,7 @@ param(
     [switch]$Once,
     [switch]$Loop,
     [switch]$DryRun,
-    [string]$ActiveHours = "09:30-20:30",
+    [string]$ActiveHours = "",
     [double]$IntervalMin = 0.0,
     [double]$IntervalMax = 0.0
 )
