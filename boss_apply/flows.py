@@ -253,10 +253,12 @@ def chat_send_resume(cfg, company):
         sess.close()
 
 
-def chat_job_detail(cfg, company=None, fetch_jd=True):
+def chat_job_detail(cfg, company=None, fetch_jd=True, fetch_history=True):
     """获取会话关联岗位的完整元数据与JD详情（只读操作，零发送）。
     若指定 company 则点开该公司的会话；若未指定则直接提取当前激活会话。
     若 fetch_jd=True 且拿到 href，则在独立后台标签页中加载并抓取完整的岗位职责与任职要求。
+    若 fetch_history=True，则顺路提取该会话最近聊天历史（同一次点开会话，零额外开页），
+    返回 history=[{role: me|hr|system, text}]，供 Agent 把握上下文避免重复作答。
     供 Agent 在制定回复策略或'见人下菜碟'时全面研判岗位含金量。"""
     company_name = (company or "").strip()
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
@@ -280,6 +282,14 @@ def chat_job_detail(cfg, company=None, fetch_jd=True):
         if not job_info:
             return {"ok": False, "company": company_name, "error": "no active job found in conversation"}
 
+        # 聊天历史提取（增强项：失败/为空不阻塞，返回空列表）
+        history = []
+        if fetch_history:
+            try:
+                history = greeter.get_active_conversation_history(sess) or []
+            except Exception:
+                history = []
+
         sess.close_tab()
 
         jd_text = ""
@@ -292,6 +302,7 @@ def chat_job_detail(cfg, company=None, fetch_jd=True):
         return {
             "ok": True,
             "company": company_name or job_info.get("companyName") or "",
+            "history": history,
             "job": {
                 "title": job_info.get("positionName") or job_info.get("title") or "",
                 "company": job_info.get("companyName") or job_info.get("brandName") or "",

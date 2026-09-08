@@ -495,3 +495,42 @@ def get_active_conversation_job(sess):
         return res
     return None
 
+
+# 聊天历史提取（2026-09-08 真机侦察）：消息列表在 .chat-message .im-list，
+# 每个 .message-item 的 class 标注发言方：item-myself=我方 / item-friend=HR / item-system=平台系统消息。
+# innerText 带时间戳前缀（"08-31 17:12|"、"昨天 19:20|"、"10:34||"）与"已读"、卡片按钮（"拒绝|同意"）噪声，需过滤。
+CHAT_HISTORY_JS = """
+(() => {
+  const list = document.querySelector('.chat-message .im-list');
+  if (!list) return JSON.stringify({r: 'no_list'});
+  const TIME_RE = /^(?:\\d{2}-\\d{2} \\d{1,2}:\\d{2}|\\d{4}-\\d{2}-\\d{2}[ T]\\d{1,2}:\\d{2}.*|昨天.*|\\d{1,2}:\\d{2}|\\d{1,2}月\\d{1,2}日.*)$/;
+  const DROP = new Set(['已读', '未读', '拒绝', '同意', '收下']);
+  const msgs = [];
+  for (const it of list.querySelectorAll('.message-item')) {
+    const cls = String(it.className || '');
+    let role = null;
+    if (cls.includes('item-myself')) role = 'me';
+    else if (cls.includes('item-friend')) role = 'hr';
+    else if (cls.includes('item-system')) role = 'system';
+    if (!role) continue;
+    const raw = (it.innerText || '').replace(/\\n/g, '|');
+    const parts = raw.split('|').map(s => s.trim())
+      .filter(s => s && !TIME_RE.test(s) && !DROP.has(s));
+    const text = parts.join(' ').slice(0, 120);
+    if (text) msgs.push({role: role, text: text});
+  }
+  return JSON.stringify({messages: msgs, count: msgs.length, source: 'dom'});
+})()
+"""
+
+
+def get_active_conversation_history(sess, limit=20):
+    """提取当前激活会话的最近聊天历史（只读，零发送）。
+    返回 [{role, text}]（role: me=我方 / hr=对方 / system=平台系统消息），
+    最多 limit 条（取最近的）；提取失败返回 None（历史是增强项，不阻塞决策）。"""
+    res = _ev(sess, CHAT_HISTORY_JS)
+    if isinstance(res, dict) and res.get("messages") is not None:
+        msgs = res.get("messages") or []
+        return msgs[-int(limit):] if limit else msgs
+    return None
+

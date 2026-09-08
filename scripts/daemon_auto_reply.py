@@ -320,15 +320,18 @@ def run_cycle(cfg, engine, args, st=None):
             continue
 
         # 5.2 JD 上下文注入（补全项 a）：决策前先取会话关联岗位详情（只读，零发送）
+        # 同一次点开会话顺路抓取聊天历史（记忆注入：与 HR 所见零漂移）
         try:
             jd_res = flows.chat_job_detail(cfg, company=who)
         except Exception as e:
             jd_res = {"ok": False, "error": str(e)[:200]}
         if jd_res.get("ok"):
             conv["job"] = jd_res.get("job") or {}
+            conv["history"] = jd_res.get("history") or []
             _j = conv["job"]
             print(f"  [JD注入] {_j.get('title') or '?'} | {_j.get('salary') or '?'} | "
                   f"{_j.get('city') or '?'} | JD全文 {_j.get('jd_text') and len(_j['jd_text']) or 0} 字")
+            print(f"  [记忆注入] 会话历史 {len(conv['history'])} 条（我方/HR/系统已标注）")
         else:
             print(f"  [JD注入] 未取到岗位详情（{str(jd_res.get('error'))[:80]}），按无JD上下文决策。")
 

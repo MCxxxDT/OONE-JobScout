@@ -523,6 +523,116 @@ check("日报dry-run推送返回ok", res12.get("ok") is True)
 check("日报dry-run不实发飞书", res12.get("feishu_sent") is False)
 check("日报当日已发判定生效", _dm._daily_report_sent_today())
 
+print("== 13. 会话历史记忆注入（2026-09-08：聊天面板现场抓取，零漂移）==")
+
+# 13.1 CHAT_HISTORY_JS 静态结构（真机侦察结论固化：.chat-message .im-list + item-myself/friend/system）
+check("CHAT_HISTORY_JS 定位消息列表", ".chat-message .im-list" in _gr.CHAT_HISTORY_JS)
+check("CHAT_HISTORY_JS 区分我方气泡", "item-myself" in _gr.CHAT_HISTORY_JS)
+check("CHAT_HISTORY_JS 区分HR气泡", "item-friend" in _gr.CHAT_HISTORY_JS)
+check("CHAT_HISTORY_JS 区分系统消息", "item-system" in _gr.CHAT_HISTORY_JS)
+check("CHAT_HISTORY_JS 过滤已读噪声", "已读" in _gr.CHAT_HISTORY_JS)
+check("CHAT_HISTORY_JS 过滤时间戳", "TIME_RE" in _gr.CHAT_HISTORY_JS)
+
+# 13.2 解析层：MockSess 返回真实侦察结构（含时间戳/已读/按钮噪声）
+class MockHistSess:
+    def __init__(self, val):
+        self.val = val
+    def eval(self, js):
+        return self.val
+
+# 模拟壹网壹创真实会话提取结果（侦察实测 12 条的代表性子集）
+hist_payload = json.dumps({
+    "messages": [
+        {"role": "me", "text": "您好，这是我的电话"},
+        {"role": "system", "text": "请求交换电话已发送"},
+        {"role": "hr", "text": "我想要一份您的附件简历，您是否同意"},
+        {"role": "system", "text": "您的附件简历 简历 已发送给Boss点击查看附件"},
+        {"role": "hr", "text": "现在在杭州吗，可以接受线下面试吗，预计到岗时间什么时候"},
+        {"role": "me", "text": "您好！目前人在福州，对江浙沪方向的机会也一直持开放态度。初试方便先通过线上进行吗？"},
+        {"role": "hr", "text": "目前实习生薪资3000（包括基础薪资2700…），可以接受吗"},
+    ],
+    "count": 7, "source": "dom",
+})
+h = _gr.get_active_conversation_history(MockHistSess(hist_payload))
+check("历史解析返回列表", isinstance(h, list) and len(h) == 7)
+check("历史解析保留发言方标注", h[0]["role"] == "me" and h[1]["role"] == "system" and h[2]["role"] == "hr")
+check("历史解析保序（时间正序）", h[-1]["text"].startswith("目前实习生薪资"))
+
+h_lim = _gr.get_active_conversation_history(MockHistSess(hist_payload), limit=3)
+check("历史条数上限截尾（取最近）", len(h_lim) == 3 and h_lim[-1]["role"] == "hr")
+
+check("无消息列表返回None", _gr.get_active_conversation_history(MockSess(json.dumps({"r": "no_list"}))) is None)
+check("eval失败返回None", _gr.get_active_conversation_history(MockSess(None)) is None)
+
+# 13.3 prompt 注入：带 history 的 conv
+engine_hist = _air.AIReplyEngine(cfg)
+p_no_hist = engine_hist.build_agent_prompt({"who": "测试HR", "last_msg": "您好"})
+check("无history时prompt不含历史段", "【对话历史（最近" not in p_no_hist)
+conv_hist = {
+    "who": "韩女士壹网壹创HR", "last_msg": "目前实习生薪资3000，可以接受吗",
+    "job": {"title": "电商运营实习生", "company": "壹网壹创", "salary": "130-180元/天"},
+    "history": [
+        {"role": "hr", "text": "现在在杭州吗，可以接受线下面试吗"},
+        {"role": "me", "text": "您好！目前人在福州，初试方便先线上进行吗？"},
+        {"role": "hr", "text": "目前实习生薪资3000，可以接受吗"},
+    ],
+}
+p_hist = engine_hist.build_agent_prompt(conv_hist)
+check("带history时prompt含对话历史段", "【对话历史" in p_hist)
+check("历史段标注我方发言", "我方: 您好！目前人在福州" in p_hist)
+check("历史段标注HR发言", "HR: 现在在杭州吗" in p_hist)
+check("历史段条数标注正确", "最近3条" in p_hist)
+check("历史与JD段共存", "会话关联岗位" in p_hist and "对话历史" in p_hist)
+check("心法含防车轱辘话条目", "绝不车轱辘话" in p_hist)
+
+# 13.4 chat_job_detail 集成管道（monkeypatch 全链路：RawCDP→点会话→抓岗位→抓历史）
+class FakeSess13:
+    def open_tab(self, url="about:blank"):
+        return "tid"
+    def nav(self, u):
+        return {}
+    def state(self):
+        return {"blank": False, "bodyLen": 500}
+    def eval(self, js):
+        return "{}"
+    def close_tab(self):
+        pass
+    def close(self):
+        pass
+
+_orig_rawcdp_cls = flows.rawcdp.RawCDP
+_orig_open_conv13 = _gr._open_conversation_input
+_orig_get_job13 = _gr.get_active_conversation_job
+_orig_get_hist13 = _gr.get_active_conversation_history
+try:
+    flows.rawcdp.RawCDP = lambda ep: FakeSess13()
+    _gr._open_conversation_input = lambda s, c, poll_s=12: ({"inputTag": "div"}, "head")
+    _gr.get_active_conversation_job = lambda s: {"encryptJobId": "e13", "positionName": "AI产品经理",
+                                                "companyName": "测试科技", "href": ""}
+    _gr.get_active_conversation_history = lambda s, limit=20: [
+        {"role": "hr", "text": "你好"}, {"role": "me", "text": "您好！"}]
+    res13 = flows.chat_job_detail(cfg, company="测试科技", fetch_jd=False)
+    check("chat_job_detail返回ok", res13.get("ok") is True)
+    check("chat_job_detail携带history字段", isinstance(res13.get("history"), list) and len(res13["history"]) == 2)
+    check("history发言方解析正确", res13["history"][0]["role"] == "hr" and res13["history"][1]["role"] == "me")
+
+    # 历史提取异常不阻塞（增强项容错）
+    def _raise_hist(s, limit=20):
+        raise RuntimeError("boom")
+    _gr.get_active_conversation_history = _raise_hist
+    res13b = flows.chat_job_detail(cfg, company="测试科技", fetch_jd=False)
+    check("历史提取异常不阻塞主流程", res13b.get("ok") is True and res13b.get("history") == [])
+
+    # fetch_history=False 跳过提取
+    _gr.get_active_conversation_history = lambda s, limit=20: [{"role": "hr", "text": "不应出现"}]
+    res13c = flows.chat_job_detail(cfg, company="测试科技", fetch_jd=False, fetch_history=False)
+    check("fetch_history=False不提取历史", res13c.get("ok") is True and res13c.get("history") == [])
+finally:
+    flows.rawcdp.RawCDP = _orig_rawcdp_cls
+    _gr._open_conversation_input = _orig_open_conv13
+    _gr.get_active_conversation_job = _orig_get_job13
+    _gr.get_active_conversation_history = _orig_get_hist13
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

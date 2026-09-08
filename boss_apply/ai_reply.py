@@ -159,6 +159,25 @@ class AIReplyEngine:
             if lines:
                 jd_section = "\n【会话关联岗位与JD（供研判含金量）】\n" + "\n".join(lines) + "\n"
 
+        # 对话历史注入（daemon 每轮从聊天面板现场抓取，与 HR 所见零漂移）
+        history_section = ""
+        history = conv.get("history") or []
+        if isinstance(history, list) and history:
+            role_label = {"me": "我方", "hr": "HR", "system": "[系统]"}
+            h_lines = []
+            for m in history:
+                if not isinstance(m, dict):
+                    continue
+                label = role_label.get(m.get("role"), "[系统]")
+                text = (m.get("text") or "").strip()
+                if text:
+                    h_lines.append(f"{label}: {text}")
+            if h_lines:
+                history_section = (
+                    "\n【对话历史（最近%d条，已标注发言方，按时间正序）】\n" % len(h_lines)
+                    + "\n".join(h_lines) + "\n"
+                )
+
         return (
             f"【候选人真实画像】\n"
             f"- 姓名：{self.profile['name']}\n"
@@ -168,7 +187,8 @@ class AIReplyEngine:
             f"- 到岗与稳定性：{self.profile['availability']}\n"
             f"- 薪资底线诉求：{self.profile['salary_requirement']}\n"
             f"- 核心优势：全栈MCP/Agent工程落地经验 + 200人团队月操盘10万GMV的商业化即战力\n"
-            f"{jd_section}\n"
+            f"{jd_section}"
+            f"{history_section}\n"
             f"【当前HR与最新消息】\n"
             f"- 对话方：{who}\n"
             f"- HR最新消息：\"{last_msg}\"\n\n"
@@ -179,7 +199,8 @@ class AIReplyEngine:
             f"4. 邀约面试 / 问到岗时间：说明学业与时间相对具备弹性，主动索要岗位JD与具体安排，绝不擅自承诺死时间；\n"
             f"5. 三不原则：不承诺（时间保留弹性）、不拒绝（保持积极开放）、不负责（主动索要详细JD互相了解）；\n"
             f"6. 若上方提供了【会话关联岗位与JD】：结合JD研判含金量后见人下菜碟——大模型/Agent核心产品岗可显著提升热情并呼应JD匹配点；披着AI外衣的销售/地推/杂役岗保持礼貌太极、点到为止，不深聊不主动推进；\n"
-            f"7. 绝对隐私红线：严禁在文案中输出真实11位手机号、座机电话、微信号或外部链接。\n\n"
+            f"7. 若上方提供了【对话历史】：严格承接上文推进，绝不车轱辘话——已告知过的信息（如常驻地、到岗意向）不重复原话表述，直接回应HR最新问题的增量部分；\n"
+            f"8. 绝对隐私红线：严禁在文案中输出真实11位手机号、座机电话、微信号或外部链接。\n\n"
             f"请输出纯 JSON 格式：\n"
             f'{{"action": "reply"|"needs_human"|"skip", "reason": "理由", "reply_text": "50-100字拟人高情商回复（表达开放，反索JD）"}}'
         )
