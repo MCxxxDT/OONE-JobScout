@@ -4,11 +4,18 @@
 .DESCRIPTION
   1. 自检 Chrome CDP 9335 端口：若未拉起，自动带专用 Profile 与调试参数拉起 Chrome；
   2. 探测登录与 CDP 通信可用性；
-  3. 拉起 daemon_auto_reply.py 执行后台巡检守护；
-  4. 支持 Windows 开机自启 / 计划任务调用。
+  3. 拉起 daemon_auto_reply.py 执行后台巡检守护（崩溃自动重启：异常退出退避 60s 后重启）；
+  4. 全程日志落盘 state/daemon.log（已 gitignore）；
+  5. 轮询间隔：不显式传 -IntervalMin/-IntervalMax 时由 config.json 的 daemon 段决定（默认 3-5 分钟）。
+  6. 开机自启（可选，需管理员 PowerShell 手动执行一次，本脚本不自动改动系统）：
+     Register-ScheduledTask -TaskName "boss-apply-daemon" -Trigger (New-ScheduledTaskTrigger -AtLogOn) `
+       -Action (New-ScheduledTaskAction -Execute "powershell.exe" `
+         -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSScriptRoot\start_daemon.ps1`" -Loop") `
+       -Settings (New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 5))
 .EXAMPLE
   .\scripts\start_daemon.ps1 -Loop
   .\scripts\start_daemon.ps1 -Once -DryRun
+  .\scripts\start_daemon.ps1 -Loop -IntervalMin 15 -IntervalMax 25   # 显式覆盖 config
 #>
 
 param(
@@ -16,8 +23,8 @@ param(
     [switch]$Loop,
     [switch]$DryRun,
     [string]$ActiveHours = "09:30-20:30",
-    [double]$IntervalMin = 15.0,
-    [double]$IntervalMax = 25.0
+    [double]$IntervalMin = 0.0,
+    [double]$IntervalMax = 0.0
 )
 
 $ErrorActionPreference = "Continue"
@@ -89,7 +96,7 @@ if (-not $chromeAlive) {
     }
 }
 
-# 3. 启动守护脚本
+# 3. 启动守护脚本（仅显式传参时透传 interval，否则由 config.json daemon 段决定）
 $daemonArgs = @("scripts/daemon_auto_reply.py")
 
 if ($Once) {
@@ -102,11 +109,40 @@ if ($DryRun) {
     $daemonArgs += "--dry-run"
 }
 
-$daemonArgs += @(
-    "--active-hours", $ActiveHours,
-    "--interval-min", $IntervalMin.ToString(),
-    "--interval-max", $IntervalMax.ToString()
-)
+$daemonArgs += @("--active-hours", $ActiveHours)
+if ($IntervalMin -gt 0) {
+    $daemonArgs += @("--interval-min", $IntervalMin.ToString())
+}
+if ($IntervalMax -gt 0) {
+    $daemonArgs += @("--interval-max", $IntervalMax.ToString())
+}
+
+# 4. 日志落盘 state/daemon.log（已 gitignore），控制台与文件同步留存
+$logDir = Join-Path $RepoRoot "state"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+$logPath = Join-Path $logDir "daemon.log"
 
 Write-Host "`n[守护启动] 正在执行: python $($daemonArgs -join ' ')" -ForegroundColor Cyan
-& python @daemonArgs
+Write-Host "[守护日志] $logPath（控制台与文件双写）" -ForegroundColor Gray
+
+if ($Once) {
+    # 单次模式：直接执行，输出双写日志
+    & python @daemonArgs 2>&1 | Tee-Object -FilePath $logPath -Append
+} else {
+    # 常驻模式：崩溃自动重启（正常退出码 0 不重启；异常退出退避 60 秒后重启并记日志）
+    $restartCount = 0
+    while ($true) {
+        $startTime = Get-Date
+        & python @daemonArgs 2>&1 | Tee-Object -FilePath $logPath -Append
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -eq 0) {
+            Write-Host "[守护退出] daemon 正常退出（exit 0），不重启。" -ForegroundColor Yellow
+            break
+        }
+        $restartCount++
+        $uptime = (Get-Date) - $startTime
+        Write-Host "[守护重启] daemon 异常退出（exit $exitCode，运行 $($uptime.ToString('hh\:mm\:ss'))），60 秒后自动重启（第 $restartCount 次）..." -ForegroundColor Red
+        "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [RESTART] exit=$exitCode uptime=$($uptime.ToString('hh\:mm\:ss')) count=$restartCount" | Tee-Object -FilePath $logPath -Append
+        Start-Sleep -Seconds 60
+    }
+}

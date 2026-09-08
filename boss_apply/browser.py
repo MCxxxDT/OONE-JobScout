@@ -1,7 +1,9 @@
-"""CDP 连接管理 + 风控信号检测。只连接真实 Chrome（9222），绝不 launch 新浏览器。"""
+"""CDP 连接管理 + 风控信号检测（遗留 playwright 层）。
+2026-09-08 处置评估（任务3）：check_login 已走 flows.login_state → rawcdp（裸CDP），
+不依赖本模块；核心链路（server/flows/daemon）仅复用 RiskControl 异常类（rawcdp 在用）
+与 human_wait 拟人等待。playwright 连接函数仅供遗留诊断脚本（scripts/diag_*.py、
+wait_login.py）使用，其依赖改为 connect() 内懒加载——playwright 未安装时核心链路照常可用。"""
 import time
-
-from playwright.sync_api import sync_playwright
 
 _pw = None
 _browser = None
@@ -21,6 +23,7 @@ def connect(cfg):
                 return _browser
         except Exception:
             pass
+    from playwright.sync_api import sync_playwright  # 懒加载：仅遗留诊断脚本触达
     _pw = sync_playwright().start()
     _browser = _pw.chromium.connect_over_cdp(cfg["cdp_endpoint"])
     return _browser
