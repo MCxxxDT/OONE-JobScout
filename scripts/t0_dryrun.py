@@ -874,6 +874,54 @@ check("引擎画像refined覆盖硬编码", _eng21.profile["school"] == "福建�
 check("引擎画像refined新增键保留", _eng21.profile.get("summary") == "AI产品方向")
 check("引擎画像硬编码键兜底", "三不原则" in _eng21.build_agent_prompt({"who": "H", "last_msg": "hi"}))
 
+print("== 22. 偏好配置注入链（2026-09-09 向往/排斥 岗位×城市，留空=默认决断）==")
+from boss_apply import citycodes as _cc
+
+# 22.1 城市码表与解析
+check("城市码表≥40城", len(_cc.CITY_CODES) >= 40)
+check("城市码查找", _cc.lookup("杭州") == "101210100" and _cc.lookup(" 北京 ") == "101010100")
+check("未知城市返回None", _cc.lookup("马尔代夫") is None)
+res_cc, unk_cc = _cc.resolve_cities(["杭州", "不存在市"], None)
+check("批量解析含未知报告", len(res_cc) == 1 and res_cc[0]["code"] == "101210100" and unk_cc == ["不存在市"])
+check("extra映射优先", _cc.lookup("杭州", {"citycodes_extra": {"杭州": "999999"}}) == "999999")
+
+# 22.2 effective_cities / keywords（无偏好=默认；有偏好=替换/剔除）
+cfg22a = dict(cfg)
+ec_a = flows.effective_cities(cfg22a)
+check("无偏好回退默认城市集", len(ec_a["cities"]) == len(cfg["cities"]) and not ec_a["unknown"])
+check("无偏好回退默认关键词", flows.effective_keywords(cfg22a) == cfg["keywords"])
+cfg22b = dict(cfg, prefs={"want_jobs": ["AI产品经理", "Agent产品"],
+                         "avoid_jobs": ["销售", "地推"],
+                         "want_cities": ["杭州", "北京", "不存在市"],
+                         "avoid_cities": ["北京"]})
+ec_b = flows.effective_cities(cfg22b)
+check("向往城市替换城市集", [c["name"] for c in ec_b["cities"]] == ["杭州"])
+check("向往城市继承已配quota", ec_b["cities"][0]["quota"] == 25)
+check("排斥城市剔除并报告", ec_b["excluded"] == ["北京"] and "北京" not in [c["name"] for c in ec_b["cities"]])
+check("未知向往城市报告", ec_b["unknown"] == ["不存在市"])
+check("向往岗位替换关键词", flows.effective_keywords(cfg22b) == ["AI产品经理", "Agent产品"])
+cfg22c = dict(cfg, prefs={"avoid_cities": ["深圳"]})
+ec_c = flows.effective_cities(cfg22c)
+check("仅排斥城市时从默认集剔除", "深圳" not in [c["name"] for c in ec_c["cities"]] and ec_c["excluded"] == ["深圳"])
+
+# 22.3 排斥岗位硬否决
+v1, w1v = flows.avoid_veto({"title": "AI产品销售", "company": "x"}, ["销售"])
+check("排斥词命中标题否决", v1 and w1v == "销售")
+v2, _ = flows.avoid_veto({"title": "AI产品经理", "company": "外包之家"}, ["销售"])
+check("未命中不否决", not v2)
+v3, w3 = flows.avoid_veto({"title": "PM", "company": "某销售公司"}, ["销售"])
+check("排斥词命中公司名否决", v3 and w3 == "销售")
+
+# 22.4 偏好注入决策 prompt
+eng22 = _air.AIReplyEngine(cfg22b)
+p22 = eng22.build_agent_prompt({"who": "H", "last_msg": "hi"})
+check("prompt含向往岗位", "AI产品经理" in p22 and "向往岗位方向" in p22)
+check("prompt含排斥岗位", "地推" in p22)
+check("prompt含自主决断说明", "自主决断" in p22)
+p22n = _air.AIReplyEngine(dict(cfg)).build_agent_prompt({"who": "H", "last_msg": "hi"})
+check("无偏好时prompt不含偏好段", "用户求职偏好" not in p22n)
+
+
 
 shutil.rmtree(DRY, ignore_errors=True)
 

@@ -221,6 +221,26 @@ class AIReplyEngine:
                     + "\n".join(h_lines) + "\n"
                 )
 
+        # 用户求职偏好注入（2026-09-09：留空的维度由模型基于候选人背景自主决断）
+        prefs_section = ""
+        prefs = (self.cfg.get("prefs") or {})
+        want_jobs = [str(x).strip() for x in (prefs.get("want_jobs") or []) if str(x).strip()]
+        avoid_jobs = [str(x).strip() for x in (prefs.get("avoid_jobs") or []) if str(x).strip()]
+        want_cities = [str(x).strip() for x in (prefs.get("want_cities") or []) if str(x).strip()]
+        avoid_cities = [str(x).strip() for x in (prefs.get("avoid_cities") or []) if str(x).strip()]
+        if want_jobs or avoid_jobs or want_cities or avoid_cities:
+            pl = []
+            if want_jobs:
+                pl.append("- 向往岗位方向：" + "、".join(want_jobs))
+            if avoid_jobs:
+                pl.append("- 排斥岗位方向（命中则保持太极、点到为止）：" + "、".join(avoid_jobs))
+            if want_cities:
+                pl.append("- 向往城市：" + "、".join(want_cities))
+            if avoid_cities:
+                pl.append("- 排斥城市（相关机会优先降低热情）：" + "、".join(avoid_cities))
+            pl.append("- 未列出的维度由你基于候选人背景自主决断")
+            prefs_section = "\n【用户求职偏好】\n" + "\n".join(pl) + "\n"
+
         return (
             f"【候选人真实画像】\n"
             f"- 姓名：{self.profile['name']}\n"
@@ -230,6 +250,7 @@ class AIReplyEngine:
             f"- 到岗与稳定性：{self.profile['availability']}\n"
             f"- 薪资底线诉求：{self.profile['salary_requirement']}\n"
             f"- 核心优势：全栈MCP/Agent工程落地经验 + 200人团队月操盘10万GMV的商业化即战力\n"
+            f"{prefs_section}"
             f"{jd_section}"
             f"{history_section}\n"
             f"【当前HR与最新消息】\n"

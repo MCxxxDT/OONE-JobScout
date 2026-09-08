@@ -10,7 +10,52 @@ import os
 import re
 import time
 
-from . import browser, config as cfgmod, guard, greeter, ledger, rawcdp, scorer
+from . import browser, citycodes, config as cfgmod, guard, greeter, ledger, rawcdp, scorer
+
+
+def _prefs(cfg):
+    p = cfg.get("prefs") or {}
+    return {
+        "want_jobs": [str(x).strip() for x in (p.get("want_jobs") or []) if str(x).strip()],
+        "avoid_jobs": [str(x).strip() for x in (p.get("avoid_jobs") or []) if str(x).strip()],
+        "want_cities": [str(x).strip() for x in (p.get("want_cities") or []) if str(x).strip()],
+        "avoid_cities": [str(x).strip() for x in (p.get("avoid_cities") or []) if str(x).strip()],
+    }
+
+
+def effective_keywords(cfg):
+    """生效扫描关键词：偏好向往岗位非空则替换默认词表（留空=沿用现有词表=LLM/系统默认决断）。"""
+    return _prefs(cfg)["want_jobs"] or list(cfg.get("keywords") or [])
+
+
+def effective_cities(cfg):
+    """生效扫描城市集（含偏好过滤）。返回 {cities, unknown, excluded}。
+    want_cities 非空：经 citycodes 解析替换默认城市集（未知城市名入 unknown 供 Web 提示；
+    quota 沿用 config.json 已配置城市的值，未配置默认 15）；avoid_cities 一律剔除。"""
+    prefs = _prefs(cfg)
+    avoid = set(prefs["avoid_cities"])
+    cm = {c["name"]: c for c in cfg.get("cities") or []}
+    if prefs["want_cities"]:
+        resolved, unknown = citycodes.resolve_cities(prefs["want_cities"], cfg)
+        for r in resolved:
+            if r["name"] in cm and cm[r["name"]].get("quota"):
+                r["quota"] = cm[r["name"]]["quota"]
+        return {"cities": [r for r in resolved if r["name"] not in avoid],
+                "unknown": unknown,
+                "excluded": [r["name"] for r in resolved if r["name"] in avoid]}
+    base = [dict(c) for c in cfg.get("cities") or [] if c.get("name") not in avoid]
+    return {"cities": base, "unknown": [],
+            "excluded": [c["name"] for c in cfg.get("cities") or [] if c.get("name") in avoid]}
+
+
+def avoid_veto(job, avoid_jobs):
+    """偏好排斥岗位硬否决：岗位标题或公司名命中任一排斥词 → (True, 命中词)。"""
+    title = (job.get("title") or "")
+    company = (job.get("company") or "")
+    for k in (avoid_jobs or []):
+        if k and (k in title or k in company):
+            return True, k
+    return False, ""
 
 # 消息中心会话列表提取（裸CDP一次性 evaluate，从 scripts/chat_check.py 迁入）
 CHAT_LIST_JS = """
@@ -23,11 +68,17 @@ CHAT_LIST_JS = """
 
 
 def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
-    """只读扫描一个城市（裸CDP）：搜索→(可选)抓详情→打分→写台账。不发送任何沟通。"""
-    cm = {c["name"]: c for c in cfg["cities"]}
+    """只读扫描一个城市（裸CDP）：搜索→(可选)抓详情→打分→写台账。不发送任何沟通。
+    偏好注入（2026-09-09）：向往岗位替换默认关键词；城市集经 effective_cities 校验
+    （不在生效城市集/被排斥 → 拒扫）；排斥岗位命中 → 硬否决记台账（score=0）。"""
+    eff = effective_cities(cfg)
+    cm = {c["name"]: c for c in eff["cities"]}
+    prefs = _prefs(cfg)
     if city not in cm:
-        return {"error": "unknown city: %s" % city, "available": list(cm)}
-    kws = keywords or cfg["keywords"]
+        return {"error": "city %r not in effective scan set (prefs filtered or unknown)" % city,
+                "available": [c["name"] for c in eff["cities"]],
+                "unknown_cities": eff["unknown"]}
+    kws = keywords or effective_keywords(cfg)
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     found, scored = 0, 0
     try:
@@ -45,6 +96,17 @@ def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
                 g.record_search()
                 found += len(jobs)
                 for job in jobs:
+                    # 偏好排斥岗位硬否决（在打分前，LLM 匹配也不会触达）
+                    vetoed, veto_word = avoid_veto(job, prefs["avoid_jobs"])
+                    if vetoed:
+                        ledger.append({
+                            "action": "scan", "city": city, "keyword": kw, "score": 0,
+                            "reason": "prefs avoid: title/company hit %r" % veto_word,
+                            "title": job.get("title"), "company": job.get("company"),
+                            "salary": job.get("salary"), "href": job.get("href"),
+                            "tags": job.get("tags"), "boss_active": job.get("boss_active"),
+                        })
+                        continue
                     detail = ""
                     if fetch_detail:
                         try:
