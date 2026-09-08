@@ -65,7 +65,10 @@
   },
   "daemon": {
     "interval_min": 3.0,
-    "interval_max": 5.0
+    "interval_max": 5.0,
+    "active_hours": "09:30-22:00",
+    "max_age_hours": 360,
+    "soft_close_hard_limit": "23:30"
   },
   "greeting": {
     "test": [

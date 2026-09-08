@@ -112,6 +112,16 @@ def build_interactive_card(
         "actions": actions,
     })
 
+    # webhook 自定义机器人不支持按钮回调（需企业自建应用+公网回调 URL，规划中 Web 审批台解决），
+    # 明示用户避免点击无响应的困惑
+    elements.append({
+        "tag": "div",
+        "text": {
+            "tag": "lark_md",
+            "content": "ℹ️ 按钮暂不可点击（webhook 机器人不支持交互回调），请直接在 BOSS App 回复，或让 Agent 代发",
+        },
+    })
+
     return {
         "msg_type": "interactive",
         "card": {

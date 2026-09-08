@@ -134,6 +134,20 @@ def already_alerted(rows, who, conv_time):
     return _handled_since_hr_msg(rows, who, conv_time, "human_alert_card", exclude_dry_run=True)
 
 
+def already_skipped(rows, who, conv_time):
+    """防重复决策：该会话已被 daemon 判定 skip(非dry-run)且 HR 未再回复——
+    避免闸门内每轮对同一批低价值会话反复烧 LLM，也保证软收工能正常结束。"""
+    return _handled_since_hr_msg(rows, who, conv_time, "daemon_skip", exclude_dry_run=True)
+
+
+def _parse_hhmm(s, default):
+    try:
+        h, m = map(int, str(s).split(":"))
+        return datetime.time(h, m)
+    except Exception:
+        return default
+
+
 # ---------------------------------------------------------------------------
 # 护栏熔断核查（补全项 c）
 # ---------------------------------------------------------------------------
@@ -206,33 +220,43 @@ def _maybe_send_daily_report(cfg, args):
 # 巡检主循环
 # ---------------------------------------------------------------------------
 
+def _gate_sleep(cfg, args, now_str, secs):
+    """闸门休眠公共路径：推收工日报（当日一次）+ 台账留痕。"""
+    try:
+        _maybe_send_daily_report(cfg, args)
+    except Exception as e:
+        print(f"  [收工日报-异常] {e}")
+    print(f"  [时间闸门-待命] 距离下一工作时段还需约 {secs / 3600.0:.1f} 小时（{secs} 秒），自动进入休眠。")
+    ledger.append({
+        "action": "daemon_gate_sleep",
+        "current_time": now_str,
+        "active_hours": args.active_hours,
+        "wait_seconds": secs,
+    })
+
+
 def run_cycle(cfg, engine, args, st=None):
     now = datetime.datetime.now()
     now_str = now.strftime("%Y-%m-%d %H:%M:%S")
     print(f"\n[{now_str}] ======= 开启新一轮巡检 =======")
 
-    # 1. 检查工作时间闸门
+    # 1. 检查工作时间闸门（软收工：过点后若仍有活跃会话继续沟通直至完成）
     in_active = air.is_active_hour(now, args.active_hours)
+    soft_close = False
     if not in_active:
         secs = air.seconds_until_next_active(now, args.active_hours)
         hours = secs / 3600.0
         if args.dry_run:
             print(f"  [时间闸门-仿真] 当前处于非工作时段（{args.active_hours}），由于指定了 --dry-run，继续仿真评估...")
-        else:
-            print(f"  [时间闸门-拦截] 当前处于非工作时段（{args.active_hours}）。为防风控，严禁对外发送！")
-            # 收工日报：窗口结束后的当晚推送一次（其余夜晚时段为空操作）
-            try:
-                _maybe_send_daily_report(cfg, args)
-            except Exception as e:
-                print(f"  [收工日报-异常] {e}")
-            print(f"  [时间闸门-待命] 距离下一工作时段还需约 {hours:.1f} 小时（{secs} 秒），自动进入休眠。")
-            ledger.append({
-                "action": "daemon_gate_sleep",
-                "current_time": now_str,
-                "active_hours": args.active_hours,
-                "wait_seconds": secs,
-            })
+        elif now.time() >= _parse_hhmm(args.soft_close_hard_limit, datetime.time(23, 30)):
+            print(f"  [软收工-硬上限] 已过 {args.soft_close_hard_limit}，无论如何休眠（防彻夜运转）。")
+            _gate_sleep(cfg, args, now_str, secs)
             return {"status": "outside_active_hours", "wait_seconds": secs}
+        else:
+            # 软收工：先继续拉 inbox，若仍存在 HR 待回复的活跃会话则继续沟通，
+            # 全部处理完毕才休眠（用户规则：22点收工，但沟通完再下线）
+            soft_close = True
+            print(f"  [软收工] 已过活跃窗口（{args.active_hours}），检查是否仍有活跃会话...")
 
     # 2. 护栏熔断核查（补全项 c：flows.chat_reply 不受 guard 约束，daemon 每轮先查）
     paused, pause_reason = guard_blocked(cfg)
@@ -298,6 +322,22 @@ def run_cycle(cfg, engine, args, st=None):
     # 台账一次性载入，供防重复交叉核对（补全项 b）
     ledger_rows = ledger.load_all()
 
+    # 软收工判定：过活跃窗口后，仅当仍存在"HR 待回复且未处理过"的活跃会话才继续沟通
+    if soft_close:
+        active_talking = [
+            c for c in candidates
+            if not already_replied(ledger_rows, c.get("who", ""), c.get("time"))
+            and not already_alerted(ledger_rows, c.get("who", ""), c.get("time"))
+            and not already_skipped(ledger_rows, c.get("who", ""), c.get("time"))
+        ]
+        if active_talking:
+            print(f"  [软收工-继续沟通] 检测到 {len(active_talking)} 个会话仍在沟通中（HR 最后发言未回复），"
+                  f"过点不下线，处理完再休眠（硬上限 {args.soft_close_hard_limit}）。")
+        else:
+            print("  [软收工-完毕] 活跃会话已全部处理完毕，推送日报并休眠。")
+            _gate_sleep(cfg, args, now_str, secs)
+            return {"status": "outside_active_hours", "wait_seconds": secs}
+
     # 5. 逐条决策与处理（全自主推进，绝不因敏感意图阻断）
     replied_count = 0
     for conv in candidates:
@@ -311,12 +351,15 @@ def run_cycle(cfg, engine, args, st=None):
         print(f"  [会话目标] {who} (时间: {conv.get('time')})")
         print(f"  [HR最新消息] {last_msg}")
 
-        # 5.1 台账防重复交叉核对（补全项 b）：已回复/已告警且 HR 未再回复 → 跳过
+        # 5.1 台账防重复交叉核对（补全项 b）：已回复/已告警/已跳过且 HR 未再回复 → 跳过
         if already_replied(ledger_rows, who, conv.get("time")):
             print(f"  [防重复] 台账显示我方已成功回复且 HR 未再回复，跳过不重发。")
             continue
         if already_alerted(ledger_rows, who, conv.get("time")):
             print(f"  [防重复] 该会话已呼叫过人工且 HR 未再回复，跳过重复告警。")
+            continue
+        if already_skipped(ledger_rows, who, conv.get("time")):
+            print(f"  [防重复] 该会话已被决策跳过且 HR 未再回复，不再重复决策。")
             continue
 
         # 5.2 JD 上下文注入（补全项 a）：决策前先取会话关联岗位详情（只读，零发送）
@@ -359,6 +402,14 @@ def run_cycle(cfg, engine, args, st=None):
 
         if action == "skip":
             print(f"  [决策: 跳过] 原因: {reason}")
+            # skip 也留痕（幂等标记）：HR 未再回复前不再重复决策，防每轮重烧 LLM
+            ledger.append({
+                "action": "daemon_skip",
+                "company": who,
+                "reason": (reason or "")[:100],
+                "last_msg": (last_msg or "")[:60],
+                "dry_run": args.dry_run,
+            })
             continue
 
         if action == "needs_human":
@@ -445,13 +496,17 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="仿真干跑：拉取会话并生成回复，但不触发实际发送")
     parser.add_argument("--no-llm", action="store_true",
                         help="强制禁用大模型直连（引擎置为无Key状态，全部转人工，零API消耗；用于验证人工兜底链路）")
-    parser.add_argument("--active-hours", default="09:30-20:30", help="允许对外发送的活跃时间窗口 (默认 09:30-20:30)")
+    parser.add_argument("--active-hours", default=None,
+                        help="允许对外发送的活跃时间窗口 (未指定时读 config.daemon.active_hours，缺省 09:30-20:30)")
     parser.add_argument("--interval-min", type=float, default=None,
                         help="轮询最小间隔（分钟；未指定时读 config.daemon.interval_min，缺省15）")
     parser.add_argument("--interval-max", type=float, default=None,
                         help="轮询最大间隔（分钟；未指定时读 config.daemon.interval_max，缺省25）")
     parser.add_argument("--max-replies-per-cycle", type=int, default=2, help="单轮最大回复数量（防刷屏，默认2）")
-    parser.add_argument("--max-age-hours", type=int, default=24, help="只处理X小时以内的近期消息（默认24）")
+    parser.add_argument("--max-age-hours", type=int, default=None,
+                        help="只处理X小时以内的近期消息（未指定时读 config.daemon.max_age_hours，缺省24；半月补回=360）")
+    parser.add_argument("--soft-close-hard-limit", default=None,
+                        help="软收工硬上限时刻（未指定时读 config.daemon.soft_close_hard_limit，缺省 23:30；过点后无论是否有活跃会话一律休眠）")
     parser.add_argument("--typing-delay-min", type=float, default=12.0, help="拟人打字最小等待秒数（默认12）")
     parser.add_argument("--typing-delay-max", type=float, default=35.0, help="拟人打字最大等待秒数（默认35）")
 
@@ -462,7 +517,7 @@ def main():
 
     cfg = cfgmod.load()
 
-    # 轮询间隔解析（补全项 d）：CLI 显式传参 > config.json daemon 段 > 硬编码默认
+    # 参数解析：CLI 显式传参 > config.json daemon 段 > 硬编码默认
     daemon_cfg = cfg.get("daemon") or {}
     interval_src = "CLI"
     if args.interval_min is None:
@@ -473,6 +528,13 @@ def main():
         interval_src = "config" if interval_src == "config" else "CLI"
     if args.interval_max < args.interval_min:
         args.interval_max = args.interval_min
+    if args.active_hours is None:
+        args.active_hours = str(daemon_cfg.get("active_hours", "09:30-20:30"))
+        interval_src = "config" if interval_src == "config" else "CLI"
+    if args.max_age_hours is None:
+        args.max_age_hours = int(daemon_cfg.get("max_age_hours", 24))
+    if args.soft_close_hard_limit is None:
+        args.soft_close_hard_limit = str(daemon_cfg.get("soft_close_hard_limit", "23:30"))
 
     engine = air.AIReplyEngine(cfg)
     if args.no_llm:

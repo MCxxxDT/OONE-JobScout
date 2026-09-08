@@ -115,7 +115,9 @@ def is_recent_message(time_str: str, max_age_hours: int = 24) -> bool:
     - '23:19', '14:03' (当天时间) -> True
     - '刚刚', '10分钟前', '2小时前' -> True
     - '昨天' -> 在 24h~48h 判定范围内放行
-    - '09月01日', '08月31日' -> 历史旧会话，默认跳过
+    - '09月01日', '08月31日' -> 按与今天的日期差判定（含跨年），差值天数
+      <= max_age_hours/24 才放行（2026-09-08：半月窗口 max_age_hours=360 时，
+      半个月内的旧会话也纳入回复范围，用户明确要求补回这些未回复会话）
     """
     if not time_str:
         return False
@@ -126,6 +128,16 @@ def is_recent_message(time_str: str, max_age_hours: int = 24) -> bool:
         return True
     if "昨天" in ts:
         return max_age_hours >= 24
+    m = re.match(r"(\d{1,2})月(\d{1,2})日", ts)
+    if m:
+        try:
+            today = datetime.date.today()
+            d = datetime.date(today.year, int(m.group(1)), int(m.group(2)))
+            if d > today:  # 跨年：无年份文本显示的是去年日期
+                d = d.replace(year=today.year - 1)
+            return (today - d).days <= max_age_hours / 24.0
+        except ValueError:
+            return False
     return False
 
 

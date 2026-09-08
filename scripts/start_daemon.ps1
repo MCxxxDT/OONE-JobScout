@@ -96,7 +96,8 @@ if (-not $chromeAlive) {
     }
 }
 
-# 3. 启动守护脚本（仅显式传参时透传 interval，否则由 config.json daemon 段决定）
+# 3. 启动守护脚本（仅显式传参时透传，否则由 config.json daemon 段决定：
+#    active_hours / max_age_hours / soft_close_hard_limit / interval）
 $daemonArgs = @("scripts/daemon_auto_reply.py")
 
 if ($Once) {
@@ -109,7 +110,9 @@ if ($DryRun) {
     $daemonArgs += "--dry-run"
 }
 
-$daemonArgs += @("--active-hours", $ActiveHours)
+if (-not [string]::IsNullOrWhiteSpace($ActiveHours)) {
+    $daemonArgs += @("--active-hours", $ActiveHours)
+}
 if ($IntervalMin -gt 0) {
     $daemonArgs += @("--interval-min", $IntervalMin.ToString())
 }

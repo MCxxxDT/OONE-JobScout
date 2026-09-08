@@ -670,6 +670,44 @@ res15 = _fb.send_human_alert(cfg, {"company": "高意向科技", "last_msg": "�
 check("高意向告警dry-run返回ok", res15.get("ok") is True)
 check("高意向告警卡片为红色", res15["card"]["card"]["header"]["template"] == "red")
 
+print("== 16. 软收工与半月补回窗口（2026-09-08：22点收工+沟通完再下线+半月未回复会话补回）==")
+import datetime as _dt16
+
+# 16.1 半月时间窗口：M月D日 按日期差判定（相对今天构造，防测试日期漂移）
+_today16 = _dt16.date.today()
+_d_in = (_today16 - _dt16.timedelta(days=14)).strftime("%m月%d日")
+_d_edge = (_today16 - _dt16.timedelta(days=15)).strftime("%m月%d日")
+_d_out = (_today16 - _dt16.timedelta(days=20)).strftime("%m月%d日")
+check("半月窗口内旧会话放行(14天前)", _air.is_recent_message(_d_in, max_age_hours=360))
+check("半月边界放行(15天整)", _air.is_recent_message(_d_edge, max_age_hours=360))
+check("超半月旧会话拦截(20天前)", not _air.is_recent_message(_d_out, max_age_hours=360))
+check("24h窗口下旧会话仍拦截", not _air.is_recent_message(_d_in, max_age_hours=24))
+_d_cross = (_today16 - _dt16.timedelta(days=10)).strftime("%m月%d日")
+check("跨年场景日期解析不崩溃", isinstance(_air.is_recent_message(_d_cross, max_age_hours=360), bool))
+
+# 16.2 daemon 配置读取（active_hours 22点收工 / max_age 360 / 软收工硬上限）
+dc16 = cfg.get("daemon") or {}
+check("daemon.active_hours配置22点收工", dc16.get("active_hours") == "09:30-22:00")
+check("daemon.max_age_hours配置半月", dc16.get("max_age_hours") == 360)
+check("daemon软收工硬上限配置", dc16.get("soft_close_hard_limit") == "23:30")
+
+# 16.3 daemon_skip 幂等（skip 决策留痕，HR 未再回复不重复决策）
+rows16 = [
+    {"action": "daemon_skip", "company": "F公司", "ts": "2026-09-08 21:00:00", "dry_run": False},
+    {"action": "daemon_skip", "company": "G公司", "ts": "2026-09-08 21:00:00", "dry_run": True},
+]
+check("已skip且HR未再回复→不再重复决策", _dm.already_skipped(rows16, "F公司", "20:50"))
+check("HR在skip后再发新消息→放行重决策", not _dm.already_skipped(rows16, "F公司", "21:30"))
+check("dry-run的skip不算已决策", not _dm.already_skipped(rows16, "G公司", "20:50"))
+
+# 16.4 飞书卡片按钮不可用说明行
+card16 = _fb.build_interactive_card(company="测试科技", last_msg="x", reason="y")
+check("卡片含按钮不可用说明", any("按钮暂不可点击" in json.dumps(e, ensure_ascii=False)
+                                   for e in card16["card"]["elements"]))
+card_hi16 = _fb.build_interactive_card(company="测试科技", last_msg="x", reason="y", high_intent=True)
+check("高意向卡片同样含说明行", any("按钮暂不可点击" in json.dumps(e, ensure_ascii=False)
+                                     for e in card_hi16["card"]["elements"]))
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
