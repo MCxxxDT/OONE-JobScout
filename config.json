@@ -1,7 +1,7 @@
 {
   "cdp_endpoint": "http://127.0.0.1:9335",
   "profile": "test",
-  "daily_limit": 100,
+  "daily_limit": 30,
   "search_daily_limit": 40,
   "interval_seconds": [4, 10],
   "search_interval_seconds": [1.5, 3.5],
