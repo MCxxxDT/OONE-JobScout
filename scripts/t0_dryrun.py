@@ -16,6 +16,10 @@ DRY = os.path.join(cfgmod.ROOT, "state_dryrun")
 shutil.rmtree(DRY, ignore_errors=True)
 os.makedirs(DRY, exist_ok=True)
 cfgmod.STATE_DIR = DRY
+# 画像沙箱化（2026-09-09）：真实 profile.local.json（冒烟实测产生）不得泄漏进 t0——
+# 早期 ai_reply 断言基于硬编码画像语义，且 21/24 节的画像写入必须只落沙箱
+from boss_apply import profile_store as _ps_herm
+_ps_herm.PROFILE_PATH = os.path.join(DRY, "profile.local.json")
 
 cfg = cfgmod.load()
 
@@ -1046,6 +1050,105 @@ try:
 finally:
     cfgmod.LOCAL_CFG_PATH = _orig_local_path24
     _ps.refine_profile = _orig_refine24
+
+
+print("== 25. 岗位适配门禁 job_fit_gate（2026-09-09 配置优先/LLM兜底/归因留痕/零硬编码）==")
+from boss_apply import llm_match as _lm25
+
+cfg25 = dict(cfg)
+cfg25["prefs"] = {"avoid_jobs": ["BD", "地推"], "want_jobs": ["AI产品"],
+                  "want_cities": [], "avoid_cities": []}
+cfg25["job_fit_gate"] = {"min_verdict": "medium"}
+
+_orig_mo25 = _lm25.match_one
+_orig_cjd25 = flows.chat_job_detail
+try:
+    # 25.1 排斥清单命中（公司名含BD）→ rule_blacklist，LLM 零调用
+    _calls25 = {"n": 0}
+
+    def _fake_llm25(job, c):
+        _calls25["n"] += 1
+        return {"score": 30.0, "verdict": "high", "reason": "不应被调用"}
+
+    _lm25.match_one = _fake_llm25
+    g25 = flows.judge_job_fit({"title": "商家BD", "company": "万葭灯火", "salary": "8-13K",
+                                "city": "杭州", "jd_text": "渠道开发地推"}, cfg25)
+    check("排斥命中拒绝(rule_blacklist)", g25["allow"] is False and g25["attribution"] == "rule_blacklist"
+          and g25["hit_word"] == "BD")
+    check("排斥命中不烧LLM", _calls25["n"] == 0)
+
+    # 25.2 向往清单命中（标题）→ rule_whitelist
+    g25b = flows.judge_job_fit({"title": "AI产品经理", "company": "某公司", "salary": "",
+                                "city": "杭州", "jd_text": ""}, cfg25)
+    check("向往命中放行(rule_whitelist)", g25b["allow"] is True and g25b["attribution"] == "rule_whitelist")
+
+    # 25.3 未命中 + LLM low → llm_low_match
+    _lm25.match_one = lambda job, c: {"score": 5.0, "verdict": "low", "reason": "销售地推岗"}
+    g25c = flows.judge_job_fit({"title": "商务拓展", "company": "某公司", "salary": "",
+                                "city": "", "jd_text": ""}, cfg25)
+    check("LLM低分拒绝(llm_low_match)", g25c["allow"] is False and g25c["attribution"] == "llm_low_match"
+          and g25c["verdict"] == "low" and g25c["score"] == 5.0)
+
+    # 25.4 未命中 + LLM medium → llm_match_pass
+    _lm25.match_one = lambda job, c: {"score": 15.0, "verdict": "medium", "reason": "方向匹配"}
+    g25d = flows.judge_job_fit({"title": "产品运营", "company": "某公司", "salary": "",
+                                "city": "", "jd_text": ""}, cfg25)
+    check("LLM中分放行(llm_match_pass)", g25d["allow"] is True and g25d["attribution"] == "llm_match_pass")
+
+    # 25.5 偏好全空 + LLM veto → 拒绝（LLM 兜底独立于清单）
+    cfg25e = dict(cfg)
+    cfg25e["prefs"] = {"avoid_jobs": [], "want_jobs": [], "want_cities": [], "avoid_cities": []}
+    _lm25.match_one = lambda job, c: {"score": 0.0, "verdict": "veto", "reason": "销售岗"}
+    g25e = flows.judge_job_fit({"title": "销售专员", "company": "某公司", "salary": "",
+                                "city": "", "jd_text": ""}, cfg25e)
+    check("偏好空veto拒绝", g25e["allow"] is False and g25e["attribution"] == "llm_low_match")
+
+    # 25.6 LLM 不可用 → fail-close
+    _lm25.match_one = lambda job, c: None
+    g25f = flows.judge_job_fit({"title": "产品经理", "company": "某公司", "salary": "",
+                                "city": "", "jd_text": ""}, cfg25e)
+    check("LLM不可用fail-close", g25f["allow"] is False and g25f["attribution"] == "llm_unavailable")
+
+    # 25.7 min_verdict=high 收紧：medium 被拒（阈值来自配置，零硬编码）
+    cfg25g = dict(cfg25)
+    cfg25g["job_fit_gate"] = {"min_verdict": "high"}
+    _lm25.match_one = lambda job, c: {"score": 15.0, "verdict": "medium", "reason": "备选"}
+    g25g = flows.judge_job_fit({"title": "产品运营", "company": "某公司", "salary": "",
+                                "city": "", "jd_text": ""}, cfg25g)
+    check("阈值high收紧拦截", g25g["allow"] is False and g25g["attribution"] == "llm_low_match")
+
+    # 25.8 全链留痕：mock chat_job_detail → _job_fit_gate 写台账 job_fit_gate（归因可审计）
+    flows.chat_job_detail = lambda c, company=None, fetch_jd=True, fetch_history=True: {
+        "ok": True, "company": company,
+        "job": {"title": "商家BD", "company": company, "salary": "8-13K",
+                "city": "杭州", "jd_text": "地推"}}
+    g25h = flows._job_fit_gate(cfg25, "字节跳动万葭灯火")
+    check("门禁拦截返回归因", g25h["allow"] is False and g25h["attribution"] == "rule_blacklist")
+    _lg25 = [r for r in ledger.load_all() if r.get("action") == "job_fit_gate"][-1]
+    check("job_fit_gate台账留痕", _lg25["company"] == "字节跳动万葭灯火"
+          and _lg25["attribution"] == "rule_blacklist" and _lg25["hit_word"] == "BD"
+          and _lg25["allow"] is False and _lg25["job_title"] == "商家BD")
+
+    # 25.9 拦截路径不触 CDP：chat_exchange_wechat / chat_send_resume 直接 blocked
+    _r25x = flows.chat_exchange_wechat(cfg25, "字节跳动万葭灯火")
+    check("exchange_wechat被门禁拦截", _r25x.get("ok") is False and _r25x.get("blocked") == "job_fit"
+          and _r25x.get("attribution") == "rule_blacklist")
+    _r25y = flows.chat_send_resume(cfg25, "字节跳动万葭灯火")
+    check("send_resume被门禁拦截", _r25y.get("ok") is False and _r25y.get("blocked") == "job_fit")
+    _ex25 = [r for r in ledger.load_all() if r.get("action") == "exchange_wechat"
+             and r.get("status") == "blocked_job_fit"]
+    check("拦截台账status=blocked_job_fit", bool(_ex25) and _ex25[-1]["company"] == "字节跳动万葭灯火"
+          and "rule_blacklist" in _ex25[-1]["reason"])
+
+    # 25.10 岗位信息不可得 → job_info_unavailable fail-close
+    flows.chat_job_detail = lambda c, company=None, fetch_jd=True, fetch_history=True: {
+        "ok": False, "error": "conversation not found"}
+    g25i = flows._job_fit_gate(cfg25, "不存在公司")
+    check("岗位不可得fail-close", g25i["allow"] is False
+          and g25i["attribution"] == "job_info_unavailable")
+finally:
+    _lm25.match_one = _orig_mo25
+    flows.chat_job_detail = _orig_cjd25
 
 
 

@@ -57,6 +57,61 @@ def avoid_veto(job, avoid_jobs):
             return True, k
     return False, ""
 
+
+def judge_job_fit(job, cfg):
+    """岗位适配门禁判定链（2026-09-09，零硬编码岗位词——规则词全部来自 Web 端 prefs）：
+    ① prefs.avoid_jobs 命中标题/公司 → 拒绝 rule_blacklist（不烧 LLM）；
+    ② prefs.want_jobs 命中标题 → 放行 rule_whitelist（不烧 LLM）；
+    ③ 未命中/清单为空 → llm_match.match_one 语义兜底：verdict ≥ job_fit_gate.min_verdict
+      放行（llm_match_pass），否则拒绝（llm_low_match）；LLM 不可用 fail-close（llm_unavailable）。
+    返回 {allow, attribution, detail, verdict, score, hit_word}。"""
+    prefs = _prefs(cfg)
+    vetoed, hit = avoid_veto(job, prefs["avoid_jobs"])
+    if vetoed:
+        return {"allow": False, "attribution": "rule_blacklist",
+                "detail": "命中排斥词「%s」" % hit, "verdict": "", "score": None, "hit_word": hit}
+    title = job.get("title") or ""
+    for k in prefs["want_jobs"]:
+        if k and k in title:
+            return {"allow": True, "attribution": "rule_whitelist",
+                    "detail": "命中向往岗位「%s」" % k, "verdict": "", "score": None, "hit_word": k}
+    m = llm_match.match_one(job, cfg)
+    if m is None:
+        return {"allow": False, "attribution": "llm_unavailable",
+                "detail": "LLM 判定不可用，fail-close 拒绝（可稍后重试或人工在 BOSS App 操作）",
+                "verdict": "", "score": None, "hit_word": ""}
+    order = {"veto": 0, "low": 1, "medium": 2, "high": 3}
+    min_verdict = str((cfg.get("job_fit_gate") or {}).get("min_verdict") or "medium")
+    ok = order.get(str(m.get("verdict") or "low"), 0) >= order.get(min_verdict, 2)
+    return {"allow": ok,
+            "attribution": "llm_match_pass" if ok else "llm_low_match",
+            "detail": "LLM: %s" % (m.get("reason") or ""),
+            "verdict": m.get("verdict") or "", "score": m.get("score"), "hit_word": ""}
+
+
+def _job_fit_gate(cfg, company):
+    """岗位适配门禁前置：只读抓会话关联岗位 → judge_job_fit → 台账留痕（action=job_fit_gate，
+    归因字段 attribution）。岗位信息不可得时 fail-close（job_info_unavailable）——
+    连岗位都无法确认，不盲发高敏实弹动作。"""
+    try:
+        jd_res = chat_job_detail(cfg, company=company, fetch_history=False)
+    except Exception as e:
+        jd_res = {"ok": False, "error": str(e)[:200]}
+    job = (jd_res.get("job") or {}) if jd_res.get("ok") else {}
+    if jd_res.get("ok") and (job.get("title") or job.get("company")):
+        verdict = judge_job_fit(job, cfg)
+    else:
+        verdict = {"allow": False, "attribution": "job_info_unavailable",
+                   "detail": "无法获取会话关联岗位（%s）" % (jd_res.get("error") or "会话无岗位信息"),
+                   "verdict": "", "score": None, "hit_word": ""}
+    ledger.append({
+        "action": "job_fit_gate", "company": company, "job_title": job.get("title") or "",
+        "allow": verdict["allow"], "attribution": verdict["attribution"],
+        "hit_word": verdict.get("hit_word") or "", "verdict": verdict.get("verdict") or "",
+        "score": verdict.get("score"), "detail": verdict.get("detail") or "",
+    })
+    return verdict
+
 # 消息中心会话列表提取（裸CDP一次性 evaluate，从 scripts/chat_check.py 迁入）
 CHAT_LIST_JS = """
 (() => {
@@ -329,7 +384,16 @@ def chat_reply(cfg, company, text):
 def chat_exchange_wechat(cfg, company):
     """按公司名点开会话并点击【换微信】官方按钮。写台账 action=exchange_wechat。
     2026-09-08：greeter 层已加固（受信任点击+弹窗标题校验），no_dialog/no_verify
-    状态如实返回 ok=False（不再谎报成功）。"""
+    状态如实返回 ok=False（不再谎报成功）。
+    2026-09-09：岗位适配门禁——执行前 judge_job_fit 判定（prefs 规则优先/LLM 语义兜底/
+    零硬编码），拒绝时归因留痕（job_fit_gate + status=blocked_job_fit），防销售地推岗误发。"""
+    gate = _job_fit_gate(cfg, company)
+    if not gate["allow"]:
+        ledger.append({"action": "exchange_wechat", "status": "blocked_job_fit",
+                       "company": company,
+                       "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
+        return {"ok": False, "blocked": "job_fit", "company": company,
+                "attribution": gate["attribution"], "detail": gate["detail"]}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()
@@ -348,7 +412,15 @@ def chat_exchange_wechat(cfg, company):
 
 def chat_send_resume(cfg, company):
     """按公司名点开会话并点击【发简历】官方按钮。写台账 action=send_resume。
-    2026-09-08：greeter 层已加固，no_verify 状态如实返回 ok=False。"""
+    2026-09-08：greeter 层已加固，no_verify 状态如实返回 ok=False。
+    2026-09-09：岗位适配门禁——与换微信同链路（judge_job_fit），拒绝归因留痕。"""
+    gate = _job_fit_gate(cfg, company)
+    if not gate["allow"]:
+        ledger.append({"action": "send_resume", "status": "blocked_job_fit",
+                       "company": company,
+                       "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
+        return {"ok": False, "blocked": "job_fit", "company": company,
+                "attribution": gate["attribution"], "detail": gate["detail"]}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()

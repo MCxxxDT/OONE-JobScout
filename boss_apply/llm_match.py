@@ -9,6 +9,7 @@
 """
 import json
 import re
+import time
 
 from . import profile_store
 
@@ -88,6 +89,22 @@ def match_batch(jobs, cfg, batch_size=20):
             return None  # 任一批失败即整体回退（保守：宁可用稳定的关键词分也不半吊混合）
         out.update(res)
     return out or None
+
+
+def match_one(job, cfg):
+    """单岗位 LLM 语义判定（job_fit_gate 门禁兜底用）。返回 {score, verdict, reason}
+    或 None（无 key / 调用失败）。瞬时故障单次重试（对齐 ai_reply 重试哲学）。
+    注意：不受 llm_match.enabled（扫描开关）约束——门禁是安全机制，只看 Key 可用性。"""
+    llm = cfg.get("llm") or {}
+    if not (llm.get("api_key") and llm.get("base_url")):
+        return None
+    for attempt in range(2):
+        res = _call_once([job], cfg)
+        if res is not None and 0 in res:
+            return res[0]
+        if attempt == 0:
+            time.sleep(2)
+    return None
 
 
 def _call_once(batch, cfg):
