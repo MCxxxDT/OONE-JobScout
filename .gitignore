@@ -8,6 +8,10 @@ state/*.log
 state/feishu_cards.jsonl
 # 本地敏感覆盖层（api_key 等，绝不入库）
 config.local.json
+# 简历本地数据（含隐私，不入库）
+profile.local.json
+# DPAPI 加密密文存储（绑定本机）
+state/secrets.json
 # Python
 __pycache__/
 *.pyc

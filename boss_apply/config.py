@@ -25,6 +25,15 @@ def load():
     if os.path.exists(LOCAL_CFG_PATH):
         with open(LOCAL_CFG_PATH, "r", encoding="utf-8") as f:
             cfg = _deep_merge(cfg, json.load(f))
+    # 敏感值优先级：DPAPI secrets.json（Web 端保存，加密落盘）
+    # > config.local.json > 环境变量。仅覆盖已存在的键路径，不改变其余结构。
+    try:
+        from . import secrets as _sec
+        key = _sec.get_secret("llm_api_key")
+        if key:
+            cfg.setdefault("llm", {})["api_key"] = key
+    except Exception:
+        pass  # 非 Windows/无密文：按原链路（config.local > env）解析
     return cfg
 
 

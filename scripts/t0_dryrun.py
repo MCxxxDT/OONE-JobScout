@@ -486,11 +486,11 @@ check("时间解析:相对时间", dt == fixed_now - _dt2.timedelta(minutes=10) 
 check("时间解析:空文本返回None", _dm._parse_conv_time("") == (None, False))
 
 rows = [
-    {"action": "reply", "status": "ok", "company": "A公司", "ts": "2026-09-08 14:05:00"},
-    {"action": "reply", "status": "failed", "company": "B公司", "ts": "2026-09-08 14:05:00"},
-    {"action": "dryrun_reply", "company": "C公司", "ts": "2026-09-08 14:05:00"},
-    {"action": "human_alert_card", "company": "D公司", "ts": "2026-09-08 14:05:00", "dry_run": False},
-    {"action": "human_alert_card", "company": "E公司", "ts": "2026-09-08 14:05:00", "dry_run": True},
+    {"action": "reply", "status": "ok", "company": "A公司", "ts": _dt2.datetime.now().strftime("%Y-%m-%d") + " 14:05:00"},
+    {"action": "reply", "status": "failed", "company": "B公司", "ts": _dt2.datetime.now().strftime("%Y-%m-%d") + " 14:05:00"},
+    {"action": "dryrun_reply", "company": "C公司", "ts": _dt2.datetime.now().strftime("%Y-%m-%d") + " 14:05:00"},
+    {"action": "human_alert_card", "company": "D公司", "ts": _dt2.datetime.now().strftime("%Y-%m-%d") + " 14:05:00", "dry_run": False},
+    {"action": "human_alert_card", "company": "E公司", "ts": _dt2.datetime.now().strftime("%Y-%m-%d") + " 14:05:00", "dry_run": True},
 ]
 check("我方已回复且HR未再回复→防重发拦截", _dm.already_replied(rows, "A公司", "14:03"))
 check("HR在回复后再发新消息→放行处理", not _dm.already_replied(rows, "A公司", "14:10"))
@@ -701,8 +701,8 @@ check("daemon软收工硬上限配置", dc16.get("soft_close_hard_limit") == "23
 
 # 16.3 daemon_skip 幂等（skip 决策留痕，HR 未再回复不重复决策）
 rows16 = [
-    {"action": "daemon_skip", "company": "F公司", "ts": "2026-09-08 21:00:00", "dry_run": False},
-    {"action": "daemon_skip", "company": "G公司", "ts": "2026-09-08 21:00:00", "dry_run": True},
+    {"action": "daemon_skip", "company": "F公司", "ts": _dt16.datetime.now().strftime("%Y-%m-%d") + " 21:00:00", "dry_run": False},
+    {"action": "daemon_skip", "company": "G公司", "ts": _dt16.datetime.now().strftime("%Y-%m-%d") + " 21:00:00", "dry_run": True},
 ]
 check("已skip且HR未再回复→不再重复决策", _dm.already_skipped(rows16, "F公司", "20:50"))
 check("HR在skip后再发新消息→放行重决策", not _dm.already_skipped(rows16, "F公司", "21:30"))
@@ -795,6 +795,30 @@ check("发简历核验消息条目增量", "total_msgs() > before" in _resume_sr
 import boss_apply.flows as _fl19
 _wx_flow_src = _insp.getsource(_fl19.chat_exchange_wechat)
 check("flows换微信ok随status如实判定", 'r.get("status") == "ok"' in _wx_flow_src)
+
+print("== 20. DPAPI 密钥保管（2026-09-09 Web端Key加密，方案A升级）==")
+import sys as _sys20
+if _sys20.platform == "win32":
+    from boss_apply import secrets as _sec
+    _k20 = "ak_roundtrip_test_12345"
+    _blob = _sec.protect(_k20)
+    check("DPAPI加密后不含明文", _k20 not in _blob and "=" not in str(_k20))
+    check("DPAPI解密roundtrip", _sec.unprotect(_blob) == _k20)
+    _sec.set_secret("t0_test_key", _k20)
+    check("secret落盘可读回", _sec.get_secret("t0_test_key") == _k20)
+    _raw20 = open(os.path.join(cfgmod.STATE_DIR, "secrets.json"), encoding="utf-8").read()
+    check("落盘文件不含明文key", _k20 not in _raw20)
+    check("脱敏显示", _sec.masked("ak_3B5j8l02Sp0YpwW6mbndVwF4h5r33").startswith("ak_3B") and _sec.masked("ak_3B5j8l02Sp0YpwW6mbndVwF4h5r33").endswith("r33"))
+    _sec.set_secret("t0_test_key", "")  # 清理
+    check("空值删除secret", _sec.get_secret("t0_test_key") is None)
+    # 优先级链：secrets(DPAPI) > config.local.json —— 在 dryrun 沙箱内验证
+    _sec.set_secret("llm_api_key", "ak_dpapi_priority_test")
+    _cfg20 = cfgmod.load()
+    check("DPAPI密钥优先级最高", _cfg20["llm"]["api_key"] == "ak_dpapi_priority_test")
+    _sec.set_secret("llm_api_key", "")
+    check("清除DPAPI后回退config.local", cfgmod.load()["llm"]["api_key"].startswith("ak_"))
+else:
+    check("非Windows跳过DPAPI断言", True)
 
 shutil.rmtree(DRY, ignore_errors=True)
 
