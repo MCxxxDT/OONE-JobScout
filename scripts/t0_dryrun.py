@@ -177,6 +177,17 @@ c_sys1 = flows.parse_conv("08月31日|王女士靖安科技CHO|您的附件简�
 check("系统回显(简历已发送给Boss)不判待回复", bool(c_sys1) and not c_sys1["needs_reply_guess"])
 c_sys2 = flows.parse_conv("08月31日|顾女士成都福客人工智能科技高级招聘专员|对方已同意，您的附件简历已发送给对方", ops)
 check("系统回显(对方已同意)不判待回复", bool(c_sys2) and not c_sys2["needs_reply_guess"])
+# 2026-09-08 沉心传媒复发案例：交换请求回执（同意/拒绝）不判待回复
+c_sys3 = flows.parse_conv("22:41|张宏辉沉心传媒运营总监|您已经成功拒绝了对方交换微信请求", ops)
+check("系统回执(拒绝交换微信)不判待回复", bool(c_sys3) and not c_sys3["needs_reply_guess"])
+c_sys4 = flows.parse_conv("10:00|某HR|已同意和对方交换微信", ops)
+check("系统回执(同意交换微信)不判待回复", bool(c_sys4) and not c_sys4["needs_reply_guess"])
+c_sys5 = flows.parse_conv("10:00|某HR|您已成功同意对方交换电话请求", ops)
+check("系统回执(同意交换电话)不判待回复", bool(c_sys5) and not c_sys5["needs_reply_guess"])
+check("HR真实微信请求仍判待回复(转人工)", bool(flows.parse_conv("10:00|某HR|我想要和您交换微信，您是否同意", ops)))
+# 侧栏预览含拒绝回执的完整行（复现23:04现场）
+c_sys6 = flows.parse_conv("22:41|张宏辉沉心传媒运营总监|[送达]|您已经成功拒绝了对方交换微信请求", ops)
+check("复现23:04现场:[送达]+拒绝回执不判待回复", bool(c_sys6) and not c_sys6["needs_reply_guess"])
 c_close = flows.parse_conv("08月31日|罗女士肯德基招聘主管|[已读]|谢谢", ops)
 check("短促结束语(谢谢)视为对话闭环", bool(c_close) and not c_close["needs_reply_guess"])
 c_keep = flows.parse_conv("09月01日|韩女士杭州壹网壹创招聘HR|现在在杭州吗，可以接受线下面试吗", ops)
