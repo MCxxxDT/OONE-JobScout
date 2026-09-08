@@ -10,6 +10,7 @@ import datetime
 import json
 import os
 import re
+import time
 from typing import Any, Dict, Optional, Tuple
 
 from . import config as cfgmod, greeter, ledger
@@ -273,13 +274,25 @@ class AIReplyEngine:
         }
 
     def _try_llm_generate(self, conv: dict, prompt: Optional[str] = None) -> Optional[dict]:
-        """尝试使用大模型 API 作为 Agent 生成回复。"""
+        """尝试使用大模型 API 作为 Agent 生成回复。
+        瞬时故障（网络抖动/中转偶发 5xx）单次重试：同路径重试，非模板降级，
+        不违反"无法生成就转人工"的哲学（2026-09-08 实测瞬时失败 3 次/全天）。"""
         if not (self.openrouter_key or self.openai_key):
             return None
 
         if not prompt:
             prompt = self.build_agent_prompt(conv)
 
+        for attempt in range(2):  # 1 次原始调用 + 1 次重试
+            parsed = self._llm_call_once(prompt)
+            if parsed is not None:
+                return parsed
+            if attempt == 0:
+                time.sleep(2)  # 瞬时故障退避 2s 后重试一次
+        return None
+
+    def _llm_call_once(self, prompt: str) -> Optional[dict]:
+        """单次 LLM 调用：返回解析后的 {action,...} dict；任何异常/格式异常返回 None。"""
         try:
             import urllib.request
 
