@@ -361,15 +361,12 @@ elements = card_body.get("elements", [])
 check("卡片包含主要信息元素与按钮组", len(elements) >= 5)
 
 action_elem = [e for e in elements if e.get("tag") == "action"]
-check("卡片包含交互动作区", len(action_elem) == 1)
-btns = action_elem[0].get("actions", [])
-check("卡片包含4个交互按钮", len(btns) == 4)
+check("卡片包含动作区", len(action_elem) == 1)
 
-btn_actions = [b.get("value", {}).get("action") for b in btns]
-check("按钮包含 reply/exchange_wechat/send_resume/ignore",
-      btn_actions == ["reply", "exchange_wechat", "send_resume", "ignore"])
-check("首选回复按钮为 primary 样式", btns[0].get("type") == "primary")
-check("忽略按钮为 danger 样式", btns[3].get("type") == "danger")
+btns = action_elem[0].get("actions", [])
+check("按钮为open_url跳转审批台(方案A)", all(b.get("url") for b in btns) and len(btns) >= 1)
+check("跳转按钮携带token", all("token=" in (b.get("url") or "") for b in btns))
+check("卡片含审批台操作说明", any("审批台" in json.dumps(e, ensure_ascii=False) for e in elements))
 
 # 2. 结构测试 (不带推荐回复)
 card_no_reply = _fb.build_interactive_card(
@@ -378,8 +375,7 @@ card_no_reply = _fb.build_interactive_card(
     reason="打招呼无需回复",
 )
 btns_no_reply = [e for e in card_no_reply["card"]["elements"] if e.get("tag") == "action"][0]["actions"]
-check("无推荐回复时只有3个按钮", len(btns_no_reply) == 3)
-check("首个按钮为换微信", btns_no_reply[0]["value"]["action"] == "exchange_wechat")
+check("无推荐回复时也有审批台跳转按钮", len(btns_no_reply) >= 1 and all(b.get("url") for b in btns_no_reply))
 
 # 3. dry-run 模式下的呼叫人工留痕测试
 alert_res = _fb.send_human_alert(
@@ -661,7 +657,8 @@ check("仅我方发言提面试不误判(以HR发言为准)", not hi5)
 card_hi = _fb.build_interactive_card(company="测试科技", last_msg="来线下面试吧", reason="x", high_intent=True)
 check("高意向卡片红色模板", card_hi["card"]["header"]["template"] == "red")
 check("高意向卡片标题带高意向标记", "高意向" in card_hi["card"]["header"]["title"]["content"])
-check("高意向卡片保留交互按钮", len([e for e in card_hi["card"]["elements"] if e.get("tag") == "action"]) == 1)
+check("高意向卡片含审批台跳转", any(b.get("url") for e in card_hi["card"]["elements"]
+                                    if e.get("tag") == "action" for b in e.get("actions", [])))
 card_norm15 = _fb.build_interactive_card(company="测试科技", last_msg="x", reason="y")
 check("普通卡片保持橙色模板", card_norm15["card"]["header"]["template"] == "orange")
 
@@ -700,13 +697,13 @@ check("已skip且HR未再回复→不再重复决策", _dm.already_skipped(rows1
 check("HR在skip后再发新消息→放行重决策", not _dm.already_skipped(rows16, "F公司", "21:30"))
 check("dry-run的skip不算已决策", not _dm.already_skipped(rows16, "G公司", "20:50"))
 
-# 16.4 飞书卡片按钮不可用说明行
+# 16.4 飞书卡片审批台跳转（方案A）
 card16 = _fb.build_interactive_card(company="测试科技", last_msg="x", reason="y")
-check("卡片含按钮不可用说明", any("按钮暂不可点击" in json.dumps(e, ensure_ascii=False)
-                                   for e in card16["card"]["elements"]))
+check("卡片含审批台说明行", any("审批台" in json.dumps(e, ensure_ascii=False)
+                                 for e in card16["card"]["elements"]))
 card_hi16 = _fb.build_interactive_card(company="测试科技", last_msg="x", reason="y", high_intent=True)
-check("高意向卡片同样含说明行", any("按钮暂不可点击" in json.dumps(e, ensure_ascii=False)
-                                     for e in card_hi16["card"]["elements"]))
+check("高意向卡片同样含说明行", any("审批台" in json.dumps(e, ensure_ascii=False)
+                                   for e in card_hi16["card"]["elements"]))
 
 print("== 17. 发言方回执判定（2026-09-08 修复：[送达]/[已读]=我方最后发言，平台权威信号）==")
 # 沉心传媒 bug 场景：用户手打"直接boss说吧"（不在任何 opener 集合）+ 平台[送达]回执
@@ -731,6 +728,42 @@ for row in ledger.load_all():
         if c_ok:
             check("已回会话带[送达]不判待回复(%s)" % row.get("company", "")[:10], not c_ok["needs_reply_guess"])
             break
+
+print("== 18. 审批台 Web 服务（方案A：局域网工作台）==")
+import importlib.util as _ilu
+_aw_spec = _ilu.spec_from_file_location("approval_web", os.path.join(cfgmod.ROOT, "scripts", "approval_web.py"))
+_aw = _ilu.module_from_spec(_aw_spec)
+_aw_spec.loader.exec_module(_aw)
+
+# 18.1 token 认证
+check("错误token返回401", _aw._check_token(cfg, "wrong") is False)
+_want18 = (cfg.get("web") or {}).get("token") or "boss-apply"
+check("正确token通过认证", _aw._check_token(cfg, _want18) is True)
+
+# 18.2 首页路由（HTML）
+from fastapi.testclient import TestClient as _TC
+_tc18 = _TC(_aw.app)
+_r401 = _tc18.get("/", params={"token": "wrong"})
+check("首页错误token返回401页面", _r401.status_code == 401)
+_r_ok = _tc18.get("/", params={"token": _want18})
+check("首页正确token返回工作台页面", _r_ok.status_code == 200 and "审批台" in _r_ok.text)
+
+# 18.3 overview API
+_r_ov = _tc18.get("/api/overview", params={"token": _want18})
+_d18 = _r_ov.json()
+check("overview返回统计结构", "counts" in _d18 and "pending" in _d18["counts"] and "today" in _d18)
+check("overview返回护栏状态", "guard" in _d18 and "paused_reason" in _d18["guard"])
+check("overview返回台账流水", isinstance(_d18.get("ledger"), list))
+check("overview无token返回401", _tc18.get("/api/overview").status_code == 401)
+
+# 18.4 action 端点：参数校验（不真发，仅校验拒绝路径）
+_r_bad = _tc18.post("/api/action", params={"token": _want18}, json={"action": "hack", "company": "x"})
+check("非法action被拒绝", _r_bad.status_code == 400)
+_r_bad2 = _tc18.post("/api/action", params={"token": _want18}, json={"action": "reply", "company": "x"})
+check("空回复文本被拒绝", _r_bad2.status_code == 400)
+_r_ign = _tc18.post("/api/action", params={"token": _want18}, json={"action": "ignore", "company": "测试科技-审批台"})
+_d_ign = _r_ign.json()
+check("ignore操作走handle_card_action管线", _d_ign.get("ok") is True and _d_ign.get("action") == "ignore")
 
 shutil.rmtree(DRY, ignore_errors=True)
 

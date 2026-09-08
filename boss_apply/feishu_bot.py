@@ -63,64 +63,47 @@ def build_interactive_card(
 
     elements.append({"tag": "hr"})
 
-    # 交互式按钮组（类似 OpenClaw / Hermes 交互体验）
+    # 按钮组：open_url 跳转审批台（方案A：webhook 不支持交互回调，卡片按钮一律跳
+    # 局域网审批台 Web 完成操作；approval_web 未配置 base_url 时降级为纯提示）
+    try:
+        web_cfg = cfgmod.load().get("web") or {}
+    except Exception:
+        web_cfg = {}
+    base = (web_cfg.get("base_url") or os.getenv("APPROVAL_BASE_URL") or "").rstrip("/")
     actions = []
-    if suggested_reply:
-        actions.append({
-            "tag": "button",
-            "text": {"tag": "plain_text", "content": "📤 一键发送推荐回复"},
-            "type": "primary",
-            "value": {
-                "action": "reply",
-                "company": company,
-                "text": suggested_reply,
+    if base:
+        q = "?token=" + (web_cfg.get("token") or "boss-apply")
+        actions = [
+            {
+                "tag": "button",
+                "text": {"tag": "plain_text", "content": "🖥️ 打开审批台处理"},
+                "type": "primary",
+                "url": base + "/" + q,
             },
-        })
-
-    actions.extend([
-        {
-            "tag": "button",
-            "text": {"tag": "plain_text", "content": "💬 官方换微信"},
-            "type": "default",
-            "value": {
-                "action": "exchange_wechat",
-                "company": company,
-            },
-        },
-        {
-            "tag": "button",
-            "text": {"tag": "plain_text", "content": "📄 发送附件简历"},
-            "type": "default",
-            "value": {
-                "action": "send_resume",
-                "company": company,
-            },
-        },
-        {
-            "tag": "button",
-            "text": {"tag": "plain_text", "content": "🚫 忽略此条"},
-            "type": "danger",
-            "value": {
-                "action": "ignore",
-                "company": company,
-            },
-        },
-    ])
-
+        ]
     elements.append({
         "tag": "action",
         "actions": actions,
     })
 
-    # webhook 自定义机器人不支持按钮回调（需企业自建应用+公网回调 URL，规划中 Web 审批台解决），
-    # 明示用户避免点击无响应的困惑
-    elements.append({
-        "tag": "div",
-        "text": {
-            "tag": "lark_md",
-            "content": "ℹ️ 按钮暂不可点击（webhook 机器人不支持交互回调），请直接在 BOSS App 回复，或让 Agent 代发",
-        },
-    })
+    if base:
+        elements.append({
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": "ℹ️ 点击上方按钮跳转审批台（局域网/Tailscale 可达）完成 发送回复/换微信/发简历/忽略 操作",
+            },
+        })
+    else:
+        # webhook 自定义机器人不支持按钮回调（需企业自建应用+公网回调 URL），
+        # 且审批台 base_url 未配置：明示用户操作路径
+        elements.append({
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": "ℹ️ 按钮需跳转审批台（config web.base_url 未配置）。请直接在 BOSS App 回复，或让 Agent 代发",
+            },
+        })
 
     return {
         "msg_type": "interactive",
