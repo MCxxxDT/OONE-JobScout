@@ -10,7 +10,7 @@ import os
 import re
 import time
 
-from . import browser, citycodes, config as cfgmod, guard, greeter, ledger, rawcdp, scorer
+from . import browser, citycodes, config as cfgmod, guard, greeter, ledger, llm_match, rawcdp, scorer
 
 
 def _prefs(cfg):
@@ -81,8 +81,12 @@ def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
     kws = keywords or effective_keywords(cfg)
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     found, scored = 0, 0
+    llm_scored = 0
     try:
         sess.open_tab()
+        # 两段式：先收集通过硬过滤（kill/届别/薪资/active/排斥偏好）的岗位，
+        # 词表分只作回退基线；随后 llm_match 批量智能打分覆盖（失败/无key沿用词表分）
+        candidates = []
         for kw in kws:
             for p in range(1, max_pages + 1):
                 ok, info = g.check_search()
@@ -116,20 +120,43 @@ def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
                         except Exception:
                             detail = ""  # 详情失败降级：仅用列表信息打分
                     s, why = scorer.score(job, detail, cfg)
-                    ledger.append({
-                        "action": "scan", "city": city, "keyword": kw, "score": s, "reason": why,
-                        "title": job.get("title"), "company": job.get("company"),
-                        "salary": job.get("salary"), "href": job.get("href"),
-                        "tags": job.get("tags"), "boss_active": job.get("boss_active"),
-                        "detail_head": (detail or "")[:200],
-                    })
-                    if s > 0:
-                        scored += 1
+                    if s <= 0:
+                        ledger.append({
+                            "action": "scan", "city": city, "keyword": kw, "score": 0, "reason": why,
+                            "title": job.get("title"), "company": job.get("company"),
+                            "salary": job.get("salary"), "href": job.get("href"),
+                            "tags": job.get("tags"), "boss_active": job.get("boss_active"),
+                            "detail_head": (detail or "")[:200],
+                            "score_source": "hard_filter",
+                        })
+                        continue
+                    candidates.append((job, detail, kw, s, why))
                     browser.human_wait(cfg, "page")
+        # LLM 智能匹配批量覆盖（增强项：失败回退词表分，绝不阻塞）
+        llm_res = llm_match.match_batch(
+            [{**j, "detail": d} for (j, d, _kw, _s, _why) in candidates], cfg)
+        for i, (job, detail, kw, s, why) in enumerate(candidates):
+            final_s, final_why, source, verdict = s, why, "keywords", ""
+            if llm_res and i in llm_res:
+                m = llm_res[i]
+                final_s, final_why = m["score"], "llm: " + m["reason"]
+                source, verdict = "llm", m.get("verdict") or ""
+                llm_scored += 1
+            ledger.append({
+                "action": "scan", "city": city, "keyword": kw, "score": final_s, "reason": final_why,
+                "title": job.get("title"), "company": job.get("company"),
+                "salary": job.get("salary"), "href": job.get("href"),
+                "tags": job.get("tags"), "boss_active": job.get("boss_active"),
+                "detail_head": (detail or "")[:200],
+                "score_source": source, "verdict": verdict,
+            })
+            if final_s > 0:
+                scored += 1
     finally:
         sess.close_tab()
         sess.close()
-    return {"city": city, "found": found, "scored": scored, "guard": g.summary()}
+    return {"city": city, "found": found, "scored": scored, "llm_scored": llm_scored,
+            "score_source": "llm" if llm_scored else "keywords", "guard": g.summary()}
 
 
 def login_state(cfg, poll_s=15):

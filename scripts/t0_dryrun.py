@@ -921,6 +921,61 @@ check("prompt含自主决断说明", "自主决断" in p22)
 p22n = _air.AIReplyEngine(dict(cfg)).build_agent_prompt({"who": "H", "last_msg": "hi"})
 check("无偏好时prompt不含偏好段", "用户求职偏好" not in p22n)
 
+print("== 23. LLM 站内智能匹配（2026-09-09 批量打分替代关键词加权，失败回退）==")
+from boss_apply import llm_match as _lm
+
+# 23.1 无 key / 关闭开关 → None（回退路径）
+check("llm_match开关默认开启", (cfg.get("llm_match") or {}).get("enabled") is True)
+cfg23_off = dict(cfg, llm_match={"enabled": False})
+check("开关关闭返回None", _lm.match_batch([{"title": "x"}], cfg23_off) is None)
+cfg23_nokey = dict(cfg, llm={"api_key": "", "base_url": ""})
+check("无key返回None", _lm.match_batch([{"title": "x"}], cfg23_nokey) is None)
+
+# 23.2 _call_once mock：伪造 LLM 返回解析（monkeypatch urllib）
+class _FakeResp23:
+    def __init__(self, body):
+        self._body = body
+        self.status = 200
+    def read(self):
+        return json.dumps({"choices": [{"message": {"content": self._body}}]}).encode()
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+_orig_urlopen23 = None
+try:
+    import urllib.request as _ur23
+    _orig_urlopen23 = _ur23.urlopen
+
+    def _fake_urlopen(req, timeout=0):
+        body = '[{"i": 0, "score": 25.5, "verdict": "high", "reason": "Agent方向高度契合"},' \
+               '{"i": 1, "score": 99, "verdict": "veto", "reason": "销售岗"},' \
+               '{"i": 2, "score": 3, "verdict": "low", "reason": "不相关"}]'
+        return _FakeResp23("```json\n" + body + "\n```")
+    _ur23.urlopen = _fake_urlopen
+    jobs23 = [{"title": "Agent产品经理", "company": "A", "salary": "8-12K", "tags": "", "detail": "MCP"},
+              {"title": "销售专员", "company": "B", "salary": "5-8K", "tags": "", "detail": ""},
+              {"title": "行政助理", "company": "C", "salary": "4-6K", "tags": "", "detail": ""}]
+    res23 = _lm.match_batch(jobs23, cfg)
+    check("批量匹配解析成功", isinstance(res23, dict) and len(res23) == 3)
+    check("LLM分数与verdict落位", res23[0]["score"] == 25.5 and res23[0]["verdict"] == "high")
+    check("veto强制归零分", res23[1]["score"] == 0 and res23[1]["verdict"] == "veto")
+    check("超上限分数被钳制", res23[1]["score"] <= 37)
+    check("reason保留", "Agent方向" in res23[0]["reason"])
+    # LLM 故障 → match_batch 整体 None（回退关键词）
+    def _fake_err(req, timeout=0):
+        raise RuntimeError("boom")
+    _ur23.urlopen = _fake_err
+    check("LLM故障返回None回退", _lm.match_batch(jobs23, cfg) is None)
+    # 空 prompt 组件健全性
+    check("偏好块含未指定说明", "未指定（由你自主决断）" in _lm._prefs_block(cfg))
+    check("画像块含姓名", "张烨韬" in _lm._profile_block(cfg))
+finally:
+    if _orig_urlopen23 is not None:
+        _ur23.urlopen = _orig_urlopen23
+
+
 
 
 shutil.rmtree(DRY, ignore_errors=True)
