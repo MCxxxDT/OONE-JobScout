@@ -975,6 +975,79 @@ finally:
     if _orig_urlopen23 is not None:
         _ur23.urlopen = _orig_urlopen23
 
+print("== 24. Web 设置端点（2026-09-09 Key/偏好/简历，沙箱重定向本地配置）==")
+# 重定向 LOCAL_CFG_PATH 到沙箱（_write_local 与 load 都经 cfgmod 动态读取）
+_orig_local_path24 = cfgmod.LOCAL_CFG_PATH
+cfgmod.LOCAL_CFG_PATH = os.path.join(DRY, "config.local.json")
+# 伪造 refine 跳过真实 LLM 调用
+_orig_refine24 = _ps.refine_profile
+_ps.refine_profile = lambda text, cfg: (None, "t0跳过LLM提炼")
+try:
+    _tc24 = _TC(_aw.app)
+    _want24 = (cfg.get("web") or {}).get("token") or "boss-apply"
+
+    # 24.1 GET /api/settings
+    _s24 = _tc24.get("/api/settings", params={"token": _want24}).json()
+    check("settings返回LLM脱敏信息", "api_key_masked" in _s24["llm"] and "key_source" in _s24["llm"])
+    check("settings返回偏好结构", set(_s24["prefs"].keys()) == {"want_jobs", "avoid_jobs", "want_cities", "avoid_cities"})
+    check("settings返回生效城市", isinstance(_s24["effective"]["cities"], list) and len(_s24["effective"]["cities"]) >= 1)
+    check("settings返回画像元信息", "has_resume" in _s24["profile"])
+    check("settings无token返回401", _tc24.get("/api/settings").status_code == 401)
+
+    # 24.2 POST /api/settings（key→DPAPI 沙箱 secrets）
+    _r24 = _tc24.post("/api/settings", params={"token": _want24},
+                      json={"api_key": "ak_web_test_123", "base_url": "http://x/v1", "model": "m-test",
+                            "llm_match_enabled": False}).json()
+    check("settings保存返回变更清单", _r24.get("ok") is True and any("加密" in c for c in _r24["changed"]))
+    _s24b = _tc24.get("/api/settings", params={"token": _want24}).json()
+    check("保存后key来源为DPAPI", _s24b["llm"]["key_source"].startswith("DPAPI"))
+    check("保存后base_url生效", _s24b["llm"]["base_url"] == "http://x/v1")
+    check("智能匹配开关可关", _s24b["llm_match"]["enabled"] is False)
+    # 清除 key（clear_key）
+    _tc24.post("/api/settings", params={"token": _want24}, json={"clear_key": True})
+    _s24c = _tc24.get("/api/settings", params={"token": _want24}).json()
+    check("clear_key清除DPAPI密钥", not _s24c["llm"]["key_source"].startswith("DPAPI"))
+
+    # 24.3 测试连接（无效地址快速失败）
+    _t24 = _tc24.post("/api/settings/test", params={"token": _want24},
+                      json={"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "model": "m"}).json()
+    check("测试连接无效地址报错", _t24.get("ok") is False and _t24.get("error"))
+
+    # 24.4 POST /api/prefs（写沙箱本地配置）
+    _p24 = _tc24.post("/api/prefs", params={"token": _want24},
+                      json={"want_jobs": "AI产品，Agent产品", "avoid_jobs": "销售、地推",
+                            "want_cities": "杭州\n北京", "avoid_cities": ""}).json()
+    check("prefs保存成功", _p24.get("ok") is True)
+    check("prefs分隔符解析", _p24["prefs"]["want_jobs"] == ["AI产品", "Agent产品"]
+          and _p24["prefs"]["avoid_jobs"] == ["销售", "地推"]
+          and _p24["prefs"]["want_cities"] == ["杭州", "北京"])
+    check("prefs返回生效城市", "杭州" in _p24["effective_cities"] and "北京" in _p24["effective_cities"])
+
+    # 24.5 POST /api/profile（粘贴文本，refine 被 mock 跳过）
+    _r24p = _tc24.post("/api/profile", params={"token": _want24},
+                       json={"text": "测试简历：张烨韬，做过FastMCP工具链与Coze中台。"}).json()
+    check("简历保存成功", _r24p.get("ok") is True and _r24p.get("saved") is True)
+    check("refine失败如实上报", _r24p.get("refined") is False and "跳过" in _r24p.get("refine_error", ""))
+    _g24p = _tc24.get("/api/profile", params={"token": _want24}).json()
+    check("profile读取返回预览", _g24p.get("has_resume") is True and "测试简历" in _g24p.get("resume_preview", ""))
+
+    # 24.6 上传文件端点（txt multipart）
+    _f24 = _tc24.post("/api/profile", params={"token": _want24},
+                      files={"file": ("resume.txt", "文件上传测试：张烨韬 FastMCP".encode("utf-8"), "text/plain")}).json()
+    check("文件上传保存成功", _f24.get("ok") is True and _f24.get("saved") is True)
+    _bad24 = _tc24.post("/api/profile", params={"token": _want24},
+                        files={"file": ("x.exe", b"MZ", "application/x-msdownload")}).json()
+    check("不支持扩展名被拒", _bad24.get("ok") is False)
+
+    # 24.7 页面含设置区
+    _pg24 = _tc24.get("/", params={"token": _want24}).text
+    check("页面含设置面板", "settingsBox" in _pg24 and "测试连接" in _pg24)
+    check("页面含简历上传控件", "inFile" in _pg24 and "inResume" in _pg24)
+finally:
+    cfgmod.LOCAL_CFG_PATH = _orig_local_path24
+    _ps.refine_profile = _orig_refine24
+
+
 
 
 

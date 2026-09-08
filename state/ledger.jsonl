@@ -1177,3 +1177,57 @@
 {"action": "reply", "status": "ok", "company": "壹网壹创", "text_head": "您好！目前人在福州，对江浙沪方向的机会也一直持开放态度。初试方便先通过线上进行吗？时间上相对具备弹性，具体可根据双方安排协商。另外方便发一份岗位的详细 JD 供我了解一下吗？期待沟通！", "conv": "09月01日\n韩女士杭州壹网壹创招聘HR\n现在在杭州吗，可以接受线下面试吗，预计到岗时间什么", "ts": "2026-09-07 19:20:17"}
 {"action": "reply", "status": "ok", "company": "字节跳动", "text_head": "您好！感谢详细介绍~想先深入了解一下岗位的日常工作构成与发展路径，方便发一份完整的岗位 JD 供我参考吗？我会结合自身规划认真评估，期待进一步沟通！", "conv": "09月05日\n蒋先生字节跳动招聘HR\n同学你好~我司已开启27届校招工作。商家BD是我司的正", "ts": "2026-09-07 19:20:42"}
 {"action": "reply", "status": "ok", "company": "沉心传媒", "text_head": "您好！感谢您耐心介绍~娱乐直播运营的方向与我的产品经理规划匹配度不太高，就不耽误您的时间啦。祝您早日招到合适的小伙伴，也感谢这次沟通，期待未来有缘再交流！", "conv": "19:39\n高先生沉心传媒招聘者\n我们这边是娱乐直播运营，运营上班时间主要是跟进主播开播时间", "ts": "2026-09-07 20:15:31"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-07 21:20:32", "scanned": 23, "candidates": 0, "replied": 0, "dry_run": true, "ts": "2026-09-07 21:20:33"}
+{"action": "notice_alert", "company": "韩女士杭州壹网壹创招聘HR", "notice": "HR [韩女士杭州壹网壹创招聘HR] 发来消息: \"目前实习生薪资3000（包括基础薪资2700+房补150+餐补150），工作时间早九晚六双休，实习时间五个月以上，可以接受吗\"，当前无法通过 Agent 进行智能回复，请人工查看并处理！", "last_msg": "目前实习生薪资3000（包括基础薪资2700+房补150+餐补150），工作时间早九晚六双休，实习时间五个月以上，可以接受吗", "ts": "2026-09-08 18:49:39"}
+{"action": "human_alert_card", "company": "韩女士杭州壹网壹创招聘HR", "feishu_sent": false, "feishu_error": null, "dry_run": true, "reason": "无法调用 Agent/大模型进行智能回复（已禁用确定性模板降级），转人工处理", "ts": "2026-09-08 18:49:39"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 18:49:33", "scanned": 23, "candidates": 1, "replied": 0, "dry_run": true, "ts": "2026-09-08 18:49:39"}
+{"action": "dryrun_reply", "company": "韩女士杭州壹网壹创招聘HR", "last_msg": "目前实习生薪资3000（包括基础薪资2700+房补150+餐补150），工作时间早九晚六双休，实习时间五个月以上，可以接受吗", "reply_text": "韩女士您好，感谢详细介绍。我对电商运营岗位很感兴趣，虽常驻福州但强烈意向奔赴杭州全职实习。关于薪资，理解贵司安排，考虑到跨城因素，希望能覆盖基础开销。方便提供详细JD吗？可先线上初试沟通。", "source": "agent", "reason": "HR直接询问薪资接受度，需保持开放态度，结合候选人跨城实习诉求，礼貌回应并索要详细JD以推进沟通，避免直接承诺或拒绝。", "job_title": "国内电商运营", "ts": "2026-09-08 18:50:08"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 18:49:51", "scanned": 23, "candidates": 1, "replied": 1, "dry_run": true, "ts": "2026-09-08 18:50:08"}
+{"action": "notice_alert", "company": "韩女士杭州壹网壹创招聘HR", "notice": "HR [韩女士杭州壹网壹创招聘HR] 发来消息: \"目前实习生薪资3000（包括基础薪资2700+房补150+餐补150），工作时间早九晚六双休，实习时间五个月以上，可以接受吗\"，当前无法通过 Agent 进行智能回复，请人工查看并处理！", "last_msg": "目前实习生薪资3000（包括基础薪资2700+房补150+餐补150），工作时间早九晚六双休，实习时间五个月以上，可以接受吗", "ts": "2026-09-08 18:52:33"}
+{"action": "human_alert_card", "company": "韩女士杭州壹网壹创招聘HR", "feishu_sent": false, "feishu_error": null, "dry_run": true, "reason": "无法调用 Agent/大模型进行智能回复（已禁用确定性模板降级），转人工处理", "ts": "2026-09-08 18:52:33"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 18:52:07", "scanned": 23, "candidates": 1, "replied": 0, "dry_run": true, "ts": "2026-09-08 18:52:33"}
+{"action": "dryrun_reply", "company": "韩女士杭州壹网壹创招聘HR", "last_msg": "目前实习生薪资3000（包括基础薪资2700+房补150+餐补150），工作时间早九晚六双休，实习时间五个月以上，可以接受吗", "reply_text": "您好！关于薪资，因需跨城赴杭全职实习，希望能覆盖当地基础租房与生活开销（如日薪180-250左右）。五个月的时长可以配合。我最看重业务匹配度，方便再发一份详细JD供我深入了解吗？期待沟通！", "source": "agent", "reason": "HR针对薪资（3000元/月）和实习时长（五个月以上）征求候选人意见。候选人因需跨城前往杭州全职实习，对薪资覆盖当地基础开销有明确诉求，回复时需礼貌表达薪资期望，肯定时长可配合，并顺势索要详细JD以研判岗位匹配度。", "job_title": "店铺运营实习生", "ts": "2026-09-08 20:36:11"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 20:35:44", "scanned": 23, "candidates": 1, "replied": 1, "dry_run": true, "ts": "2026-09-08 20:36:11"}
+{"action": "dryrun_reply", "company": "韩女士杭州壹网壹创招聘HR", "last_msg": "目前实习生薪资3000（包括基础薪资2700+房补150+餐补150），工作时间早九晚六双休，实习时间五个月以上，可以接受吗", "reply_text": "感谢介绍。因需跨城赴杭州实习，3000元覆盖租房与生活略显紧张，期望日薪180-250或有更多房补。壹网壹创作为上市龙头非常吸引我，方便提供详细JD及转正机制吗？我时间弹性，期待与您深入沟通！", "source": "agent", "reason": "HR针对薪资、工时和实习期进行了具体报价。候选人需跨城实习，对3000元薪资略有保留，礼貌表达期望区间并重申对上市公司的兴趣，同时反索详细JD与转正机制。", "job_title": "店铺运营实习生", "high_intent": true, "ts": "2026-09-08 21:05:24"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 21:04:55", "scanned": 23, "candidates": 1, "replied": 1, "dry_run": true, "ts": "2026-09-08 21:05:24"}
+{"action": "daily_report", "date": "2026-09-08", "scanned": 0, "replied": 0, "needs_human_count": 1, "feishu_sent": true, "feishu_error": null, "dry_run": false, "ts": "2026-09-08 21:33:36"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 21:33:35", "active_hours": "09:30-20:30", "wait_seconds": 42984, "ts": "2026-09-08 21:33:36"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 21:47:31", "active_hours": "09:30-20:30", "wait_seconds": 42148, "ts": "2026-09-08 21:47:46"}
+{"action": "reply", "status": "ok", "company": "韩女士杭州壹网壹创招聘HR", "text_head": "您好！五个月及双休我可以配合。关于薪资，跨城实习覆盖杭州基础开销希望日薪在180-250元左右。另外方便提供一份详细岗位JD吗？期待您的详细介绍！", "conv": "10:34\n韩女士杭州壹网壹创招聘HR\n目前实习生薪资3000（包括基础薪资2700+房补1", "ts": "2026-09-08 21:51:32"}
+{"action": "reply", "status": "ok", "company": "童女士杭州有钱鲸网络科技招聘者", "text_head": "您好，我非常有兴趣！虽然目前常驻福州，但对杭州及江浙沪发展意向强烈，可随时线上面试或奔赴到岗。为更好匹配，方便发我一份详细的岗位JD吗？期待与您进一步沟通！", "conv": "09月01日\n童女士杭州有钱鲸网络科技招聘者\n你好，我司急聘跨境电商运营助理一职，请问考虑么", "ts": "2026-09-08 21:52:18"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 21:50:36", "scanned": 23, "candidates": 10, "replied": 2, "dry_run": false, "ts": "2026-09-08 21:52:18"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 21:55:58", "active_hours": "09:30-20:30", "wait_seconds": 41641, "ts": "2026-09-08 21:56:13"}
+{"action": "reply", "status": "ok", "company": "陈海缘高顿教育集团人事", "text_head": "陈老师您好！我是2027届数媒应届生张烨韬，有200人团队及月GMV10万的商业化实战经验，与该管培生要求高度契合。目前常驻福州，核心意向江浙沪，对广州优质机会也持开放态度。想了解下轮岗城市是否包含江浙沪？方便提供详细JD与薪资结构吗？期待", "conv": "09月01日\n陈海缘高顿教育集团人事\n你好呀，我们这边最近在招未来星·管培生-2年晋升主管/", "ts": "2026-09-08 22:00:27"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 22:00:55", "active_hours": "09:30-22:00", "wait_seconds": 41344, "ts": "2026-09-08 22:00:57"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 22:13:46", "active_hours": "09:30-22:00", "wait_seconds": 40573, "ts": "2026-09-08 22:14:01"}
+{"action": "reply", "status": "failed", "company": "赵先生新美虹星总经理", "error": "conversation/input not found for '赵先生新美虹星总经理' (head=None)", "ts": "2026-09-08 22:16:01"}
+{"action": "reply", "status": "ok", "company": "王先生多益网络招聘者", "text_head": "看到岗位职责，对内容创作与营销策划很感兴趣。想了解一下完整的岗位JD，以及安排在广州或武汉实习的具体时长和后续回杭机制。我是27届数字媒体技术专业，可随时到岗，期待您的完整介绍！", "conv": "09月01日\n王先生多益网络招聘者\n岗位职责： 1、参与营销内容创作与推广：挖掘游戏产品亮点", "ts": "2026-09-08 22:16:50"}
+{"action": "reply", "status": "ok", "company": "张宏辉沉心传媒运营总监", "text_head": "好的，那我们就在Boss上详细聊。我对娱乐直播运营助理岗位很感兴趣，之前提点比例的问题还想请教。方便您分享一下完整的岗位JD和具体职责吗？我想更全面了解团队和业务方向。", "conv": "08月31日\n张宏辉沉心传媒运营总监\n[已读]\n直接boss说吧", "ts": "2026-09-08 22:17:27"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 22:15:06", "scanned": 23, "candidates": 7, "replied": 2, "dry_run": false, "ts": "2026-09-08 22:17:27"}
+{"action": "reply", "status": "ok", "company": "赵先生新美虹星总经理", "text_head": "虽无直接短剧经验，但我擅长Agent与自动化工作流，与您JD中的“智能化生产”高度契合，希望能去杭州全职加入。方便发我一份详细JD吗？期待进一步沟通。", "conv": "09月01日\n赵先生新美虹星总经理\n[已读]\n这个确实没有，之前Vibe coding主要做", "ts": "2026-09-08 22:23:06"}
+{"action": "reply", "status": "ok", "company": "蒋文静字节跳动招聘专员", "text_head": "您好！绍兴符合我的江浙沪发展意向，我目前常驻福州，合适可随时奔赴全职实习。我具备商务谈判与团队商业化协作经验，对本岗位很有兴趣。方便提供详细的校招JD与面试流程吗？期待与您进一步交流！", "conv": "08月31日\n蒋文静字节跳动招聘专员\n你好~商家BD岗位是正式的27届校招岗位，属于抖音生活", "ts": "2026-09-08 22:23:52"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 22:21:58", "scanned": 23, "candidates": 5, "replied": 2, "dry_run": false, "ts": "2026-09-08 22:23:52"}
+{"action": "reply", "status": "ok", "company": "李女士盒马鲜生人事主管", "text_head": "您好李女士，感谢联系。我目前常驻福州，但对杭州机会意向强烈，可随时奔赴。建议初试先线上进行，高效推进。能否提供详细JD，我好针对性了解？期待进一步沟通。", "conv": "08月31日\n李女士盒马鲜生人事主管\n您好盒马BD招聘，综合薪资9k-13k ，主要负责社区", "ts": "2026-09-08 22:27:32"}
+{"action": "reply", "status": "ok", "company": "陈芳Appen-澳鹏数据招聘专员", "text_head": "您好，感谢您的推荐。我对游戏标注实习生岗位有一定兴趣，但考虑到我目前常驻福州，核心意向是江浙沪发展，而岗位在成都，可能需要进一步了解是否支持远程或调整。方便的话，能否提供更详细的岗位JD，包括工作内容、团队情况等，以便我评估匹配度？期待您的", "conv": "08月31日\n陈芳Appen-澳鹏数据招聘专员\n你好，打扰了，我们这边有一个游戏标注实习生（", "ts": "2026-09-08 22:28:24"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 22:26:45", "scanned": 23, "candidates": 3, "replied": 2, "dry_run": false, "ts": "2026-09-08 22:28:24"}
+{"action": "notice_alert", "company": "华先生Talking猎头顾问", "notice": "HR [华先生Talking猎头顾问] 发来消息: \"华先生的手机号：*****\"，Agent回复文案包含敏感联系方式，已拦截并转人工！", "last_msg": "华先生的手机号：*****", "ts": "2026-09-08 22:32:36"}
+{"action": "human_alert_card", "company": "华先生Talking猎头顾问", "feishu_sent": true, "feishu_error": null, "dry_run": false, "reason": "Agent生成文案包含联系方式/电话隐私，安全门禁拦截并转人工", "high_intent": false, "ts": "2026-09-08 22:32:37"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 22:32:04", "scanned": 23, "candidates": 1, "replied": 0, "dry_run": false, "ts": "2026-09-08 22:32:37"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 22:33:30", "active_hours": "09:30-22:00", "wait_seconds": 39389, "ts": "2026-09-08 22:33:32"}
+{"action": "exchange_wechat", "status": "ok", "company": "华先生Talking猎头顾问", "conv": "08月31日\n华先生Talking猎头顾问\n华先生的手机号：*****", "ts": "2026-09-08 22:48:15"}
+{"action": "reply", "status": "ok", "company": "张宏辉沉心传媒运营总监", "text_head": "理解，我们在平台上沟通更方便。关于岗位的提成比例和具体职责，我比较关注。方便再详细介绍一下日常的工作内容、主播培训体系，以及这个‘合作伙伴’式的分配机制具体如何运作吗？", "conv": "22:41\n张宏辉沉心传媒运营总监\n您已经成功拒绝了对方交换微信请求", "ts": "2026-09-08 23:04:30"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-08 23:03:32", "scanned": 23, "candidates": 2, "replied": 1, "dry_run": false, "ts": "2026-09-08 23:04:30"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 23:07:47", "active_hours": "09:30-22:00", "wait_seconds": 37332, "ts": "2026-09-08 23:07:48"}
+{"action": "exchange_wechat", "status": "no_verify", "company": "Talking", "conv": "08月31日\n华先生Talking猎头顾问\n华先生的手机号：*****", "ts": "2026-09-08 23:15:02"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 23:17:58", "active_hours": "09:30-22:00", "wait_seconds": 36721, "ts": "2026-09-08 23:17:59"}
+{"action": "exchange_wechat", "status": "ok", "company": "Talking", "conv": "08月31日\n华先生Talking猎头顾问\n华先生的手机号：*****", "ts": "2026-09-08 23:25:19"}
+{"action": "exchange_wechat", "status": "ok", "company": "蒋先生字节跳动招聘HR", "conv": "昨天\n蒋先生字节跳动招聘HR\n[已读]\n您好！感谢详细介绍~想先深入了解一下岗位的日常工作构", "ts": "2026-09-08 23:31:31"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-08 23:47:59", "active_hours": "09:30-22:00", "wait_seconds": 34920, "ts": "2026-09-08 23:47:59"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 00:17:59", "active_hours": "09:30-22:00", "wait_seconds": 33120, "ts": "2026-09-09 00:18:00"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 00:48:00", "active_hours": "09:30-22:00", "wait_seconds": 31319, "ts": "2026-09-09 00:48:01"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 01:18:01", "active_hours": "09:30-22:00", "wait_seconds": 29518, "ts": "2026-09-09 01:18:03"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 01:48:03", "active_hours": "09:30-22:00", "wait_seconds": 27716, "ts": "2026-09-09 01:48:04"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 02:18:04", "active_hours": "09:30-22:00", "wait_seconds": 25915, "ts": "2026-09-09 02:18:05"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 02:48:05", "active_hours": "09:30-22:00", "wait_seconds": 24114, "ts": "2026-09-09 02:48:07"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 03:18:07", "active_hours": "09:30-22:00", "wait_seconds": 22312, "ts": "2026-09-09 03:18:08"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-09 03:31:25", "active_hours": "09:30-22:00", "wait_seconds": 21514, "ts": "2026-09-09 03:31:27"}
