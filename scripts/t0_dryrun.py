@@ -633,6 +633,15 @@ finally:
     _gr.get_active_conversation_job = _orig_get_job13
     _gr.get_active_conversation_history = _orig_get_hist13
 
+print("== 14. 拟人高斯延迟（2026-09-08 开源调研落地：真人节奏更接近正态）==")
+from boss_apply import browser as _br
+
+_vals = [_br.gauss_delay(12, 35) for _ in range(300)]
+check("gauss延迟始终在区间内", all(12 <= v <= 35 for v in _vals))
+check("gauss延迟均值接近区间中点", abs(sum(_vals) / len(_vals) - 23.5) < 2.0)
+check("gauss零宽区间退化安全", _br.gauss_delay(5, 5) == 5)
+check("gauss延迟中段密度高于端点", sum(1 for v in _vals if 18 <= v <= 29) > sum(1 for v in _vals if v < 15 or v > 32))
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

@@ -406,8 +406,8 @@ def run_cycle(cfg, engine, args, st=None):
                                    "note": "pre-send recheck"})
                     break
 
-                # 拟人化打字等待
-                delay = random.uniform(args.typing_delay_min, args.typing_delay_max)
+                # 拟人化打字等待（高斯分布：真人打字节奏更接近正态）
+                delay = behav.gauss_delay(args.typing_delay_min, args.typing_delay_max)
                 print(f"  [拟人等待] 模拟阅读与输入打字，等待 {delay:.1f} 秒...")
                 time.sleep(delay)
 

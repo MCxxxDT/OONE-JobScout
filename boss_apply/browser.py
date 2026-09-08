@@ -71,15 +71,23 @@ def is_logged_in(page):
     return False
 
 
-def human_wait(cfg, kind="page"):
+def gauss_delay(lo, hi):
+    """高斯分布拟人延迟：μ=区间中点，σ=区间/6（99.7% 落在区间内），截断到 [lo,hi]。
+    真人操作间隔更接近正态而非均匀分布（对标 boss-agent-cli 高斯节流，2026-09-08 开源调研）。"""
     import random
+    if hi <= lo:
+        return lo
+    return max(lo, min(hi, random.gauss((lo + hi) / 2.0, (hi - lo) / 6.0)))
+
+
+def human_wait(cfg, kind="page"):
     if kind == "greet":
         lo, hi = cfg.get("interval_seconds", [4, 10])
     elif kind == "search":
         lo, hi = cfg.get("search_interval_seconds", [1.5, 3.5])
     else:
         lo, hi = 2.5, 3.5
-    time.sleep(random.uniform(lo, hi))
+    time.sleep(gauss_delay(lo, hi))
 
 
 def shutdown():
