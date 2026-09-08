@@ -324,66 +324,184 @@ def send_message_via_chat(sess, company, text, poll_s=12):
     return {"conv": head, "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
 
 
+# 工具栏按钮受信任点击 + 可见弹窗确认（2026-09-08 换微信误发换电话事故修复）：
+# 病理：① el.click() 合成点击被 BOSS Vue 的 isTrusted 过滤静默忽略，工具栏按钮
+# 点击从未生效；② DOM 永久预埋"确认与对方交换电话吗"隐藏弹窗（.panel-contact
+# display:none），旧确认代码 .panel-contact .btn-sure 盲配到它的确定按钮 → 误发电话。
+# 修复：坐标级 _trusted_click + 只点"可见且标题匹配"的弹窗 + 消息区计数核验。
+TOOLBAR_BTN_POS_JS = """
+(() => {
+  const btn = document.querySelector(%s);
+  if (!btn) return JSON.stringify({r: 'notfound'});
+  if (btn.classList.contains('unable')) return JSON.stringify({r: 'unable'});
+  const rect = btn.getBoundingClientRect();
+  if (rect.width <= 0) return JSON.stringify({r: 'notfound'});
+  return JSON.stringify({r: 'found', x: Math.round(rect.left + rect.width / 2),
+                         y: Math.round(rect.top + rect.height / 2)});
+})()
+"""
+
+VISIBLE_SURE_DIALOG_JS = """
+(() => {
+  for (const p of document.querySelectorAll('.panel-contact, .boss-dialog, .sentence-popover, .dialog-container')) {
+    const rect = p.getBoundingClientRect();
+    const style = window.getComputedStyle(p);
+    if (rect.width <= 0 || style.display === 'none' || style.visibility === 'hidden') continue;
+    const sure = p.querySelector('.btn-sure, .btn-sure-v2');
+    if (!sure) continue;
+    const sr = sure.getBoundingClientRect();
+    const title = (p.innerText || '').replace(/\\n/g, '|').slice(0, 60);
+    return JSON.stringify({r: 'dialog', title: title,
+                           x: Math.round(sr.left + sr.width / 2), y: Math.round(sr.top + sr.height / 2)});
+  }
+  return JSON.stringify({r: 'none'});
+})()
+"""
+
+CHAT_MSG_COUNT_JS = """
+(() => {
+  const list = document.querySelector('.chat-message .im-list');
+  if (!list) return JSON.stringify({n: -1});
+  const re = %s;
+  let n = 0;
+  for (const it of list.children) if (re.test(it.innerText || '')) n++;
+  return JSON.stringify({n: n});
+})()
+"""
+
+
+def _chat_msg_count(sess, pattern_js):
+    r = _ev(sess, CHAT_MSG_COUNT_JS % pattern_js)
+    return (r or {}).get("n", -1)
+
+
+def _toolbar_trusted_click(sess, selector_js):
+    """工具栏按钮坐标级受信任点击。返回 found/unable/notfound。"""
+    pos = _ev(sess, TOOLBAR_BTN_POS_JS % selector_js)
+    if not isinstance(pos, dict):
+        raise RuntimeError("toolbar button probe failed: %r" % (pos,))
+    if pos.get("r") != "found":
+        return pos.get("r") or "notfound"
+    _trusted_click(sess, int(pos["x"]), int(pos["y"]))
+    return "found"
+
+
 def exchange_wechat_via_chat(sess, company, poll_s=12):
     """消息中心按公司名点开会话并点击【换微信】官方原生按钮。
-    发起官方请求交换微信卡片，HR同意后平台合规交换。"""
+    2026-09-08 事故修复：换微信曾误发换电话（详见 TOOLBAR_BTN_POS_JS 注释）。
+    现流程：受信任点击换微信 → 轮询可见确认弹窗 → 标题必须含"微信"（否则中止，
+    绝不盲点预埋的电话弹窗）→ 受信任点击确定 → 消息区核验"请求交换微信"计数增加
+    且"请求交换电话"计数不变（安全双断言）。"""
     info, head = _open_conversation_input(sess, (company or "").strip(), poll_s)
     if not info:
         raise RuntimeError("conversation/input not found for %r (head=%r)" % (company, head))
-    click_res = _ev(sess, """
-(() => {
-  const btn = document.querySelector('.btn-weixin');
-  if (!btn) return JSON.stringify({r: 'notfound'});
-  if (btn.classList.contains('unable')) return JSON.stringify({r: 'already_sent'});
-  btn.click();
-  return JSON.stringify({r: 'clicked'});
-})()
-""")
-    if not (isinstance(click_res, dict) and click_res.get("r") in ("clicked", "already_sent")):
-        raise RuntimeError("click btn-weixin failed: %r" % (click_res,))
-    if click_res.get("r") == "already_sent":
+
+    wx_before = _chat_msg_count(sess, "/请求交换微信/")
+    phone_before = _chat_msg_count(sess, "/请求交换电话/")
+
+    r = _toolbar_trusted_click(sess, "'.btn-weixin'")
+    if r == "unable":
         return {"status": "already_sent", "company": company, "conv": head}
-    time.sleep(1.0)
-    # 确认弹窗（若出现确认交换微信弹窗则点击确认）
-    _ev(sess, """
+    if r != "found":
+        raise RuntimeError("btn-weixin not clickable: %r" % (r,))
+
+    # 轮询可见确认弹窗（最多 ~6s）
+    confirmed = None
+    for _ in range(12):
+        time.sleep(0.5)
+        dlg = _ev(sess, VISIBLE_SURE_DIALOG_JS)
+        if isinstance(dlg, dict) and dlg.get("r") == "dialog":
+            confirmed = dlg
+            break
+    if confirmed is None:
+        # 无弹窗：部分状态可能直接发送，靠消息区核验判定
+        return {"status": "no_dialog", "company": company, "conv": head,
+                "note": "wechat button clicked but no visible confirm dialog"}
+    title = confirmed.get("title") or ""
+    if "微信" not in title or "电话" in title:
+        # 安全中止：弹窗不是微信确认（含电话），绝不点确定
+        _ev(sess, """
 (() => {
-  const b = document.querySelector('.panel-contact .btn-sure, .panel-contact .btn-sure-v2, .boss-dialog .btn-sure');
-  if (b) { b.click(); return 'confirmed'; }
-  return 'no_dialog';
+  for (const p of document.querySelectorAll('.panel-contact, .boss-dialog, .sentence-popover')) {
+    const style = window.getComputedStyle(p);
+    if (style.display === 'none') continue;
+    const cancel = p.querySelector('.btn-cancel, .btn-outline-v2, [class*="cancel"]');
+    if (cancel) { cancel.click(); break; }
+  }
+  return 'dismissed';
 })()
 """)
+        raise RuntimeError("confirm dialog title mismatch (want 微信, got %r), dismissed & aborted" % title)
+    _trusted_click(sess, int(confirmed["x"]), int(confirmed["y"]))
+
+    # 发送核验：请求交换微信计数增加，且请求交换电话计数不增
+    sent = False
+    for _ in range(10):
+        time.sleep(0.5)
+        if _chat_msg_count(sess, "/请求交换微信/") > wx_before:
+            sent = True
+            break
+    phone_after = _chat_msg_count(sess, "/请求交换电话/")
+    if phone_after > phone_before:
+        raise RuntimeError("SAFETY: 请求交换电话 unexpectedly increased (wechat flow sent phone!)")
+    if not sent:
+        return {"status": "no_verify", "company": company, "conv": head,
+                "note": "confirmed dialog but no 请求交换微信 message appeared"}
     return {"status": "ok", "action": "exchange_wechat", "company": company, "conv": head}
 
 
 def send_resume_via_chat(sess, company, poll_s=12):
     """消息中心按公司名点开会话并点击【发简历】官方原生按钮。
-    直接将在线/附件简历卡片推送给 HR 在线预览。"""
+    2026-09-08 修复：同 exchange_wechat——受信任点击 + 只点可见弹窗 + 消息区核验
+    （新消息条目出现才算成功，杜绝盲点隐藏元素）。"""
     info, head = _open_conversation_input(sess, (company or "").strip(), poll_s)
     if not info:
         raise RuntimeError("conversation/input not found for %r (head=%r)" % (company, head))
-    click_res = _ev(sess, """
+
+    def total_msgs():
+        r = _ev(sess, """
+(() => {
+  const list = document.querySelector('.chat-message .im-list');
+  return JSON.stringify({n: list ? list.children.length : -1});
+})()
+""")
+        return (r or {}).get("n", -1)
+
+    before = total_msgs()
+    # 发简历按钮无独立 class，按文本精确定位（受信任点击）
+    pos = _ev(sess, """
 (() => {
   const btns = Array.from(document.querySelectorAll('.toolbar-btn'));
   const btn = btns.find(b => (b.innerText || '').trim() === '发简历');
   if (!btn) return JSON.stringify({r: 'notfound'});
-  if (btn.classList.contains('unable')) return JSON.stringify({r: 'already_sent'});
-  btn.click();
-  return JSON.stringify({r: 'clicked'});
+  if (btn.classList.contains('unable')) return JSON.stringify({r: 'unable'});
+  const rect = btn.getBoundingClientRect();
+  if (rect.width <= 0) return JSON.stringify({r: 'notfound'});
+  return JSON.stringify({r: 'found', x: Math.round(rect.left + rect.width / 2),
+                         y: Math.round(rect.top + rect.height / 2)});
 })()
 """)
-    if not (isinstance(click_res, dict) and click_res.get("r") in ("clicked", "already_sent")):
-        raise RuntimeError("click send_resume failed: %r" % (click_res,))
-    if click_res.get("r") == "already_sent":
+    if isinstance(pos, dict) and pos.get("r") == "unable":
         return {"status": "already_sent", "company": company, "conv": head}
-    time.sleep(1.0)
-    _ev(sess, """
-(() => {
-  const b = document.querySelector('.boss-dialog .btn-sure, .dialog-container .btn-sure');
-  if (b) { b.click(); return 'confirmed'; }
-  return 'no_dialog';
-})()
-""")
-    return {"status": "ok", "action": "send_resume", "company": company, "conv": head}
+    if not (isinstance(pos, dict) and pos.get("r") == "found"):
+        raise RuntimeError("send_resume button not clickable: %r" % (pos,))
+    _trusted_click(sess, int(pos["x"]), int(pos["y"]))
+
+    # 轮询可见确认弹窗（最多 ~3s，发简历可能直接发送无弹窗）
+    for _ in range(6):
+        time.sleep(0.5)
+        dlg = _ev(sess, VISIBLE_SURE_DIALOG_JS)
+        if isinstance(dlg, dict) and dlg.get("r") == "dialog":
+            _trusted_click(sess, int(dlg["x"]), int(dlg["y"]))
+            break
+
+    # 发送核验：消息区出现新条目
+    for _ in range(10):
+        time.sleep(0.5)
+        if total_msgs() > before:
+            return {"status": "ok", "action": "send_resume", "company": company, "conv": head}
+    return {"status": "no_verify", "company": company, "conv": head,
+            "note": "clicked but no new message appeared in chat"}
 
 
 def send_greeting_raw(sess, job, cfg):

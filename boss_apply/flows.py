@@ -228,14 +228,16 @@ def chat_reply(cfg, company, text):
 
 
 def chat_exchange_wechat(cfg, company):
-    """按公司名点开会话并点击【换微信】官方按钮。写台账 action=exchange_wechat。"""
+    """按公司名点开会话并点击【换微信】官方按钮。写台账 action=exchange_wechat。
+    2026-09-08：greeter 层已加固（受信任点击+弹窗标题校验），no_dialog/no_verify
+    状态如实返回 ok=False（不再谎报成功）。"""
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()
         r = greeter.exchange_wechat_via_chat(sess, company)
         ledger.append({"action": "exchange_wechat", "status": r.get("status", "ok"),
                        "company": company, "conv": r.get("conv")})
-        return {"ok": True, "company": company, "result": r}
+        return {"ok": r.get("status") == "ok", "company": company, "result": r}
     except Exception as e:
         ledger.append({"action": "exchange_wechat", "status": "failed",
                        "company": company, "error": str(e)[:200]})
@@ -246,14 +248,15 @@ def chat_exchange_wechat(cfg, company):
 
 
 def chat_send_resume(cfg, company):
-    """按公司名点开会话并点击【发简历】官方按钮。写台账 action=send_resume。"""
+    """按公司名点开会话并点击【发简历】官方按钮。写台账 action=send_resume。
+    2026-09-08：greeter 层已加固，no_verify 状态如实返回 ok=False。"""
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()
         r = greeter.send_resume_via_chat(sess, company)
         ledger.append({"action": "send_resume", "status": r.get("status", "ok"),
                        "company": company, "conv": r.get("conv")})
-        return {"ok": True, "company": company, "result": r}
+        return {"ok": r.get("status") == "ok", "company": company, "result": r}
     except Exception as e:
         ledger.append({"action": "send_resume", "status": "failed",
                        "company": company, "error": str(e)[:200]})

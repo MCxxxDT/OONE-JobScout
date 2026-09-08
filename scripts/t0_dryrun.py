@@ -765,6 +765,26 @@ _r_ign = _tc18.post("/api/action", params={"token": _want18}, json={"action": "i
 _d_ign = _r_ign.json()
 check("ignore操作走handle_card_action管线", _d_ign.get("ok") is True and _d_ign.get("action") == "ignore")
 
+print("== 19. 工具栏按钮受信任点击修复（2026-09-08 换微信误发换电话事故）==")
+# 19.1 静态结构断言：修复三要素齐全
+_src19 = _gr.TOOLBAR_BTN_POS_JS + _gr.VISIBLE_SURE_DIALOG_JS
+check("按钮定位JS输出受信任坐标", "getBoundingClientRect" in _gr.TOOLBAR_BTN_POS_JS)
+check("弹窗确认JS过滤display:none", "display === 'none'" in _gr.VISIBLE_SURE_DIALOG_JS)
+check("弹窗确认JS过滤visibility:hidden", "visibility === 'hidden'" in _gr.VISIBLE_SURE_DIALOG_JS)
+import inspect as _insp
+_wx_src = _insp.getsource(_gr.exchange_wechat_via_chat)
+check("换微信用受信任点击", "_trusted_click" in _wx_src)
+check("换微信弹窗标题必须含微信", '"微信" not in title' in _wx_src and '"电话" in title' in _wx_src)
+check("换微信含电话计数安全断言", "phone_after > phone_before" in _wx_src)
+check("换微信核验交换微信消息计数", "请求交换微信" in _wx_src)
+_resume_src = _insp.getsource(_gr.send_resume_via_chat)
+check("发简历用受信任点击", "_trusted_click" in _resume_src)
+check("发简历核验消息条目增量", "total_msgs() > before" in _resume_src)
+# 19.2 flows 层如实上报
+import boss_apply.flows as _fl19
+_wx_flow_src = _insp.getsource(_fl19.chat_exchange_wechat)
+check("flows换微信ok随status如实判定", 'r.get("status") == "ok"' in _wx_flow_src)
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
