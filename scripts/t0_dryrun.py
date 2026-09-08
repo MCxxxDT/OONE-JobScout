@@ -435,6 +435,94 @@ finally:
     flows.chat_exchange_wechat = orig_wechat
     flows.chat_send_resume = orig_resume
 
+print("== 12. 守护补全校验（JD注入/台账防重复/熔断接入/收工日报，2026-09-08）==")
+import datetime as _dt2
+
+# 12.1 config 本地覆盖层合并（config.local.json 递归覆盖 config.json）
+base = {"a": 1, "notify": {"x": 1, "y": 2}, "llm": {"model": "m0"}}
+local = {"llm": {"model": "m1", "api_key": "k"}, "b": 2}
+merged = cfgmod._deep_merge(base, local)
+check("local覆盖同名标量键", merged["llm"]["model"] == "m1")
+check("local深合并不丢兄弟键", merged["llm"]["api_key"] == "k" and merged["notify"]["x"] == 1)
+check("local新增顶层键生效", merged["b"] == 2)
+check("base不被就地修改", base["llm"]["model"] == "m0")
+
+# 12.2 JD 上下文注入决策 Prompt（任务1a）
+engine_jd = _air.AIReplyEngine(cfg)
+conv_no_jd = {"who": "测试HR", "last_msg": "您好"}
+p_no_jd = engine_jd.build_agent_prompt(conv_no_jd)
+check("无job字段时prompt不含JD段", "- 岗位名称：" not in p_no_jd)
+conv_jd = dict(conv_no_jd, job={"title": "AI产品经理", "company": "某科技", "salary": "200-300元/天",
+                                "city": "杭州", "experience": "不限", "degree": "本科",
+                                "jd_text": "负责Agent产品设计与MCP工具链落地。" * 20, "boss_active": 2})
+p_jd = engine_jd.build_agent_prompt(conv_jd)
+check("job字段注入prompt含JD段", "会话关联岗位" in p_jd)
+check("JD注入含岗位名与薪资", "AI产品经理" in p_jd and "200-300元/天" in p_jd)
+check("JD全文截断至600字内", "jd_text" not in p_jd and len(p_jd) < 8000)
+check("JD注入含见人下菜碟心法", "见人下菜碟" in p_jd)
+
+# 12.3 台账防重复交叉核对（任务1b）
+sys.path.insert(0, os.path.join(cfgmod.ROOT, "scripts"))
+import daemon_auto_reply as _dm
+
+fixed_now = _dt2.datetime(2026, 9, 8, 15, 0, 0)
+dt, has_t = _dm._parse_conv_time("14:03", now=fixed_now)
+check("时间解析:今天HH:MM", dt == _dt2.datetime(2026, 9, 8, 14, 3) and has_t)
+dt, has_t = _dm._parse_conv_time("昨天 15:20", now=fixed_now)
+check("时间解析:昨天带时分", dt == _dt2.datetime(2026, 9, 7, 15, 20) and has_t)
+dt, has_t = _dm._parse_conv_time("昨天", now=fixed_now)
+check("时间解析:昨天无时分", dt is not None and not has_t)
+dt, has_t = _dm._parse_conv_time("09月01日", now=fixed_now)
+check("时间解析:月日历史", dt == _dt2.datetime(2026, 9, 1, 23, 59) and not has_t)
+dt, has_t = _dm._parse_conv_time("10分钟前", now=fixed_now)
+check("时间解析:相对时间", dt == fixed_now - _dt2.timedelta(minutes=10) and has_t)
+check("时间解析:空文本返回None", _dm._parse_conv_time("") == (None, False))
+
+rows = [
+    {"action": "reply", "status": "ok", "company": "A公司", "ts": "2026-09-08 14:05:00"},
+    {"action": "reply", "status": "failed", "company": "B公司", "ts": "2026-09-08 14:05:00"},
+    {"action": "dryrun_reply", "company": "C公司", "ts": "2026-09-08 14:05:00"},
+    {"action": "human_alert_card", "company": "D公司", "ts": "2026-09-08 14:05:00", "dry_run": False},
+    {"action": "human_alert_card", "company": "E公司", "ts": "2026-09-08 14:05:00", "dry_run": True},
+]
+check("我方已回复且HR未再回复→防重发拦截", _dm.already_replied(rows, "A公司", "14:03"))
+check("HR在回复后再发新消息→放行处理", not _dm.already_replied(rows, "A公司", "14:10"))
+check("失败回复不算已回复", not _dm.already_replied(rows, "B公司", "14:03"))
+check("仿真回复不算已回复", not _dm.already_replied(rows, "C公司", "14:03"))
+check("已告警且HR未再回复→防重复呼叫", _dm.already_alerted(rows, "D公司", "14:03"))
+check("dry-run告警不算已呼叫", not _dm.already_alerted(rows, "E公司", "14:03"))
+check("无台账记录放行", not _dm.already_replied(rows, "F公司", "14:03"))
+
+# 12.4 护栏熔断接入（任务1c）
+g12 = guard.Guard(cfg)
+g12.pause("unit-test-risk")
+blk, why = _dm.guard_blocked(cfg)
+check("熔断状态被daemon感知", blk and why == "unit-test-risk")
+g12.resume()
+blk, why = _dm.guard_blocked(cfg)
+check("解除熔断后daemon放行", not blk)
+
+# 12.5 收工日报（任务1e）
+ledger.append({"action": "scan", "city": "杭州", "score": 15.0, "title": "Agent产品", "company": "甲科技", "href": "/j/x1"})
+ledger.append({"action": "scan", "city": "上海", "score": 11.0, "title": "AI产品助理", "company": "乙科技", "href": "/j/x2"})
+ledger.append({"action": "reply", "status": "ok", "company": "甲科技", "text_head": "您好！"})
+report = _dm.build_daily_report_data(cfg)
+check("日报数据统计当日扫描", report["scanned"] >= 2)
+check("日报数据统计当日实发回复", report["replied"] >= 1)
+check("日报needs_human含真实告警公司", "测试科技" in report["needs_human"])
+check("日报Top岗位按分排序", report["top_jobs"] and report["top_jobs"][0]["score"] >= report["top_jobs"][-1]["score"])
+
+card12 = _fb.build_daily_report_card(report)
+check("日报卡片为interactive", card12.get("msg_type") == "interactive")
+check("日报卡片标题为收工日报", "收工日报" in card12["card"]["header"]["title"]["content"])
+check("日报卡片为绿色模板", card12["card"]["header"]["template"] == "green")
+check("日报卡片含高分Top5", any("Top5" in json.dumps(e, ensure_ascii=False) for e in card12["card"]["elements"]))
+
+res12 = _fb.send_daily_report(cfg, report, dry_run=True)
+check("日报dry-run推送返回ok", res12.get("ok") is True)
+check("日报dry-run不实发飞书", res12.get("feishu_sent") is False)
+check("日报当日已发判定生效", _dm._daily_report_sent_today())
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

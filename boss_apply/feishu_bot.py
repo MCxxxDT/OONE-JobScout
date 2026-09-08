@@ -205,6 +205,132 @@ def send_human_alert(cfg: dict, alert_data: dict, dry_run: bool = False) -> dict
     }
 
 
+def build_daily_report_card(report: Dict[str, Any]) -> Dict[str, Any]:
+    """构建守护收工日报卡片（当日扫描/回复/needs_human清单/高分岗位Top5）。"""
+    date = report.get("date") or datetime.datetime.now().strftime("%Y-%m-%d")
+    scanned = report.get("scanned", 0)
+    replied = report.get("replied", 0)
+    needs_human = report.get("needs_human") or []
+    top_jobs = report.get("top_jobs") or []
+    guard_paused = report.get("guard_paused")
+
+    elements = [
+        {
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": f"**📈 当日扫描**：{scanned} 个岗位　|　**💬 当日实发回复**：{replied} 条",
+            },
+        },
+    ]
+
+    if needs_human:
+        human_lines = "\n".join("- %s" % c for c in needs_human[:10])
+        more = f"\n- …等共 {len(needs_human)} 项" if len(needs_human) > 10 else ""
+        elements.append({
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": f"**🚨 当日转人工清单（{len(needs_human)} 项）**：\n{human_lines}{more}",
+            },
+        })
+    else:
+        elements.append({
+            "tag": "div",
+            "text": {"tag": "lark_md", "content": "**🚨 当日转人工清单**：无"},
+        })
+
+    if top_jobs:
+        job_lines = "\n".join(
+            "%d. **%s** · %s（%s分）" % (i + 1, j.get("title") or "?", j.get("company") or "?", j.get("score") or 0)
+            for i, j in enumerate(top_jobs[:5])
+        )
+        elements.append({
+            "tag": "div",
+            "text": {"tag": "lark_md", "content": f"**🏆 当日高分岗位 Top5**：\n{job_lines}"},
+        })
+
+    guard_line = f"⛔ 护栏熔断中：{guard_paused}" if guard_paused else "✅ 护栏状态正常"
+    elements.append({"tag": "hr"})
+    elements.append({
+        "tag": "div",
+        "text": {"tag": "lark_md", "content": f"{guard_line}　|　数据来源：state/ledger.jsonl 台账"},
+    })
+
+    return {
+        "msg_type": "interactive",
+        "card": {
+            "config": {"wide_screen_mode": True},
+            "header": {
+                "title": {"tag": "plain_text", "content": "📊 BOSS直聘 · 求职守护收工日报"},
+                "template": "green",
+            },
+            "elements": elements,
+        },
+    }
+
+
+def send_daily_report(cfg: dict, report: dict, dry_run: bool = False) -> dict:
+    """推送收工日报（飞书 Webhook），写 state/feishu_cards.jsonl 与台账 action=daily_report。
+    日报触发去重以台账 daily_report 当日记录为准（daemon 侧控制）。"""
+    card = build_daily_report_card(report)
+
+    notify_cfg = cfg.get("notify") or {}
+    feishu_webhook = notify_cfg.get("feishu_webhook") or os.getenv("FEISHU_WEBHOOK_URL") or ""
+
+    # 卡片留痕（含 dry-run）
+    card_log_path = cfgmod.state_path("feishu_cards.jsonl")
+    try:
+        with open(card_log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "type": "daily_report",
+                "dry_run": dry_run,
+                "card": card,
+            }, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+    # 飞书 Webhook 实弹推送
+    feishu_sent = False
+    feishu_error = None
+    if feishu_webhook and not dry_run:
+        try:
+            import requests
+            resp = requests.post(feishu_webhook, json=card, timeout=6)
+            if resp.status_code == 200:
+                res_data = resp.json()
+                if res_data.get("code") == 0 or res_data.get("StatusCode") == 0:
+                    feishu_sent = True
+                else:
+                    feishu_error = f"Feishu API error: {res_data}"
+            else:
+                feishu_error = f"HTTP {resp.status_code}: {resp.text[:100]}"
+        except Exception as e:
+            feishu_error = str(e)
+    elif not feishu_webhook:
+        feishu_error = "未配置Webhook"
+
+    ledger.append({
+        "action": "daily_report",
+        "date": report.get("date"),
+        "scanned": report.get("scanned", 0),
+        "replied": report.get("replied", 0),
+        "needs_human_count": len(report.get("needs_human") or []),
+        "feishu_sent": feishu_sent,
+        "feishu_error": feishu_error,
+        "dry_run": dry_run,
+    })
+
+    return {
+        "ok": True,
+        "card": card,
+        "feishu_sent": feishu_sent,
+        "feishu_error": feishu_error,
+        "dry_run": dry_run,
+    }
+
+
 def handle_card_action(cfg: dict, action_payload: dict) -> dict:
     """处理卡片点击回调或远程交互动作。
     action_payload 形如：

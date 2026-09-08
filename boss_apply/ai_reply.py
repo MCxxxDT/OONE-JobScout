@@ -129,9 +129,36 @@ class AIReplyEngine:
             self.llm_model = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
 
     def build_agent_prompt(self, conv: dict) -> str:
-        """根据当前会话构建供 Agent/大模型思考的标准化决策 Prompt 与心法。"""
+        """根据当前会话构建供 Agent/大模型思考的标准化决策 Prompt 与心法。
+        conv 可携带 job 字段（flows.chat_job_detail 结果）：注入岗位元数据与 JD 全文，
+        供模型研判岗位含金量后"见人下菜碟"（核心产品岗提热情，销售地推岗保持太极）。"""
         who = conv.get("who") or "HR"
         last_msg = (conv.get("last_msg") or "").strip()
+
+        jd_section = ""
+        jd = conv.get("job") or {}
+        if isinstance(jd, dict) and jd:
+            lines = []
+            if jd.get("title"):
+                lines.append(f"- 岗位名称：{jd['title']}")
+            if jd.get("company"):
+                lines.append(f"- 公司：{jd['company']}")
+            if jd.get("salary"):
+                lines.append(f"- 薪资：{jd['salary']}")
+            if jd.get("city"):
+                lines.append(f"- 城市：{jd['city']}")
+            if jd.get("experience"):
+                lines.append(f"- 经验要求：{jd['experience']}")
+            if jd.get("degree"):
+                lines.append(f"- 学历要求：{jd['degree']}")
+            if jd.get("boss_active") is not None and jd.get("boss_active") >= 0:
+                lines.append(f"- BOSS最近活跃：{jd['boss_active']}天前（越小越活跃）")
+            jd_text = (jd.get("jd_text") or "").strip()
+            if jd_text:
+                lines.append("- JD全文（截取）：\n" + jd_text[:600])
+            if lines:
+                jd_section = "\n【会话关联岗位与JD（供研判含金量）】\n" + "\n".join(lines) + "\n"
+
         return (
             f"【候选人真实画像】\n"
             f"- 姓名：{self.profile['name']}\n"
@@ -140,7 +167,8 @@ class AIReplyEngine:
             f"- 常驻地与意向城市：目前常驻【{self.profile['current_city']}】，核心意向奔赴【{self.profile['target_region']}】发展\n"
             f"- 到岗与稳定性：{self.profile['availability']}\n"
             f"- 薪资底线诉求：{self.profile['salary_requirement']}\n"
-            f"- 核心优势：全栈MCP/Agent工程落地经验 + 200人团队月操盘10万GMV的商业化即战力\n\n"
+            f"- 核心优势：全栈MCP/Agent工程落地经验 + 200人团队月操盘10万GMV的商业化即战力\n"
+            f"{jd_section}\n"
             f"【当前HR与最新消息】\n"
             f"- 对话方：{who}\n"
             f"- HR最新消息：\"{last_msg}\"\n\n"
@@ -150,7 +178,8 @@ class AIReplyEngine:
             f"3. 索要联系方式（微信/电话/邮箱）：引导留存平台沟通更及时，反客为主索要岗位详细JD；\n"
             f"4. 邀约面试 / 问到岗时间：说明学业与时间相对具备弹性，主动索要岗位JD与具体安排，绝不擅自承诺死时间；\n"
             f"5. 三不原则：不承诺（时间保留弹性）、不拒绝（保持积极开放）、不负责（主动索要详细JD互相了解）；\n"
-            f"6. 绝对隐私红线：严禁在文案中输出真实11位手机号、座机电话、微信号或外部链接。\n\n"
+            f"6. 若上方提供了【会话关联岗位与JD】：结合JD研判含金量后见人下菜碟——大模型/Agent核心产品岗可显著提升热情并呼应JD匹配点；披着AI外衣的销售/地推/杂役岗保持礼貌太极、点到为止，不深聊不主动推进；\n"
+            f"7. 绝对隐私红线：严禁在文案中输出真实11位手机号、座机电话、微信号或外部链接。\n\n"
             f"请输出纯 JSON 格式：\n"
             f'{{"action": "reply"|"needs_human"|"skip", "reason": "理由", "reply_text": "50-100字拟人高情商回复（表达开放，反索JD）"}}'
         )
