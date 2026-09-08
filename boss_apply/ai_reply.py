@@ -51,6 +51,30 @@ SALARY_PATTERNS = [
     re.compile(r"(?:薪资待遇|期望薪资|底薪|提成|能接受.*薪资)", re.I),
 ]
 
+# 高意向信号（对标 ai-job 高意向识别，2026-09-08 开源调研落地）：
+# 强关键词=面试推进/录用信号，任一命中即高意向；弱关键词=薪资/到岗类洽谈信号，
+# 需叠加 HR 发言 >=4 轮（真聊起来了）才算，避免把 HR 群发模板误判为高意向。
+HIGH_INTENT_STRONG = ("面试", "二面", "三面", "笔试", "offer", "Offer", "OFFER", "录用", "入职", "报到")
+HIGH_INTENT_WEAK = ("薪资", "待遇", "到岗", "实习期", "转正", "试用期", "五险", "房补", "餐补")
+
+
+def detect_high_intent(conv: dict) -> Tuple[bool, str]:
+    """识别高意向会话，供 daemon 将 needs_human 告警升级为飞书红色高优卡片，
+    避免高价值机会淹没在普通告警里。返回 (是否高意向, 判定依据)。
+    只扫描 HR 发言（last_msg 即 HR 最新发言 + history 中 role=hr 的条目），
+    我方自己提到"面试/offer"不算 HR 高意向。"""
+    history = conv.get("history") or []
+    hr_turns = sum(1 for m in history if isinstance(m, dict) and m.get("role") == "hr")
+    text = conv.get("last_msg") or ""
+    for m in history[-6:]:
+        if isinstance(m, dict) and m.get("role") == "hr":
+            text += " " + (m.get("text") or "")
+    if any(k in text for k in HIGH_INTENT_STRONG):
+        return True, "strong_kw"
+    if hr_turns >= 4 and any(k in text for k in HIGH_INTENT_WEAK):
+        return True, "weak_kw+hr_turns=%d" % hr_turns
+    return False, ""
+
 
 def is_active_hour(now: Optional[datetime.datetime] = None, active_hours: str = "09:30-20:30") -> bool:
     """判断当前时间是否处于工作时间窗口内（默认 09:30~20:30）。

@@ -335,13 +335,18 @@ def run_cycle(cfg, engine, args, st=None):
         else:
             print(f"  [JD注入] 未取到岗位详情（{str(jd_res.get('error'))[:80]}），按无JD上下文决策。")
 
-        # 5.3 AI 决策（conv 已携带 job 字段 → 决策 prompt 注入 JD）
+        # 5.3 AI 决策（conv 已携带 job 字段 → 决策 prompt 注入 JD 与对话历史）
         decision = engine.decide_and_generate(conv)
         action = decision.get("action")
         reason = decision.get("reason")
         notice = decision.get("notice")
         reply_text = decision.get("reply_text", "")
         source = decision.get("source", "unknown")
+
+        # 5.4 高意向识别（开源调研落地）：needs_human 告警升级红色卡片；回复留痕打标
+        hi_flag, hi_why = air.detect_high_intent(conv)
+        if hi_flag:
+            print(f"  [🔥高意向] 检测到高意向信号（{hi_why}），告警与台账升级标记")
 
         if notice:
             print(f"  [📢异步提醒] {notice}")
@@ -370,6 +375,7 @@ def run_cycle(cfg, engine, args, st=None):
                     "job_title": (conv.get("job") or {}).get("title") or conv.get("title") or conv.get("job"),
                 },
                 dry_run=args.dry_run,
+                high_intent=hi_flag,
             )
             if args.dry_run:
                 status_str = "仿真留痕"
@@ -395,6 +401,7 @@ def run_cycle(cfg, engine, args, st=None):
                     "source": source,
                     "reason": reason,
                     "job_title": (conv.get("job") or {}).get("title") or "",
+                    "high_intent": hi_flag,
                 })
                 replied_count += 1
             else:

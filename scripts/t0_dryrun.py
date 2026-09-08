@@ -642,6 +642,34 @@ check("gauss延迟均值接近区间中点", abs(sum(_vals) / len(_vals) - 23.5)
 check("gauss零宽区间退化安全", _br.gauss_delay(5, 5) == 5)
 check("gauss延迟中段密度高于端点", sum(1 for v in _vals if 18 <= v <= 29) > sum(1 for v in _vals if v < 15 or v > 32))
 
+print("== 15. 高意向识别与告警升级（2026-09-08 开源调研落地：对标 ai-job）==")
+
+hi1, w1 = _air.detect_high_intent({"who": "H", "last_msg": "下周三方便来公司线下面试吗", "history": []})
+check("强关键词(面试邀约)判高意向", hi1 and w1 == "strong_kw")
+hi1b, _ = _air.detect_high_intent({"who": "H", "last_msg": "好的", "history": [{"role": "hr", "text": "给你发offer流程了"}]})
+check("强关键词(offer)判高意向", hi1b)
+hi2, w2 = _air.detect_high_intent({"who": "H", "last_msg": "好的谢谢",
+                                   "history": [{"role": "hr", "text": "期望薪资多少"}] * 4})
+check("弱关键词+HR四轮判高意向", hi2 and "hr_turns=4" in w2)
+hi3, _ = _air.detect_high_intent({"who": "H", "last_msg": "你好，看了你的简历方便聊聊吗", "history": []})
+check("普通群发招呼不判高意向", not hi3)
+hi4, _ = _air.detect_high_intent({"who": "H", "last_msg": "期望薪资多少", "history": [{"role": "hr", "text": "期望薪资"}]})
+check("弱关键词轮数不足不判高意向", not hi4)
+hi5, _ = _air.detect_high_intent({"who": "H", "last_msg": "好的", "history": [{"role": "me", "text": "面试聊过了"}] * 6})
+check("仅我方发言提面试不误判(以HR发言为准)", not hi5)
+
+card_hi = _fb.build_interactive_card(company="测试科技", last_msg="来线下面试吧", reason="x", high_intent=True)
+check("高意向卡片红色模板", card_hi["card"]["header"]["template"] == "red")
+check("高意向卡片标题带高意向标记", "高意向" in card_hi["card"]["header"]["title"]["content"])
+check("高意向卡片保留交互按钮", len([e for e in card_hi["card"]["elements"] if e.get("tag") == "action"]) == 1)
+card_norm15 = _fb.build_interactive_card(company="测试科技", last_msg="x", reason="y")
+check("普通卡片保持橙色模板", card_norm15["card"]["header"]["template"] == "orange")
+
+res15 = _fb.send_human_alert(cfg, {"company": "高意向科技", "last_msg": "发offer了",
+                                   "reason": "测试高意向告警"}, dry_run=True, high_intent=True)
+check("高意向告警dry-run返回ok", res15.get("ok") is True)
+check("高意向告警卡片为红色", res15["card"]["card"]["header"]["template"] == "red")
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

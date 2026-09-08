@@ -21,8 +21,10 @@ def build_interactive_card(
     suggested_reply: Optional[str] = None,
     time_str: Optional[str] = None,
     job_title: Optional[str] = None,
+    high_intent: bool = False,
 ) -> Dict[str, Any]:
-    """构建飞书标准交互式卡片 JSON (Interactive Card)。"""
+    """构建飞书标准交互式卡片 JSON (Interactive Card)。
+    high_intent=True 时升级为红色高优模板 + 🔥标题前缀（高意向会话优先处理）。"""
     time_display = time_str or datetime.datetime.now().strftime("%H:%M")
     job_display = f" · {job_title}" if job_title else ""
 
@@ -119,17 +121,18 @@ def build_interactive_card(
             "header": {
                 "title": {
                     "tag": "plain_text",
-                    "content": "🚨 BOSS直聘 · HR消息待人工决策",
+                    "content": ("🔥 高意向 | " if high_intent else "") + "🚨 BOSS直聘 · HR消息待人工决策",
                 },
-                "template": "orange",
+                "template": "red" if high_intent else "orange",
             },
             "elements": elements,
         },
     }
 
 
-def send_human_alert(cfg: dict, alert_data: dict, dry_run: bool = False) -> dict:
-    """呼叫人工：构建卡片并发送通知（飞书 Webhook + Windows 声音/提示）。"""
+def send_human_alert(cfg: dict, alert_data: dict, dry_run: bool = False, high_intent: bool = False) -> dict:
+    """呼叫人工：构建卡片并发送通知（飞书 Webhook + Windows 声音/提示）。
+    high_intent=True 时红色高优卡片（ai_reply.detect_high_intent 判定）。"""
     company = alert_data.get("company") or alert_data.get("who") or "未知HR"
     last_msg = alert_data.get("last_msg") or ""
     reason = alert_data.get("reason") or alert_data.get("notice") or "HR发来消息需人工查看决策"
@@ -142,6 +145,8 @@ def send_human_alert(cfg: dict, alert_data: dict, dry_run: bool = False) -> dict
         reason=reason,
         suggested_reply=suggested_reply,
         time_str=time_str,
+        job_title=alert_data.get("job_title"),
+        high_intent=high_intent or bool(alert_data.get("high_intent")),
     )
 
     notify_cfg = cfg.get("notify") or {}
@@ -194,6 +199,7 @@ def send_human_alert(cfg: dict, alert_data: dict, dry_run: bool = False) -> dict
         "feishu_error": feishu_error,
         "dry_run": dry_run,
         "reason": reason,
+        "high_intent": high_intent or bool(alert_data.get("high_intent")),
     })
 
     return {
