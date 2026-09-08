@@ -151,7 +151,13 @@ class AIReplyEngine:
         agent_generator: Optional[Any] = None,
     ):
         self.cfg = cfg or {}
-        self.profile = dict(CANDIDATE_PROFILE, **(profile or {}))
+        # 画像优先级：显式传入 > 简历提炼（profile_store.refined）> 硬编码默认
+        try:
+            from . import profile_store
+            refined = profile_store.load_profile() or {}
+        except Exception:
+            refined = {}
+        self.profile = dict(CANDIDATE_PROFILE, **refined, **(profile or {}))
         self.agent_generator = agent_generator
         llm_cfg = self.cfg.get("llm") or {}
         if llm_cfg.get("api_key"):

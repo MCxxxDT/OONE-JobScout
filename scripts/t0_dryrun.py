@@ -820,6 +820,61 @@ if _sys20.platform == "win32":
 else:
     check("非Windows跳过DPAPI断言", True)
 
+print("== 21. 简历管道（2026-09-09 上传→解析→提炼→画像替换）==")
+from boss_apply import profile_store as _ps
+
+# 21.1 文本提取：纯文本直通 / txt文件 / PDF roundtrip / 不支持类型
+_t21 = "张烨韬 福建师范大学 数字媒体技术 2027届"
+_out, _err = _ps.extract_text(_t21)
+check("粘贴纯文本直通", _err is None and _out == _t21)
+_txt_path = os.path.join(DRY, "resume.txt")
+with open(_txt_path, "w", encoding="utf-8") as f:
+    f.write(_t21)
+_out, _err = _ps.extract_text(_txt_path)
+check("txt文件解析", _err is None and _t21 in _out)
+_out, _err = _ps.extract_text(os.path.join(DRY, "不存在.pdf"))
+check("不存在文件报错", _err is not None and "不存在" in _err)
+_png_path = os.path.join(DRY, "photo.png")
+with open(_png_path, "wb") as f:
+    f.write(b"\x89PNG fake")
+_out, _err = _ps.extract_text(_png_path)
+check("不支持类型报错", _err is not None and "不支持" in _err)
+import pymupdf as _pm
+_pdf_path = os.path.join(DRY, "resume.pdf")
+_doc = _pm.open()
+_doc.new_page().insert_text((72, 72), "Zhang Yetao FJNU DMT 2027")
+_doc.save(_pdf_path)
+_doc.close()
+_out, _err = _ps.extract_text(_pdf_path)
+check("PDF解析roundtrip", _err is None and "FJNU" in _out.replace(" ", " "))
+_docx_path = os.path.join(DRY, "resume.docx")
+import docx as _dx
+_d = _dx.Document()
+_d.add_paragraph("Zhang Yetao docx test")
+_d.save(_docx_path)
+_out, _err = _ps.extract_text(_docx_path)
+check("docx解析roundtrip", _err is None and "docx test" in _out)
+
+# 21.2 保存与画像提取（写入 t0 沙箱的 profile.local.json）
+_ps.PROFILE_PATH = os.path.join(DRY, "profile.local.json")
+_ps.save_resume("模拟简历全文：张烨韬，福建师大数媒技术，做过FastMCP工具链。", "paste")
+check("简历落盘可读回", _ps.get_resume().startswith("模拟简历全文"))
+check("profile_meta元信息", _ps.profile_meta()["has_resume"] is True and _ps.profile_meta()["resume_chars"] > 10)
+check("无refined时load_profile为None", _ps.load_profile() is None)
+# 写入伪造 refined 验证覆盖链
+_d21 = _load_json21 = json.load(open(_ps.PROFILE_PATH, encoding="utf-8"))
+_d21["refined"] = {"name": "张烨韬", "school": "福建师范大学", "summary": "AI产品方向",
+                    "tech_highlights": ["FastMCP"], "grad_year": 0, "current_city": ""}
+json.dump(_d21, open(_ps.PROFILE_PATH, "w", encoding="utf-8"), ensure_ascii=False)
+_rp = _ps.load_profile()
+check("refined读取并剔除空值键", _rp == {"name": "张烨韬", "school": "福建师范大学", "summary": "AI产品方向", "tech_highlights": ["FastMCP"]})
+# 引擎画像合并：refined 覆盖硬编码同名字段
+_eng21 = _air.AIReplyEngine(cfg)
+check("引擎画像refined覆盖硬编码", _eng21.profile["school"] == "福建师范大学")
+check("引擎画像refined新增键保留", _eng21.profile.get("summary") == "AI产品方向")
+check("引擎画像硬编码键兜底", "三不原则" in _eng21.build_agent_prompt({"who": "H", "last_msg": "hi"}))
+
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

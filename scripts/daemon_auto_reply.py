@@ -236,6 +236,12 @@ def _gate_sleep(cfg, args, now_str, secs):
 
 
 def run_cycle(cfg, engine, args, st=None):
+    # engine 每轮重建（若调用方未传入）：Web 端更新简历画像/偏好后 ≤ 一个轮询周期自动生效
+    if engine is None:
+        engine = air.AIReplyEngine(cfg)
+        if args.no_llm:
+            engine.openai_key = ""
+            engine.openrouter_key = ""
     now = datetime.datetime.now()
     now_str = now.strftime("%Y-%m-%d %H:%M:%S")
     print(f"\n[{now_str}] ======= 开启新一轮巡检 =======")
@@ -555,10 +561,11 @@ def main():
         run_cycle(cfg, engine, args)
         return
 
-    # 常驻循环
+    # 常驻循环：每轮重载配置并重建引擎——Web 端更新 Key/简历画像/偏好后自动生效（≤一个轮询周期）
     st = {"guard_alerted": False}
     while True:
-        res = run_cycle(cfg, engine, args, st)
+        cfg = cfgmod.load()
+        res = run_cycle(cfg, None, args, st)
         status = res.get("status")
         if status == "outside_active_hours":
             wait_s = res.get("wait_seconds", 3600)
