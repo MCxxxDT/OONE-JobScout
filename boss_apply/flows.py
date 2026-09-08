@@ -138,9 +138,18 @@ SYSTEM_MSG_RE = re.compile(r"^您的附件简历|已发送给(?:Boss|对方)|^�
 CLOSING_WORDS = ("谢谢", "感谢", "好的", "好嘞", "收到", "嗯嗯", "ok", "OK")
 
 
+# 消息状态回执（2026-09-08 实测）：[送达]/[已读] 只出现在我方最后发言的会话上——
+# 平台只对我方发出的消息回执；HR 发的消息无此标记。这是判定发言方的权威信号，
+# 修复"用户手打的短消息（不在任何 opener 前缀集合）被误判为 HR 发言"的 bug
+# （实测案例：用户对沉心传媒手打"直接boss说吧"被误判，导致 daemon 答非所问）。
+SELF_MSG_STATUS = ("[送达]", "[已读]")
+
+
 def parse_conv(raw, openers):
     """消息中心会话行 → 结构化。raw 形如 '02:42|赵先生新美虹星总经理|[送达]|您好，…'。
-    from_us=最后一条以 openers 任一前缀开头（含原生默认招呼，见 greeter.self_openers）；
+    from_us 双通道判定（2026-09-08 修复）：
+      ① 前缀法（原有）：最后一条以 openers 任一前缀开头（含原生默认招呼）；
+      ② 回执法（新增，权威）：会话带 [送达]/[已读] 状态回执 = 我方最后发言。
     needs_human=最后一条含联系方式意图（greeter.privacy_blocked，索要或发送均拦截）；
     系统回显（审计补丁#4）与短结束语（审计补丁#5）不判待回复。"""
     parts = [p for p in raw.replace("\n", "|").split("|") if p != ""]
@@ -154,7 +163,8 @@ def parse_conv(raw, openers):
         status = rest[0]
         rest = rest[1:]
     preview = "|".join(rest)
-    from_us = any(preview.startswith(op) for op in (openers or ()))
+    from_us = (any(preview.startswith(op) for op in (openers or ()))
+               or status in SELF_MSG_STATUS)
     is_system = bool(SYSTEM_MSG_RE.search(preview))
     is_closing = preview in CLOSING_WORDS
     return {"time": time_s, "who": who, "status": status,

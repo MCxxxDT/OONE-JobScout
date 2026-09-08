@@ -708,6 +708,30 @@ card_hi16 = _fb.build_interactive_card(company="测试科技", last_msg="x", rea
 check("高意向卡片同样含说明行", any("按钮暂不可点击" in json.dumps(e, ensure_ascii=False)
                                      for e in card_hi16["card"]["elements"]))
 
+print("== 17. 发言方回执判定（2026-09-08 修复：[送达]/[已读]=我方最后发言，平台权威信号）==")
+# 沉心传媒 bug 场景：用户手打"直接boss说吧"（不在任何 opener 集合）+ 平台[送达]回执
+# 修复前：前缀法失败 → 误判 HR 发言 → daemon 答非所问；修复后：回执法接住
+c_bug = flows.parse_conv("22:17|张宏辉沉心传媒运营总监|[送达]|直接boss说吧", ops)
+check("bug复现场景:[送达]+手打消息判我方发言", bool(c_bug) and not c_bug["needs_reply_guess"])
+# 修复后核心断言：带 [送达] 回执 = 我方发言，即使文本不在 openers
+c_fix1 = flows.parse_conv("08月31日|张宏辉沉心传媒运营总监|[送达]|直接boss说吧", ops)
+check("回执法:[送达]手打消息判我方发言", bool(c_fix1) and not c_fix1["needs_reply_guess"])
+c_fix2 = flows.parse_conv("昨天|高先生沉心传媒招聘者|[已读]|您好！感谢您耐心介绍~", ops)
+check("回执法:[已读]判我方发言", bool(c_fix2) and not c_fix2["needs_reply_guess"])
+# 无回执的 HR 发言仍正常判待回复
+c_hr = flows.parse_conv("10:34|韩女士壹网壹创HR|目前实习生薪资3000可以接受吗", ops)
+check("无回执HR发言仍判待回复", bool(c_hr) and c_hr["needs_reply_guess"] and c_hr["status"] == "")
+# 双通道兼容：前缀法依然生效（无回执+我方模板前缀）
+c_pf = flows.parse_conv("02:42|赵先生新美虹星总经理|" + g0, ops)
+check("前缀法通道依然生效", bool(c_pf) and not c_pf["needs_reply_guess"])
+# 实弹回归验证：今晚 daemon 已回的会话现在应显示我方发言（模拟侧栏行）
+for row in ledger.load_all():
+    if row.get("action") == "reply" and row.get("status") == "ok" and row.get("ts", "").startswith("2026-09-08"):
+        c_ok = flows.parse_conv("%s|%s|[送达]|%s" % ("22:00", row.get("company", ""), (row.get("text_head") or "")[:50]), ops)
+        if c_ok:
+            check("已回会话带[送达]不判待回复(%s)" % row.get("company", "")[:10], not c_ok["needs_reply_guess"])
+            break
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
