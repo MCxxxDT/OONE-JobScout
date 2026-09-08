@@ -29,6 +29,10 @@ param(
 
 $ErrorActionPreference = "Continue"
 
+# 控制台输出统一 UTF-8：daemon 进程输出为 UTF-8，若按系统默认 GBK 解码，
+# Tee-Object 落盘的 daemon.log 中文会变乱码（2026-09-09 detached 拉起实测复现）
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
