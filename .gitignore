@@ -4,6 +4,8 @@ state/guard_state.json
 state/*.png
 # 运行日志（不入库）
 state/*.log
+# 飞书卡片运行时留痕（与台账 human_alert_card 记录冗余）
+state/feishu_cards.jsonl
 # 本地敏感覆盖层（api_key 等，绝不入库）
 config.local.json
 # Python
