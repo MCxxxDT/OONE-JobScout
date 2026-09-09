@@ -892,7 +892,7 @@ check("批量解析含未知报告", len(res_cc) == 1 and res_cc[0]["code"] == "
 check("extra映射优先", _cc.lookup("杭州", {"citycodes_extra": {"杭州": "999999"}}) == "999999")
 
 # 22.2 effective_cities / keywords（无偏好=默认；有偏好=替换/剔除）
-cfg22a = dict(cfg)
+cfg22a = dict(cfg, prefs={})
 ec_a = flows.effective_cities(cfg22a)
 check("无偏好回退默认城市集", len(ec_a["cities"]) == len(cfg["cities"]) and not ec_a["unknown"])
 check("无偏好回退默认关键词", flows.effective_keywords(cfg22a) == cfg["keywords"])
@@ -924,7 +924,7 @@ p22 = eng22.build_agent_prompt({"who": "H", "last_msg": "hi"})
 check("prompt含向往岗位", "AI产品经理" in p22 and "向往岗位方向" in p22)
 check("prompt含排斥岗位", "地推" in p22)
 check("prompt含自主决断说明", "自主决断" in p22)
-p22n = _air.AIReplyEngine(dict(cfg)).build_agent_prompt({"who": "H", "last_msg": "hi"})
+p22n = _air.AIReplyEngine(dict(cfg, prefs={})).build_agent_prompt({"who": "H", "last_msg": "hi"})
 check("无偏好时prompt不含偏好段", "用户求职偏好" not in p22n)
 
 print("== 23. LLM 站内智能匹配（2026-09-09 批量打分替代关键词加权，失败回退）==")
@@ -1360,35 +1360,102 @@ check("RawCDP 具备 minimize_window 方法", hasattr(_rc.RawCDP, "minimize_wind
 
 # 29.4 Web 端 Settings API 读写 privacy_policy 与 browser
 from fastapi.testclient import TestClient
-client = TestClient(_aw.app)
-resp_get = client.get("/api/settings?token=boss-apply")
-check("Settings GET 包含 privacy_policy 节点", resp_get.status_code == 200 and "privacy_policy" in resp_get.json())
-check("Settings GET 包含 browser 节点", "browser" in resp_get.json())
+_orig_local_path29 = cfgmod.LOCAL_CFG_PATH
+cfgmod.LOCAL_CFG_PATH = os.path.join(DRY, "config.local.json")
+try:
+    client = TestClient(_aw.app)
+    resp_get = client.get("/api/settings?token=boss-apply")
+    check("Settings GET 包含 privacy_policy 节点", resp_get.status_code == 200 and "privacy_policy" in resp_get.json())
+    check("Settings GET 包含 browser 节点", "browser" in resp_get.json())
 
-# 测试 POST 写入
-post_payload = {
-    "privacy_policy": {
-        "exchange_wechat": "high_intent_only",
-        "send_resume": "auto",
-        "exchange_phone": "manual",
-        "contact_phone": "13800138000",
-        "contact_wechat": "test_wx_id",
-    },
-    "browser": {
-        "silent_mode": True,
-        "minimize_on_start": True,
+    # 测试 POST 写入
+    post_payload = {
+        "privacy_policy": {
+            "exchange_wechat": "high_intent_only",
+            "send_resume": "auto",
+            "exchange_phone": "manual",
+            "contact_phone": "13800138000",
+            "contact_wechat": "test_wx_id",
+        },
+        "browser": {
+            "silent_mode": True,
+            "minimize_on_start": True,
+        }
     }
-}
-resp_post = client.post("/api/settings?token=boss-apply", json=post_payload)
-check("Settings POST 成功更新权限与浏览器设置", resp_post.status_code == 200 and resp_post.json().get("ok") is True)
+    resp_post = client.post("/api/settings?token=boss-apply", json=post_payload)
+    check("Settings POST 成功更新权限与浏览器设置", resp_post.status_code == 200 and resp_post.json().get("ok") is True)
 
-# 回读验证
-resp_get2 = client.get("/api/settings?token=boss-apply")
-pol_saved = resp_get2.json().get("privacy_policy") or {}
-br_saved = resp_get2.json().get("browser") or {}
-check("Settings 回读 privacy_policy 正确保存", pol_saved.get("exchange_wechat") == "high_intent_only" and pol_saved.get("contact_phone") == "13800138000")
-check("Settings 回读 browser 正确保存", br_saved.get("silent_mode") is True and br_saved.get("minimize_on_start") is True)
+    # 回读验证
+    resp_get2 = client.get("/api/settings?token=boss-apply")
+    pol_saved = resp_get2.json().get("privacy_policy") or {}
+    br_saved = resp_get2.json().get("browser") or {}
+    check("Settings 回读 privacy_policy 正确保存", pol_saved.get("exchange_wechat") == "high_intent_only" and pol_saved.get("contact_phone") == "13800138000")
+    check("Settings 回读 browser 正确保存", br_saved.get("silent_mode") is True and br_saved.get("minimize_on_start") is True)
 
+    print("== 30. 校园与实习双模态检索参数体系（2026-09-09 现场调研落地）==")
+    # 30.1 search_jobs experience 参数构造断言
+    from boss_apply.rawcdp import RawCDP
+    cdp_inst = RawCDP("http://127.0.0.1:9335")
+    captured_nav_urls = []
+    cdp_inst.nav = lambda u: captured_nav_urls.append(u)
+    cdp_inst.wait_ready = lambda **kw: {"cards": 0}
+    cdp_inst.eval = lambda js: "[]"
+    cdp_inst._try_passive_search = lambda u: None
+
+    # 实习模式 experience=108
+    cdp_inst.search_jobs("AI产品", "101210100", page_no=1, experience="108")
+    check("search_jobs拼接实习参数experience=108", len(captured_nav_urls) > 0 and "experience=108" in captured_nav_urls[-1])
+
+    # 校招模式 experience=102
+    cdp_inst.search_jobs("AI产品", "101210100", page_no=1, experience="102")
+    check("search_jobs拼接校招参数experience=102", "experience=102" in captured_nav_urls[-1])
+
+    # 不限模式 experience=None
+    cdp_inst.search_jobs("AI产品", "101210100", page_no=1, experience=None)
+    check("search_jobs不限模式不带experience", "experience=" not in captured_nav_urls[-1])
+
+    # 30.2 API_SALARY_JS 包含 experience
+    api_js_intern = cdp_inst.API_SALARY_JS % {"q": "test", "c": "101210100", "p": 1, "exp": json.dumps("108")}
+    check("API_SALARY_JS包含experience参数逻辑", "experience=" in api_js_intern and '"108"' in api_js_intern)
+
+    # 30.3 scan_city 中 job_mode 调度验证
+    cfg_intern = dict(cfg, job_mode="intern")
+    scan_urls = []
+    def mock_search(self, kw, c, p, experience=None):
+        scan_urls.append({"p": p, "exp": experience})
+        return []
+    orig_search_jobs = flows.rawcdp.RawCDP.search_jobs
+    flows.rawcdp.RawCDP.search_jobs = mock_search
+    flows.rawcdp.RawCDP.open_tab = lambda self, **kw: None
+    flows.rawcdp.RawCDP.close_tab = lambda self: None
+    try:
+        flows.scan_city(cfg_intern, guard.Guard(cfg_intern), "杭州", keywords=["AI产品"], max_pages=1, fetch_detail=False)
+        check("scan_city intern模式传108", len(scan_urls) >= 1 and scan_urls[-1]["exp"] == "108")
+
+        scan_urls.clear()
+        cfg_campus = dict(cfg, job_mode="campus")
+        flows.scan_city(cfg_campus, guard.Guard(cfg_campus), "杭州", keywords=["AI产品"], max_pages=1, fetch_detail=False)
+        check("scan_city campus模式传102", len(scan_urls) >= 1 and scan_urls[-1]["exp"] == "102")
+
+        scan_urls.clear()
+        cfg_mix = dict(cfg, job_mode="mix")
+        flows.scan_city(cfg_mix, guard.Guard(cfg_mix), "杭州", keywords=["AI产品"], max_pages=2, fetch_detail=False)
+        check("scan_city mix模式交替调度", len(scan_urls) >= 2 and scan_urls[0]["exp"] == "108" and scan_urls[1]["exp"] == "102")
+    finally:
+        flows.rawcdp.RawCDP.search_jobs = orig_search_jobs
+
+    # 30.4 Web 端 Settings / Prefs 读写 job_mode 回环
+    resp_job_mode = client.post("/api/settings?token=boss-apply", json={"job_mode": "campus"})
+    check("Settings POST 成功更新 job_mode", resp_job_mode.status_code == 200 and resp_job_mode.json().get("ok") is True)
+    resp_job_mode_get = client.get("/api/settings?token=boss-apply")
+    check("Settings GET 回读 job_mode 正确", resp_job_mode_get.json().get("job_mode") == "campus")
+
+    resp_prefs_mode = client.post("/api/prefs?token=boss-apply", json={"want_jobs": "AI产品", "avoid_jobs": "", "want_cities": "杭州", "avoid_cities": "", "job_mode": "intern"})
+    check("Prefs POST 成功保存 job_mode", resp_prefs_mode.status_code == 200 and resp_prefs_mode.json().get("ok") is True)
+    resp_job_mode_get2 = client.get("/api/settings?token=boss-apply")
+    check("Prefs 更新后 job_mode 为 intern", resp_job_mode_get2.json().get("job_mode") == "intern")
+finally:
+    cfgmod.LOCAL_CFG_PATH = _orig_local_path29
 
 shutil.rmtree(DRY, ignore_errors=True)
 

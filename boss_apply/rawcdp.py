@@ -476,7 +476,9 @@ class RawCDP:
     API_SALARY_JS = """
 (async () => {
   try {
-    const u = '/wapi/zpgeek/search/joblist.json?scene=1&query=%(q)s&city=%(c)s&page=%(p)d&pageSize=30&securityId=&pos=';
+    let u = '/wapi/zpgeek/search/joblist.json?scene=1&query=%(q)s&city=%(c)s&page=%(p)d&pageSize=30&securityId=&pos=';
+    const exp = %(exp)s;
+    if (exp) u += '&experience=' + encodeURIComponent(exp);
     const r = await fetch(u, {credentials: 'include', headers: {'accept': 'application/json'}});
     const j = await r.json();
     const L = (j.zpData && j.zpData.jobList) || [];
@@ -485,8 +487,10 @@ class RawCDP:
 })()
 """
 
-    def search_jobs(self, keyword, city_code, page_no=1):
+    def search_jobs(self, keyword, city_code, page_no=1, experience=None):
         url = LIST_URL.format(q=quote(keyword), c=city_code, p=page_no)
+        if experience:
+            url += "&experience=%s" % quote(str(experience))
         # 主路径：被动捕获页面自身的 joblist 响应（零注入请求，采纳 eatmoreduck #53 教训）
         try:
             data = self._try_passive_search(url)
@@ -514,7 +518,10 @@ class RawCDP:
         except Exception:
             cards = []
         # 新版卡片DOM不带薪资数字（异步/特殊渲染）→ 用前端同款API按encryptJobId回填
-        api_js = self.API_SALARY_JS % {"q": quote(keyword), "c": city_code, "p": page_no}
+        api_js = self.API_SALARY_JS % {
+            "q": quote(keyword), "c": city_code, "p": page_no,
+            "exp": json.dumps(str(experience)) if experience else "null"
+        }
         try:
             api = {a.get("eid"): a for a in json.loads(self.eval(api_js) or "[]") if a.get("eid")}
         except Exception:
@@ -532,6 +539,39 @@ class RawCDP:
             j["boss_active"] = active_days(j.get("raw", ""))
             j["keyword"] = keyword
         return cards
+
+    def fetch_campus_recommendations(self):
+        """抓取 /school/ 校园招聘专区的瞰荐名企与 2027 届在招项目。"""
+        url = BASE + "/school/?ka=tab_school_recruit_click"
+        self.nav(url)
+        time.sleep(2)
+        js = """
+        (() => {
+            const items = [];
+            document.querySelectorAll('[class*="recommend"] [class*="item"], [class*="kanjian"] [class*="item"], [class*="company-card"]').forEach(el => {
+                const title = el.querySelector('[class*="title"], h3, h4, .name')?.innerText?.trim() || '';
+                const desc = el.querySelector('[class*="desc"], [class*="count"], p')?.innerText?.trim() || '';
+                const campus_link = el.querySelector('a[href*="experience=102"]')?.href || '';
+                const intern_link = el.querySelector('a[href*="experience=108"]')?.href || '';
+                const general_link = el.querySelector('a')?.href || '';
+                if (title) {
+                    items.push({
+                        company: title,
+                        desc: desc,
+                        campus_url: campus_link,
+                        intern_url: intern_link,
+                        url: campus_link || intern_link || general_link
+                    });
+                }
+            });
+            return JSON.stringify(items);
+        })()
+        """
+        try:
+            res = self.eval(js)
+            return json.loads(res) if res else []
+        except Exception:
+            return []
 
     def fetch_detail(self, job):
         """返回 (detail_text, active_days_int)。导航到详情页提取JD与活跃度。"""

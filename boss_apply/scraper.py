@@ -61,8 +61,10 @@ def parse_card(card):
     }
 
 
-def search_jobs(page, keyword, city_code, page_no=1):
+def search_jobs(page, keyword, city_code, page_no=1, experience=None):
     url = LIST_URL.format(q=quote(keyword), c=city_code, p=page_no)
+    if experience:
+        url += "&experience=%s" % quote(str(experience))
     page.goto(url, timeout=30000)
     page.wait_for_selector(".job-card-wrapper", timeout=15000)
     check_risk(page)

@@ -137,6 +137,7 @@ def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     found, scored = 0, 0
     llm_scored = 0
+    job_mode = cfg.get("job_mode", "intern")  # intern(108) | campus(102) | mix | all(None)
     try:
         sess.open_tab()
         # 两段式：先收集通过硬过滤（kill/届别/薪资/active/排斥偏好）的岗位，
@@ -147,19 +148,31 @@ def scan_city(cfg, g, city, keywords=None, max_pages=2, fetch_detail=True):
                 ok, info = g.check_search()
                 if not ok:
                     return {"city": city, "found": found, "scored": scored, "stopped": info}
+                # 解析当前页经验门禁参数
+                if job_mode == "intern":
+                    exp_code = "108"
+                elif job_mode == "campus":
+                    exp_code = "102"
+                elif job_mode == "mix":
+                    exp_code = "108" if p % 2 == 1 else "102"
+                else:
+                    exp_code = None
                 try:
-                    jobs = sess.search_jobs(kw, cm[city]["code"], p)
+                    jobs = sess.search_jobs(kw, cm[city]["code"], p, experience=exp_code)
                 except browser.RiskControl as e:
                     g.pause("risk: %s" % e)
                     return {"city": city, "found": found, "scored": scored, "PAUSED": str(e)}
                 g.record_search()
                 found += len(jobs)
                 for job in jobs:
+                    job["job_mode"] = job_mode
+                    job["experience"] = exp_code
                     # 偏好排斥岗位硬否决（在打分前，LLM 匹配也不会触达）
                     vetoed, veto_word = avoid_veto(job, prefs["avoid_jobs"])
                     if vetoed:
                         ledger.append({
                             "action": "scan", "city": city, "keyword": kw, "score": 0,
+                            "job_mode": job_mode, "experience": exp_code,
                             "reason": "prefs avoid: title/company hit %r" % veto_word,
                             "title": job.get("title"), "company": job.get("company"),
                             "salary": job.get("salary"), "href": job.get("href"),
@@ -665,3 +678,17 @@ def probe_readonly(cfg, steps=None):
         sess.close_tab()
         sess.close()
     return {"verdict": "全部档位未触发风控信号", "log": log}
+
+
+def fetch_campus_portal_companies(cfg):
+    """访问 /school/ 校园招聘专区，抓取当前名企直聘专场与2027校招/实习项目。"""
+    sess = rawcdp.RawCDP(cfg.get("cdp_endpoint", "http://127.0.0.1:9335"))
+    try:
+        sess.open_tab()
+        return sess.fetch_campus_recommendations()
+    finally:
+        try:
+            sess.close_tab()
+            sess.close()
+        except Exception:
+            pass

@@ -51,7 +51,7 @@ def _check_token(cfg, token):
 
 
 def _write_local(section_key, section_updates):
-    """深合并写入 config.local.json 的指定顶层段（保留其他段）。"""
+    """深合并或直接写入 config.local.json 的指定顶层字段（保留其他段）。"""
     path = cfgmod.LOCAL_CFG_PATH
     data = {}
     if os.path.exists(path):
@@ -60,11 +60,14 @@ def _write_local(section_key, section_updates):
                 data = json.load(f)
         except Exception:
             data = {}
-    cur = data.get(section_key) or {}
-    if not isinstance(cur, dict):
-        cur = {}
-    cur.update(section_updates or {})
-    data[section_key] = cur
+    if isinstance(section_updates, dict):
+        cur = data.get(section_key) or {}
+        if not isinstance(cur, dict):
+            cur = {}
+        cur.update(section_updates)
+        data[section_key] = cur
+    else:
+        data[section_key] = section_updates
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -124,6 +127,7 @@ def api_settings_get(token: str = ""):
     priv = cfg.get("privacy_policy") or {}
     br = cfg.get("browser") or {}
     return {
+        "job_mode": cfg.get("job_mode", "intern"),
         "llm": {
             "api_key_masked": secrets_mod.masked(llm.get("api_key") or ""),
             "key_source": _key_source(cfg),
@@ -212,6 +216,13 @@ async def api_settings_post(request: Request, token: str = ""):
             _write_local("browser", clean_b)
             changed.append("浏览器运行设置已更新")
 
+    # 求职定向模态更新 (experience 门禁)
+    if "job_mode" in body:
+        jm = str(body["job_mode"]).strip().lower()
+        if jm in ("intern", "campus", "mix", "all"):
+            _write_local("job_mode", jm)
+            changed.append("求职定向模态已更新为 %s" % jm)
+
     return {"ok": True, "changed": changed or ["无变更"]}
 
 
@@ -244,6 +255,10 @@ async def api_prefs_post(request: Request, token: str = ""):
         "avoid_cities": _split_list(body.get("avoid_cities")),
     }
     _write_local("prefs", prefs)
+    if "job_mode" in body:
+        jm = str(body["job_mode"]).strip().lower()
+        if jm in ("intern", "campus", "mix", "all"):
+            _write_local("job_mode", jm)
     cfg2 = cfgmod.load()
     eff = flows.effective_cities(cfg2)
     return {"ok": True, "prefs": prefs,
@@ -892,6 +907,13 @@ PAGE = """<!DOCTYPE html>
             </h5>
             <div class="settings-block">
               <div style="font-size:12px;color:var(--mut);margin-bottom:10px">留空 = 大模型基于简历与岗位上下文自主决断</div>
+              <label>🎯 求职定向模态（自动锁定底层 experience 参数，杜绝社招经验门禁）</label>
+              <select id="inJobMode" style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;font-weight:700;background:#fff;margin-bottom:12px;color:#111">
+                <option value="intern">🎯 大厂高薪实习 (在校生专属 · experience=108)</option>
+                <option value="campus">🎓 2027届秋招正式批 (应届生专属 · experience=102)</option>
+                <option value="mix">⚡ 并驾齐驱混合模式 (实习与校招交替轮巡)</option>
+                <option value="all">🌐 全网不限经验 (历史向下兼容模式)</option>
+              </select>
               <label>向往岗位（逗号/换行分隔，高亮优先沟通）</label>
               <textarea id="inWantJobs"></textarea>
               <label>排斥岗位（命中黑名单直接过滤，不耗 Token）</label>
@@ -1456,6 +1478,7 @@ async function loadSettings() {
   document.getElementById('inAvoidJobs').value = (s.prefs.avoid_jobs || []).join('，');
   document.getElementById('inWantCities').value = (s.prefs.want_cities || []).join('，');
   document.getElementById('inAvoidCities').value = (s.prefs.avoid_cities || []).join('，');
+  if (document.getElementById('inJobMode')) document.getElementById('inJobMode').value = s.job_mode || 'intern';
 
   const priv = s.privacy_policy || {};
   if (document.getElementById('inPolicyWechat')) document.getElementById('inPolicyWechat').value = priv.exchange_wechat || 'auto';
@@ -1512,15 +1535,20 @@ async function testLLM() {
 
 async function savePrefs() {
   const el = document.getElementById('resPrefs');
-  const body = { want_jobs: document.getElementById('inWantJobs').value, avoid_jobs: document.getElementById('inAvoidJobs').value,
-                 want_cities: document.getElementById('inWantCities').value, avoid_cities: document.getElementById('inAvoidCities').value };
+  const body = {
+    want_jobs: document.getElementById('inWantJobs').value,
+    avoid_jobs: document.getElementById('inAvoidJobs').value,
+    want_cities: document.getElementById('inWantCities').value,
+    avoid_cities: document.getElementById('inAvoidCities').value,
+    job_mode: document.getElementById('inJobMode') ? document.getElementById('inJobMode').value : 'intern'
+  };
   const d = await api('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (el) {
     el.style.color = d.ok ? 'var(--ok)' : 'var(--dan)';
     el.textContent = d.ok ? '✅ 已保存（下轮扫描生效）' : '❌ 保存失败';
     if (d.unknown_cities && d.unknown_cities.length) el.textContent += ' ⚠ 未识别城市：' + d.unknown_cities.join('、');
   }
-  if (d.ok) { showToast('求职偏好已保存！', 'success'); loadSettings(); }
+  if (d.ok) { showToast('求职偏好与模态已保存！', 'success'); loadSettings(); }
 }
 
 async function saveProfile() {
