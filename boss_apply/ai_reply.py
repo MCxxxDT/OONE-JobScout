@@ -213,8 +213,8 @@ def detect_privacy_leak(text: str, cfg: Optional[dict] = None, profile: Optional
     if not text:
         return False, ""
 
-    # 1. 11 位手机号（中国大陆手机号）
-    if re.search(r"(?<!\d)1[3-9]\d{9}(?!\d)", text):
+    # 1. 11 位手机号（中国大陆手机号，含空格/连字符如 138-1234-5678）
+    if re.search(r"(?<!\d)1[3-9](?:[\s-]?\d){9}(?!\d)", text):
         return True, "包含11位手机号码"
 
     # 2. 座机号码 / 长固定电话
