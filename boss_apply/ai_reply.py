@@ -160,6 +160,52 @@ FORBIDDEN_PHRASES = (
 )
 
 
+def sanitize_and_clean_reply(text: str, max_chars: int = 150) -> str:
+    """清理回复文本中的 Markdown 标记、八股文禁令短语，并确保句子完整结束（杜绝截断半句话/半个字）。"""
+    if not text:
+        return ""
+    # 1. 过滤八股文禁令短语
+    for ban in FORBIDDEN_PHRASES:
+        text = text.replace(ban, "")
+
+    # 2. 剥除 Markdown 格式标记（BOSS 聊天为移动端纯文本，加粗 ** 会暴露为源码源码感）
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"__([^_]+)__", r"\1", text)
+    text = text.replace("**", "").replace("__", "").replace("*", "").replace("`", "").replace("#", "")
+
+    # 3. 清理首尾多余空白和非法起手标点
+    text = re.sub(r"^[，。！!？?\s]+", "", text).strip()
+    text = re.sub(r"[\s\t\r]+", " ", text).strip()
+
+    # 4. 若未超出上限，直接返回整句（绝不盲目截断）
+    if len(text) <= max_chars:
+        return text
+
+    # 5. 超出上限时：寻找最后一个完整句子结束标点，杜绝生硬切断字词
+    truncated = text[:max_chars]
+    last_stop = max(
+        truncated.rfind("。"),
+        truncated.rfind("！"),
+        truncated.rfind("!"),
+        truncated.rfind("？"),
+        truncated.rfind("?"),
+        truncated.rfind("\n"),
+    )
+    if last_stop >= 25:
+        return truncated[:last_stop + 1].strip()
+
+    # 次级保底：若无句末标点，找逗号/分号断句并收尾
+    last_comma = max(truncated.rfind("，"), truncated.rfind(","), truncated.rfind("；"), truncated.rfind(";"))
+    if last_comma >= 25:
+        return truncated[:last_comma].strip() + "。"
+
+    # 最底线保底：剥除末尾可能的断裂字符并补句号
+    res = truncated.rstrip("，,；;、的和与且在但若方")
+    if not re.search(r"[。！？!?]$", res):
+        res += "。"
+    return res
+
+
 class AIReplyEngine:
     """纯 Agent / 大模型驱动的会话决策与回复生成引擎（彻底废除确定性模板降级）。"""
 
@@ -304,9 +350,10 @@ class AIReplyEngine:
             f"   - 若无需回复：action=\"skip\"，reply_text=\"\"；\n"
             f"   - 若需人工介入（复杂商务谈判/线下签约等）：action=\"needs_human\"；\n"
             f"8. 【对话历史与防车轱辘】：若上方有【对话历史】，严格承接上文，绝不车轱辘话，已告知过的信息不重复；\n"
-            f"9. 【极致短小精悍】：reply_text 严格控制在 35 字以内，模拟真实手机微信打字习惯：直接、口语化、高效、不卑不亢。\n\n"
+            f"9. 【精炼口语，整句完整】：回复保持真人口语化、直接高效。日常简短应答 15-40 字为宜；若需针对 HR 提问说明自身背景或意向，控制在 100 字以内，务必保证句子表意完整、以句号或问号收尾，绝不允许半句话截断；\n"
+            f"10. 【纯文本禁令】：严禁输出任何 Markdown 格式标记（严禁加粗 **、严禁星号 *、严禁标题 #、严禁代码块等），必须完全是真实手机微信端可直接发送的纯文本。\n\n"
             f"请输出纯 JSON 格式：\n"
-            f'{{"action": "reply"|"send_resume"|"exchange_wechat"|"agree_wechat"|"needs_human"|"skip", "reply_text": "35字以内真人口语短文本（若action无需文本可为空）", "reason": "简要理由"}}'
+            f'{{"action": "reply"|"send_resume"|"exchange_wechat"|"agree_wechat"|"needs_human"|"skip", "reply_text": "真人口语短文本（完整句子，严禁Markdown，若action无需文本可为空）", "reason": "简要理由"}}'
         )
 
     def decide_and_generate(self, conv: dict, agent_generator: Optional[Any] = None) -> dict:
@@ -346,11 +393,7 @@ class AIReplyEngine:
         if isinstance(agent_res, dict) and agent_res.get("action"):
             act = agent_res.get("action")
             if act in ("reply", "send_resume", "exchange_wechat", "agree_wechat"):
-                reply_text = (agent_res.get("reply_text") or "").strip()
-                # 过滤八股文禁令短语
-                for ban in FORBIDDEN_PHRASES:
-                    reply_text = reply_text.replace(ban, "")
-                reply_text = re.sub(r"^[，。！,!\s]+|[，。！,!\s]+$", "", reply_text).strip()
+                reply_text = sanitize_and_clean_reply(agent_res.get("reply_text") or "", max_chars=150)
 
                 if act == "reply" and not reply_text:
                     pass  # 回复为空，落入人工处理
@@ -366,7 +409,7 @@ class AIReplyEngine:
                 else:
                     return {
                         "action": act,
-                        "reply_text": reply_text[:120],
+                        "reply_text": reply_text,
                         "reason": agent_res.get("reason") or f"Agent执行动作: {act}",
                         "notice": agent_res.get("notice") or "",
                         "source": agent_res.get("source") or "agent",
@@ -421,7 +464,7 @@ class AIReplyEngine:
             payload = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "你是一名求职助理 Agent，代表求职者回复招聘平台HR消息。严格输出纯JSON。单条回复必须极短（35字内），真人日常口语化，杜绝客服八股文。"},
+                    {"role": "system", "content": "你是一名求职助理 Agent，代表求职者回复招聘平台HR消息。严格输出纯JSON。真人口语化，杜绝客服八股文，严禁使用任何Markdown标记（如**），保持整句完整自然收尾。"},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,
@@ -444,11 +487,7 @@ class AIReplyEngine:
                     if isinstance(parsed, dict) and "action" in parsed:
                         act = parsed.get("action")
                         if act in ("reply", "send_resume", "exchange_wechat", "agree_wechat", "needs_human", "skip"):
-                            reply_text = (parsed.get("reply_text") or "").strip()
-                            for ban in FORBIDDEN_PHRASES:
-                                reply_text = reply_text.replace(ban, "")
-                            reply_text = re.sub(r"^[，。！,!\s]+|[，。！,!\s]+$", "", reply_text).strip()
-                            parsed["reply_text"] = reply_text[:35]
+                            parsed["reply_text"] = sanitize_and_clean_reply(parsed.get("reply_text") or "", max_chars=150)
                             return parsed
         except Exception:
             pass

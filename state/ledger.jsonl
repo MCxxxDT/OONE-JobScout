@@ -1243,3 +1243,5 @@
 {"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:06:44", "scanned": 23, "candidates": 1, "replied": 1, "dry_run": false, "ts": "2026-09-09 17:07:46"}
 {"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:13:18", "scanned": 23, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 17:13:19"}
 {"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:17:58", "scanned": 23, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 17:18:00"}
+{"action": "reply", "status": "ok", "company": "孟子权千广传媒招聘主管", "text_head": "您好！我在福州，强烈意向奔赴杭州全职到岗。我有数字媒体技术与直播GMV操盘经验，对这个岗位很有兴趣。初试建议先线上进行，方便您发一份详细的岗位JD吗？期待您的交流！", "conv": "17:19\n孟子权千广传媒招聘主管\n你好呀，还在找工作吗？有兴趣聊一下嘛~", "ts": "2026-09-09 17:22:43"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:21:50", "scanned": 24, "candidates": 1, "replied": 1, "dry_run": false, "ts": "2026-09-09 17:22:43"}

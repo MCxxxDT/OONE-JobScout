@@ -1227,6 +1227,16 @@ try:
 finally:
     flows.chat_exchange_wechat = orig_ex
 
+# 27.7 文本完整度与防截断清洗（Markdown剥除/防中途腰斩/句末完整）
+raw_md_text = "好的华先生，我这就去整理发送。想请您多帮忙留意下贵司在杭州或北京的**实习/应届AI产品岗**。我有全栈Agent工程落地和商业化实操经验。"
+cleaned_md = _air.sanitize_and_clean_reply(raw_md_text, max_chars=150)
+check("sanitize剥除Markdown粗体标记", "**" not in cleaned_md and "实习/应届AI产品岗" in cleaned_md)
+check("sanitize合理长度不截断整句", len(cleaned_md) == len(raw_md_text) - 4)
+
+long_over_text = "好的华先生，我这就去整理发送。考虑到社招岗位与我的阶段不符，想请您多帮忙留意下贵司在杭州或北京的实习/应届AI产品岗。我有全栈Agent工程落地和商业化实操经验，对Vibe Coding和大模型协同办公方向非常感兴趣且有深度实践。方便的话想请教下您这边有相关的机会吗？"
+safe_cut = _air.sanitize_and_clean_reply(long_over_text, max_chars=110)
+check("sanitize超长安全截断于句号不挂残词", safe_cut.endswith("。") and not safe_cut.endswith("方。") and not safe_cut.endswith("方"))
+
 
 shutil.rmtree(DRY, ignore_errors=True)
 
