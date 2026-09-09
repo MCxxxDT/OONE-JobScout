@@ -470,13 +470,17 @@ PAGE = """<!DOCTYPE html>
     transition: transform 0.2s, box-shadow 0.2s;
   }
   .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .stat-card .label { font-size: 13px; font-weight: 600; color: var(--mut); display: flex; justify-content: space-between; align-items: center; }
-  .stat-card .val { font-size: 30px; font-weight: 900; margin-top: 8px; color: var(--txt); letter-spacing: -0.5px; }
-  .stat-card .val.c-acc { color: #0284c7; }
-  .stat-card .val.c-ok { color: #059669; }
-  .stat-card .val.c-warn { color: #d97706; }
-  .stat-card .val.c-dan { color: #dc2626; }
-  .stat-card .hint { font-size: 11px; color: var(--mut-dark); margin-top: 4px; font-weight: 500; }
+  .stat-card .label, .stat-card .stat-label { font-size: 13px; font-weight: 700; color: var(--mut); display: flex; justify-content: space-between; align-items: center; }
+  .stat-card .val, .stat-card .stat-val { font-size: 30px; font-weight: 900; margin-top: 8px; color: var(--txt); letter-spacing: -0.5px; }
+  .stat-card .val.c-acc, .stat-card .stat-val.c-acc { color: #0284c7; }
+  .stat-card .val.c-ok, .stat-card .stat-val.c-ok { color: #059669; }
+  .stat-card .val.c-warn, .stat-card .stat-val.c-warn { color: #d97706; }
+  .stat-card .val.c-dan, .stat-card .stat-val.c-dan { color: #dc2626; }
+  .stat-card .hint, .stat-card .stat-hint { font-size: 11px; color: var(--mut-dark); margin-top: 4px; font-weight: 500; }
+
+  /* Quota Progress Bar */
+  .quota-track { width: 100%; height: 4px; background: #e2e8f0; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .quota-fill { height: 100%; width: 0%; background: #10b981; border-radius: 4px; transition: width 0.5s ease; }
 
   /* Main Tab Content Panels */
   .tab-content { display: none; }
@@ -656,12 +660,68 @@ PAGE = """<!DOCTYPE html>
   }
   .filter-pill:hover { background: #f8fafc; color: #111; border-color: #cbd5e1; }
   .filter-pill.active { background: #111; color: #fff; border-color: #111; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+
+  /* Confirmation Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    z-index: 100000; justify-content: center; align-items: center;
+    opacity: 0; transition: opacity 0.25s ease;
+  }
+  .modal-overlay.active { display: flex; opacity: 1; }
+  .modal-card {
+    background: #fff; padding: 36px 32px; border-radius: 28px; width: 90%; max-width: 420px;
+    text-align: center; transform: scale(0.92); transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1.2);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.18); border: 1px solid rgba(0,0,0,0.04);
+  }
+  .modal-overlay.active .modal-card { transform: scale(1); }
+
+  /* Apple Style Switch */
+  .form-switch-apple { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
+  .form-switch-apple input { opacity: 0; width: 0; height: 0; }
+  .switch-slider {
+    position: absolute; cursor: pointer; inset: 0; background-color: #e2e8f0;
+    transition: .3s cubic-bezier(0.16, 1, 0.3, 1); border-radius: 26px;
+  }
+  .switch-slider:before {
+    position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+    background-color: white; transition: .3s cubic-bezier(0.16, 1, 0.3, 1); border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  .form-switch-apple input:checked + .switch-slider { background-color: #111; }
+  .form-switch-apple input:checked + .switch-slider:before { transform: translateX(20px); }
+
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+    .admin-header { padding: 12px 16px; }
+    .brand-text h1 { font-size: 15px; }
+    .island-nav-row { top: 62px; padding: 6px 0; }
+    .island-capsule { height: 46px; }
+    .panel-card { padding: 18px; border-radius: 20px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .table-custom td { padding: 12px 10px; font-size: 12px; }
+  }
 </style>
 </head>
 <body>
 <!-- Top Drop Floating Pill Toast -->
 <div id="appToast" class="app-toast"></div>
 <div id="toastBox" style="display:none"></div>
+
+<!-- Safe Confirmation Modal -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-card">
+    <div style="width:52px;height:52px;background:#fee2e2;color:#ef4444;border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px">
+      ⚠️
+    </div>
+    <div id="confirmTitle" style="font-size:18px;font-weight:900;margin-bottom:8px;color:#111">确认执行操作</div>
+    <div id="confirmDesc" style="font-size:13px;color:#64748b;line-height:1.6;margin-bottom:26px">确定要执行此操作吗？</div>
+    <div class="d-flex gap-3">
+      <button class="btn-action-light w-100 justify-content-center" style="padding:12px;border-radius:14px" onclick="closeConfirm()">取消</button>
+      <button class="btn-black w-100 justify-content-center" style="padding:12px;border-radius:14px" id="confirmBtn" onclick="executeConfirm()">确定执行</button>
+    </div>
+  </div>
+</div>
 
 <!-- Top Sticky Navbar -->
 <header class="admin-header">
@@ -712,7 +772,8 @@ PAGE = """<!DOCTYPE html>
     <div class="stat-card">
       <div class="stat-label"><span>今日实发回复</span><span>💬</span></div>
       <div class="stat-val c-ok" id="statTodayReplied">0</div>
-      <div class="stat-hint">拟人高斯发出</div>
+      <div class="quota-track"><div class="quota-fill" id="quotaFill"></div></div>
+      <div class="stat-hint" id="quotaHint">拟人高斯发出</div>
     </div>
     <div class="stat-card">
       <div class="stat-label"><span>今日巡检扫描</span><span>🔍</span></div>
@@ -765,7 +826,8 @@ PAGE = """<!DOCTYPE html>
         </div>
         <div class="admin-search-group" style="max-width:340px">
           <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="快速搜索公司、动作或状态…" oninput="renderLedger()">
+          <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="快速搜索公司、动作或状态…" oninput="renderLedger(); toggleSearchClear()">
+          <div class="admin-search-clear" id="ledgerFilterClear" onclick="clearLedgerSearch()" title="清空搜索">✕</div>
         </div>
       </div>
       <div class="table-responsive">
@@ -804,9 +866,16 @@ PAGE = """<!DOCTYPE html>
               <input type="text" id="inBase">
               <label>模型名称</label>
               <input type="text" id="inModel">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:14px">
-                <input type="checkbox" id="inLLMMatch" style="width:auto"> 启用 LLM 智能匹配（岗位打分，关闭则回退关键词词表）
-              </label>
+              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
+                <div>
+                  <strong style="font-size:13px;color:#111;display:block">启用 LLM 智能匹配打分</strong>
+                  <span style="font-size:11px;color:var(--mut)">开启后调用大模型对岗位深度打分，关闭则回退关键词词表</span>
+                </div>
+                <label class="form-switch-apple">
+                  <input type="checkbox" id="inLLMMatch">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
               <div class="d-flex align-items-center gap-3 mt-4">
                 <button class="btn-black" onclick="saveSettings()">保存配置</button>
                 <button class="btn-action-light" onclick="testLLM()">测试连接</button>
@@ -930,20 +999,26 @@ PAGE = """<!DOCTYPE html>
               <div style="font-size:12px;color:var(--mut);margin-bottom:12px">
                 解决 BOSS 轮询时 Chrome 窗口时不时弹窗、置顶、抢占桌面输入焦点的问题。
               </div>
-              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px;line-height:1.4">
-                <input type="checkbox" id="inBrowserSilent" style="width:auto;margin-top:3px">
+              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
                 <div>
-                  <strong style="color:var(--txt)">静默后台巡检模式 (Silent Background Mode)</strong>
-                  <div style="font-size:12px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行页面操作，绝不抢占前台键盘输入焦点与激活置顶。</div>
+                  <strong style="font-size:13px;color:#111;display:block">静默后台巡检模式 (Silent Mode)</strong>
+                  <span style="font-size:11px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行操作，绝不抢占前台键盘输入焦点与激活置顶</span>
                 </div>
-              </label>
-              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:14px;line-height:1.4">
-                <input type="checkbox" id="inBrowserMinimize" style="width:auto;margin-top:3px">
+                <label class="form-switch-apple">
+                  <input type="checkbox" id="inBrowserSilent">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
                 <div>
-                  <strong style="color:var(--txt)">启动时窗口最小化 (Minimize On Start)</strong>
-                  <div style="font-size:12px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏幕。</div>
+                  <strong style="font-size:13px;color:#111;display:block">启动时窗口最小化 (Minimize On Start)</strong>
+                  <span style="font-size:11px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏幕</span>
                 </div>
-              </label>
+                <label class="form-switch-apple">
+                  <input type="checkbox" id="inBrowserMinimize">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
               <div class="d-flex align-items-center gap-3 mt-4">
                 <button class="btn-black" onclick="saveBrowserSettings()">保存浏览器设置</button>
                 <span id="resBrowser" style="font-size:12px"></span>
@@ -1064,6 +1139,14 @@ async function load(isManual) {
     document.getElementById('statTodayScanned').textContent = d.today.scanned || 0;
     document.getElementById('statHighIntent').textContent = d.counts.high_intent || 0;
 
+    // 配额进度与提示
+    const maxReplied = (d.guard && d.guard.max_replies_per_day) || 30;
+    const curReplied = d.today.replied || 0;
+    const qFill = document.getElementById('quotaFill');
+    if (qFill) qFill.style.width = Math.min(100, Math.round(curReplied / maxReplied * 100)) + '%';
+    const qHint = document.getElementById('quotaHint');
+    if (qHint) qHint.textContent = `今日已发 ${curReplied} / 配额上限 ${maxReplied}`;
+
     pendingData = d.pending || [];
     resolvedData = d.resolved || [];
     window._pending = pendingData;
@@ -1075,6 +1158,44 @@ async function load(isManual) {
     if (isManual) showToast('工作台数据已更新！', 'success');
   } catch(e) {
     console.error(e);
+  }
+}
+
+let _confirmCallback = null;
+function askConfirm(title, desc, onOk) {
+  const m = document.getElementById('confirmModal');
+  if (!m) { if (onOk) onOk(); return; }
+  document.getElementById('confirmTitle').textContent = title || '确认执行操作';
+  document.getElementById('confirmDesc').textContent = desc || '确定要执行此操作吗？';
+  _confirmCallback = onOk;
+  m.classList.add('active');
+}
+
+function closeConfirm() {
+  const m = document.getElementById('confirmModal');
+  if (m) m.classList.remove('active');
+  _confirmCallback = null;
+}
+
+function executeConfirm() {
+  const cb = _confirmCallback;
+  closeConfirm();
+  if (cb) cb();
+}
+
+function toggleSearchClear() {
+  const el = document.getElementById('ledgerFilter');
+  const btn = document.getElementById('ledgerFilterClear');
+  if (btn) btn.style.display = (el && el.value.trim()) ? 'flex' : 'none';
+}
+
+function clearLedgerSearch() {
+  const el = document.getElementById('ledgerFilter');
+  if (el) {
+    el.value = '';
+    renderLedger();
+    toggleSearchClear();
+    el.focus();
   }
 }
 
@@ -1147,7 +1268,7 @@ function renderPending() {
         <button class="btn-action-light" id="btnDone${i}" onclick="act(${i},'mark_handled')" title="已在手机微信或BOSS端手动处理，直接标记为已完成消单">
           ✅ 标记已处理
         </button>
-        <button class="btn-action-nuke" onclick="act(${i},'ignore')">
+        <button class="btn-action-nuke" onclick="askConfirm('确认忽略该会话？', '忽略后系统本轮将不再跟进该企业消息，直到对方再次发信。', () => act(${i},'ignore'))">
           ✕ 忽略
         </button>
         <div id="res${i}" style="margin-left:auto;font-size:12px;font-weight:700"></div>
@@ -1580,7 +1701,11 @@ def api_overview(token: str = ""):
             "scanned": len([r for r in scans if (r.get("ts") or "").startswith(today)]),
             "replied": len([r for r in replied_ok if (r.get("ts") or "").startswith(today)]),
         },
-        "guard": guardmod.Guard(cfg).summary(),
+        "guard": {
+            **guardmod.Guard(cfg).summary(),
+            "paused": guardmod.Guard(cfg).paused,
+            "max_replies_per_day": cfg.get("daily_limit", 30),
+        },
         "pending": pending[:100],
         "resolved": resolved[:100],
         "ledger": [
