@@ -54,6 +54,9 @@ def self_openers(cfg, head_len=14):
         if r.get("action") == "reply" and r.get("text_head"):
             ops.add(r["text_head"].strip()[:head_len])
     ops.add(NATIVE_DEFAULT_OPENER[:head_len])
+    custom_opener = (cfg.get("native_opener") or "").strip()
+    if custom_opener:
+        ops.add(custom_opener[:head_len])
     return tuple(o for o in ops if o)
 
 

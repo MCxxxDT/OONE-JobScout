@@ -263,7 +263,7 @@ class AIReplyEngine:
             refined = profile_store.load_profile() or {}
         except Exception:
             refined = {}
-        self.profile = dict(CANDIDATE_PROFILE, **refined, **(profile or {}))
+        self.profile = {**CANDIDATE_PROFILE, **refined, **(profile or {})}
         self.agent_generator = agent_generator
         llm_cfg = self.cfg.get("llm") or {}
         if llm_cfg.get("api_key"):
@@ -361,12 +361,17 @@ class AIReplyEngine:
                 hl_parts.append(s)
         highlights_str = "；".join(hl_parts) if hl_parts else "具备扎实的产品与工程落地实践"
 
+        cur_city = self.profile.get('current_city', '福州')
+        target_reg = self.profile.get('target_region', '江浙沪')
+        grade_desc = self.profile.get('grade_desc', '2027届应届在读生')
+        status_desc = self.profile.get('status', '目前处于实习/校招求职阶段，可稳定全职到岗')
+
         return (
             f"【候选人真实画像】\n"
             f"- 姓名：{self.profile.get('name', '张烨韬')}\n"
             f"- 学历与专业：{self.profile.get('school', '')} · {self.profile.get('major', '')}\n"
-            f"- 毕业届别与状态：{self.profile.get('grade_desc', '2027届应届在读生')}（目前2026年9月处于秋招黄金期，毕业设计已交付，无在校日常课程）\n"
-            f"- 常驻地与意向城市：目前常驻【{self.profile.get('current_city', '福州')}】，核心意向奔赴【{self.profile.get('target_region', '江浙沪')}】发展\n"
+            f"- 毕业届别与状态：{grade_desc}（{status_desc}）\n"
+            f"- 常驻地与意向城市：目前常驻【{cur_city}】，核心意向奔赴【{target_reg}】发展\n"
             f"- 到岗与稳定性：{self.profile.get('availability', '合适机会随时奔赴全职到岗')}\n"
             f"- 薪资底线诉求：{self.profile.get('salary_requirement', '实习薪资能覆盖租房与生活开销')}\n"
             f"- 核心优势：{highlights_str}\n"
@@ -379,9 +384,9 @@ class AIReplyEngine:
             f"【Agent 沟通策略与铁律（拒绝人机，真人口语化，直接高效）】\n"
             f"1. 【铁血禁令（绝对禁止）】：严禁出现“感谢您的详细介绍”、“期待进一步沟通”、“希望有机会加入”、“非常荣幸”、“祝好”等任何客服式/三段式礼貌八股废话！开门见山直接说事；\n"
             f"2. 【严禁无脑索要JD】：严禁无脑索要“完整JD/汇报线/技术栈”——除非 HR 仅发了“在吗/发个简历”且上下文完全没有任何职位信息，否则一律禁止主动索要 JD；\n"
-            f"3. 【闭合性问题直球回答】：遇到诸如“能否线下面试？”、“早九晚七能接受吗？”、“目前在职还是离职？”等闭合提问，必须在 15 字内正面肯定直答（如：“可以线下面试”、“时间没问题可以接受”、“目前已离职随时到岗”），绝不允许顾左右而言他或打太极；\n"
-            f"4. 【问常驻地 / 地点】：真诚告知目前常驻福州，强烈意向奔赴江浙沪发展；初试可提议先通过线上高效推进；\n"
-            f"5. 【问薪资 / 待遇】：说明跨城前往江浙沪全职实习，主要希望能覆盖当地基础租房与生活开销即可，以业务和团队匹配为主；\n"
+            f"3. 【闭合性问题直球回答】：遇到诸如“能否线下面试？”、“早九晚七能接受吗？”、“目前在职还是离职？”等闭合提问，必须在 15 字内基于候选人实际情况直截了当明确回答（结合候选人画像中常驻地/到岗时间，能即直言能，不能或需协调亦如实简练告知），绝不允许顾左右而言他或打太极；\n"
+            f"4. 【问常驻地 / 地点】：结合候选人画像如实告知常驻【{cur_city}】，意向奔赴【{target_reg}】；初试可提议先通过线上高效推进；\n"
+            f"5. 【问薪资 / 待遇】：说明跨城前往【{target_reg}】发展，主要希望能覆盖当地基础租房与生活开销即可（参考诉求：{self.profile.get('salary_requirement', '满足基础租房与生活开销')}），以业务和团队匹配为主；\n"
             f"6. 【三不原则与见人下菜碟】：不承诺死时间、不拒绝机会、见人下菜碟（结合JD研判，核心岗提升热情，杂役销售岗点到为止；严禁泄露真实11位手机号、微信号）；\n"
             f"7. 【动作协同规则】：\n"
             f"   - 若对方索要简历：action=\"send_resume\"，reply_text=\"已发您附件简历，请查收\"；\n"
