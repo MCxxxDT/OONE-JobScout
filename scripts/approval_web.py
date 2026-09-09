@@ -302,486 +302,652 @@ async def api_profile_post(request: Request, token: str = "",
     return {"ok": True, "saved": True, "refined": True,
             "refined_summary": (refined or {}).get("summary") or "", "meta": meta}
 
-
 PAGE = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BOSS求职守护 · 审批工作台</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BOSS求职守护 · 运营中枢</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
   :root {
-    --bg: #090d16;
-    --card: #111827;
-    --card-glass: rgba(17, 24, 39, 0.85);
-    --border: rgba(255, 255, 255, 0.08);
-    --txt: #f8fafc;
-    --mut: #94a3b8;
-    --mut-dark: #64748b;
-    --acc: #38bdf8;
-    --acc-glow: rgba(56, 189, 248, 0.15);
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --txt: #111111;
+    --mut: #64748b;
+    --mut-dark: #94a3b8;
+    --border: rgba(0, 0, 0, 0.05);
+    --border-light: rgba(0, 0, 0, 0.03);
+    --acc: #0ea5e9;
     --ok: #10b981;
-    --ok-bg: rgba(16, 185, 129, 0.12);
     --warn: #f59e0b;
-    --warn-bg: rgba(245, 158, 11, 0.12);
-    --dan: #f43f5e;
-    --dan-bg: rgba(244, 63, 94, 0.12);
+    --dan: #ef4444;
     --wechat: #07c160;
-    --wechat-bg: rgba(7, 193, 96, 0.12);
-    --purple: #a855f7;
-    --purple-bg: rgba(168, 85, 247, 0.12);
-    --radius: 14px;
+    --purple: #8b5cf6;
+    --radius: 20px;
+    --radius-lg: 24px;
+    --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.025);
+    --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.035);
+    --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.06);
   }
-  * { box-sizing:border-box; margin:0; padding:0; }
+
   body {
-    background: radial-gradient(circle at 50% 0%, #172554 0%, var(--bg) 40%, var(--bg) 100%);
+    background-color: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
     color: var(--txt);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-    min-height: 100vh; padding: 20px 16px 60px;
     -webkit-font-smoothing: antialiased;
+    padding-bottom: 60px;
+    min-height: 100vh;
   }
-  .wrap { max-width: 960px; margin: 0 auto; }
-  
-  /* Navbar */
-  .navbar {
-    display: flex; justify-content: space-between; align-items: center;
-    background: var(--card-glass); backdrop-filter: blur(16px);
-    border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 14px 20px; margin-bottom: 20px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .brand-icon {
-    width: 38px; height: 38px; border-radius: 10px;
-    background: linear-gradient(135deg, #0ea5e9, #6366f1);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 19px; box-shadow: 0 0 16px rgba(14, 165, 233, 0.4);
-  }
-  .brand-text h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.2; }
-  .brand-text .status-line { font-size: 12px; color: var(--mut); display: flex; align-items: center; gap: 8px; margin-top: 3px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-  .dot-ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 2s infinite; }
-  .dot-err { background: var(--dan); box-shadow: 0 0 8px var(--dan); }
-  @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0.6; } }
 
-  .nav-right { display: flex; align-items: center; gap: 12px; }
-  .tabs { display: flex; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
-  .tab-btn {
-    border: 0; background: transparent; color: var(--mut); padding: 7px 14px;
-    font-size: 13px; font-weight: 500; border-radius: 8px; cursor: pointer;
-    transition: all 0.2s ease; display: flex; align-items: center; gap: 6px;
-  }
-  .tab-btn:hover { color: var(--txt); }
-  .tab-btn.active { background: #1e293b; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-  .badge {
-    background: var(--dan); color: #fff; font-size: 10px; font-weight: 700;
-    padding: 1px 6px; border-radius: 10px; line-height: 14px; display: inline-block;
-  }
-  .btn-refresh {
-    background: #1e293b; border: 1px solid var(--border); color: var(--txt);
-    padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
-    display: flex; align-items: center; gap: 5px; transition: all 0.2s;
-  }
-  .btn-refresh:hover { background: #334155; border-color: var(--acc); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
 
-  /* KPI Stats */
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  /* Sticky Top Header */
+  .admin-header {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    color: #111;
+    padding: 14px 32px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    margin-bottom: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .logo-squircle {
+    width: 42px; height: 42px; border-radius: 12px; margin-right: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,1);
+    background: #111; color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+
+  .brand-text h1 { font-size: 18px; font-weight: 900; letter-spacing: 0.3px; line-height: 1.2; margin: 0; }
+  .brand-text .status-line { font-size: 12px; color: var(--mut); display: flex; align-items: center; gap: 8px; margin-top: 3px; font-weight: 500; }
+
+  /* Pulse Dots */
+  .pulse-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot-green { background: #10b981; animation: pulseG 2s infinite; }
+  .dot-blue { background: #3b82f6; animation: pulseB 2s infinite; }
+  .dot-red { background: #ef4444; animation: pulseR 2s infinite; }
+  @keyframes pulseG { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
+  @keyframes pulseB { 0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); } 70% { box-shadow: 0 0 0 8px rgba(59,130,246,0); } 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); } }
+  @keyframes pulseR { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 70% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
+
+  /* Signature Dynamic Island Capsule Navigation */
+  .island-nav-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 25px;
+    padding: 8px 6px;
+    position: sticky;
+    top: 72px;
+    z-index: 990;
+    background: rgba(244, 245, 247, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-radius: 0 0 20px 20px;
+  }
+
+  .island-capsule {
+    flex: 1;
+    height: 52px;
+    border-radius: 26px;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.45s cubic-bezier(0.32, 0.72, 0, 1.2);
+    overflow: hidden;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .island-capsule.active {
+    flex: 2.8;
+    background: #ffffff;
+    color: #111111;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    border-color: #ffffff;
+  }
+  .island-capsule:active { transform: scale(0.97); }
+
+  .island-svg {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+    stroke: currentColor !important;
+    stroke-width: 2.2 !important;
+    fill: none !important;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: margin 0.35s;
+    flex-shrink: 0 !important;
+    display: block;
+  }
+  .island-capsule.active .island-svg { margin-right: 8px; }
+
+  .capsule-text {
+    opacity: 0; max-width: 0; font-size: 14px; font-weight: 800;
+    transition: all 0.35s ease; display: inline-block; letter-spacing: 0.3px;
+  }
+  .island-capsule.active .capsule-text { opacity: 1; max-width: 160px; }
+
+  .capsule-badge {
+    background: #ef4444; color: #fff; font-size: 11px; font-weight: 800;
+    padding: 1px 7px; border-radius: 10px; margin-left: 6px; line-height: 16px;
+    display: inline-block;
+  }
+
+  /* KPI Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 25px;
+  }
   .stat-card {
-    background: var(--card-glass); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 16px; transition: transform 0.2s, border-color 0.2s;
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.03);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s, box-shadow 0.2s;
   }
-  .stat-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.15); }
-  .stat-card .label { font-size: 12px; font-weight: 500; color: var(--mut); display: flex; justify-content: space-between; align-items: center; }
-  .stat-card .val { font-size: 26px; font-weight: 700; margin-top: 8px; color: var(--txt); }
-  .stat-card .val.c-acc { color: var(--acc); }
-  .stat-card .val.c-ok { color: var(--ok); }
-  .stat-card .val.c-warn { color: var(--warn); }
-  .stat-card .val.c-dan { color: var(--dan); }
-  .stat-card .hint { font-size: 11px; color: var(--mut-dark); margin-top: 4px; }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .stat-card .label { font-size: 13px; font-weight: 600; color: var(--mut); display: flex; justify-content: space-between; align-items: center; }
+  .stat-card .val { font-size: 30px; font-weight: 900; margin-top: 8px; color: var(--txt); letter-spacing: -0.5px; }
+  .stat-card .val.c-acc { color: #0284c7; }
+  .stat-card .val.c-ok { color: #059669; }
+  .stat-card .val.c-warn { color: #d97706; }
+  .stat-card .val.c-dan { color: #dc2626; }
+  .stat-card .hint { font-size: 11px; color: var(--mut-dark); margin-top: 4px; font-weight: 500; }
 
-  /* Tab Views */
+  /* Main Tab Content Panels */
   .tab-content { display: none; }
   .tab-content.active { display: block; animation: fadeIn 0.25s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* Pending Section */
-  .section-title { font-size: 16px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-  .empty-box {
-    background: var(--card-glass); border: 1px dashed rgba(255,255,255,0.15);
-    border-radius: var(--radius); padding: 48px 24px; text-align: center; color: var(--mut);
+  .panel-card {
+    background: #fff;
+    padding: 28px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    margin-bottom: 25px;
+    border: 1px solid rgba(0,0,0,0.03);
+    position: relative;
   }
-  .empty-icon { font-size: 40px; margin-bottom: 12px; display: block; }
 
+  /* Spotlight Search Group */
+  .admin-search-group { position: relative; width: 100%; max-width: 420px; z-index: 100; display: flex; align-items: center; }
+  .spotlight-icon { position: absolute; left: 16px; width: 18px; height: 18px; stroke: #94a3b8; stroke-width: 2.5; fill: none; pointer-events: none; transition: stroke 0.3s; z-index: 2; }
+  .admin-search-input {
+    width: 100%; border-radius: 24px; background: #fff; border: 1.5px solid #e2e8f0;
+    padding: 12px 42px 12px 46px; outline: none; transition: all 0.25s ease;
+    font-size: 13px; font-weight: 600; color: #111; box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  }
+  .admin-search-input:focus { background: #fff; border-color: #111; box-shadow: 0 10px 25px rgba(0,0,0,0.06); }
+  .admin-search-group:focus-within .spotlight-icon { stroke: #111; }
+  .admin-search-clear {
+    position: absolute; right: 14px; width: 22px; height: 22px; background: #e2e8f0; color: #64748b;
+    border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer;
+    font-size: 12px; font-weight: bold; transition: all 0.2s; z-index: 2;
+  }
+  .admin-search-clear:hover { background: #cbd5e1; color: #111; transform: scale(1.1); }
+
+  /* Custom Floating Table */
+  .table-custom { border-collapse: separate; border-spacing: 0 10px; margin-top: -10px; width: 100%; }
+  .table-custom th { border: none; font-weight: 800; color: #94a3b8; text-transform: uppercase; font-size: 11px; letter-spacing: 1.2px; padding: 0 20px 8px; }
+  .table-custom td { background: #fff; padding: 18px 20px; vertical-align: middle; border-top: 1px solid #f8fafc; border-bottom: 1px solid #f8fafc; }
+  .table-custom td:first-child { border-top-left-radius: 18px; border-bottom-left-radius: 18px; border-left: 1px solid #f8fafc; }
+  .table-custom td:last-child { border-top-right-radius: 18px; border-bottom-right-radius: 18px; border-right: 1px solid #f8fafc; }
+  .table-custom tbody tr { transition: all 0.25s ease; }
+  .table-custom tbody tr:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.03); }
+
+  /* Soft Badges */
+  .soft-badge { font-weight: 800; padding: 5px 12px; border-radius: 10px; font-size: 11px; border: 1px solid transparent; letter-spacing: 0.3px; display: inline-block; }
+  .badge-pub { background: rgba(16,185,129,0.08); color: #059669; border-color: rgba(16,185,129,0.15); }
+  .badge-rej { background: rgba(239,68,68,0.08); color: #dc2626; border-color: rgba(239,68,68,0.15); }
+  .badge-ai { background: rgba(245,158,11,0.08); color: #d97706; border-color: rgba(245,158,11,0.15); }
+  .badge-blue { background: rgba(14,165,233,0.08); color: #0284c7; border-color: rgba(14,165,233,0.15); }
+  .badge-purple { background: rgba(139,92,246,0.08); color: #7c3aed; border-color: rgba(139,92,246,0.15); }
+
+  /* Conv Card (Pending Review) */
   .conv-card {
-    background: var(--card-glass); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 18px 20px; margin-bottom: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-    transition: border-color 0.2s, box-shadow 0.2s;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    border: 1px solid rgba(0,0,0,0.035);
+    transition: all 0.25s ease;
   }
-  .conv-card:hover { border-color: rgba(255,255,255,0.18); box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
-  .conv-card.hi { border-left: 4px solid var(--dan); }
-  .conv-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-  .who-wrap { display: flex; align-items: center; gap: 10px; }
-  .avatar {
-    width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #334155, #475569);
-    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff;
-  }
-  .who-info .title { font-size: 15px; font-weight: 600; color: var(--txt); }
-  .who-info .sub-t { font-size: 12px; color: var(--mut); margin-top: 2px; }
-  .hi-badge {
-    background: var(--dan-bg); color: var(--dan); border: 1px solid rgba(244, 63, 94, 0.3);
-    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;
+  .conv-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.04); transform: translateY(-1px); }
+  .conv-card.hi { border-left: 5px solid #ef4444; }
+
+  .avatar-circle {
+    width: 42px; height: 42px; border-radius: 14px; background: #111; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
   }
 
-  /* Quotes & Reasons */
   .quote-box {
-    background: rgba(15, 23, 42, 0.6); border-left: 3px solid var(--acc);
-    border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 13px; color: #cbd5e1;
-    margin-bottom: 10px; line-height: 1.5; white-space: pre-wrap;
+    background: #f8fafc; border-left: 4px solid #111;
+    border-radius: 0 14px 14px 0; padding: 14px 18px; font-size: 14px; color: #1e293b;
+    margin: 14px 0; line-height: 1.6; white-space: pre-wrap; font-weight: 500;
   }
   .reason-box {
-    background: var(--warn-bg); border: 1px solid rgba(245, 158, 11, 0.25);
-    border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #fbbf24;
-    margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+    background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 12px; padding: 10px 14px; font-size: 13px; color: #b45309;
+    margin-bottom: 14px; line-height: 1.5; font-weight: 500;
   }
 
-  /* Draft Editor */
-  .editor-wrap { margin-top: 12px; background: rgba(10, 15, 26, 0.6); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
-  .editor-label { font-size: 12px; font-weight: 500; color: var(--mut); margin-bottom: 6px; display: flex; justify-content: space-between; }
-  .editor-wrap textarea {
-    width: 100%; min-height: 56px; background: transparent; border: 0; outline: 0;
-    color: var(--txt); font-size: 13px; line-height: 1.5; resize: vertical;
-    font-family: inherit;
+  /* Quick Chip Buttons */
+  .chips-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .chip-btn {
+    background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 16px;
+    padding: 5px 12px; font-size: 12px; font-weight: 600; color: #475569;
+    cursor: pointer; transition: all 0.15s ease;
   }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); }
-  .chip {
-    background: #1e293b; border: 1px solid var(--border); border-radius: 6px;
-    padding: 3px 8px; font-size: 11px; color: var(--mut); cursor: pointer; transition: all 0.15s;
-  }
-  .chip:hover { background: #334155; color: #fff; border-color: var(--acc); }
+  .chip-btn:hover { background: #111; color: #fff; border-color: #111; transform: translateY(-1px); }
 
-  /* Action Buttons */
-  .action-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
-  .btn {
-    border: 0; border-radius: 8px; padding: 8px 15px; font-size: 13px; font-weight: 500;
-    cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;
-    text-decoration: none; color: #fff;
+  /* Reply Text Box */
+  .reply-textarea {
+    width: 100%; border-radius: 14px; background: #f8fafc; border: 1.5px solid #e2e8f0;
+    padding: 12px 16px; font-size: 14px; color: #111; outline: none; transition: all 0.2s;
+    min-height: 75px; resize: vertical; font-family: inherit;
   }
-  .btn:hover { transform: translateY(-1px); }
-  .btn:active { transform: translateY(0); }
-  .btn-primary { background: linear-gradient(135deg, #0284c7, #0369a1); box-shadow: 0 2px 10px rgba(2,132,199,0.3); }
-  .btn-primary:hover { background: linear-gradient(135deg, #0369a1, #075985); }
-  .btn-wechat { background: linear-gradient(135deg, #059669, #047857); box-shadow: 0 2px 10px rgba(5,150,105,0.25); }
-  .btn-wechat:hover { background: linear-gradient(135deg, #047857, #065f46); }
-  .btn-resume { background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 2px 10px rgba(79,70,229,0.25); }
-  .btn-resume:hover { background: linear-gradient(135deg, #4338ca, #3730a3); }
-  .btn-purple { background: linear-gradient(135deg, #9333ea, #7e22ce); box-shadow: 0 2px 10px rgba(147,51,234,0.25); }
-  .btn-purple:hover { background: linear-gradient(135deg, #7e22ce, #6b21a8); }
-  .btn-done { background: linear-gradient(135deg, #0d9488, #0f766e); box-shadow: 0 2px 10px rgba(13,148,136,0.25); }
-  .btn-done:hover { background: linear-gradient(135deg, #0f766e, #115e59); }
-  .btn-ghost { background: #1e293b; color: var(--mut); border: 1px solid var(--border); }
-  .btn-ghost:hover { background: #334155; color: var(--txt); }
+  .reply-textarea:focus { background: #fff; border-color: #111; box-shadow: 0 6px 20px rgba(0,0,0,0.04); }
 
-  /* Toast & Notification */
-  #toastBox {
-    position: fixed; top: 24px; right: 24px; z-index: 9999;
-    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  /* Buttons */
+  .btn-black {
+    background: #111; color: #fff; border: none; border-radius: 16px;
+    padding: 10px 20px; font-weight: 700; font-size: 13px; transition: 0.2s;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12); display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
   }
-  .toast {
-    background: #1e293b; border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 18px; color: #fff; font-size: 13px; font-weight: 500;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5); pointer-events: auto;
-    animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); display: flex; align-items: center; gap: 8px;
-  }
-  .toast.success { border-color: var(--ok); background: #064e3b; }
-  .toast.info { border-color: var(--acc); background: #0c4a6e; }
-  .toast.error { border-color: var(--dan); background: #881337; }
-  @keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+  .btn-black:hover { background: #262626; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.16); color: #fff; }
+  .btn-black:active { transform: scale(0.97); }
 
-  /* Ledger Stream */
-  .ledger-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
-  .search-input {
-    background: #0f172a; border: 1px solid var(--border); border-radius: 8px;
-    padding: 8px 12px; color: var(--txt); font-size: 13px; width: 260px; outline: 0;
+  .btn-action-wechat {
+    background: #07c160; color: #fff; border: none; border-radius: 16px;
+    padding: 10px 18px; font-weight: 700; font-size: 13px; transition: 0.2s;
+    box-shadow: 0 4px 12px rgba(7, 193, 96, 0.25); display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
   }
-  .search-input:focus { border-color: var(--acc); }
-  .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn-action-wechat:hover { background: #06ad56; transform: translateY(-1px); color: #fff; }
+  .btn-action-wechat:active { transform: scale(0.97); }
+
+  .btn-action-resume {
+    background: #8b5cf6; color: #fff; border: none; border-radius: 16px;
+    padding: 10px 18px; font-weight: 700; font-size: 13px; transition: 0.2s;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25); display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .btn-action-resume:hover { background: #7c3aed; transform: translateY(-1px); color: #fff; }
+  .btn-action-resume:active { transform: scale(0.97); }
+
+  .btn-action-light {
+    background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 16px;
+    padding: 10px 16px; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-action-light:hover { background: #e2e8f0; color: #111; }
+  .btn-action-light:active { transform: scale(0.97); }
+
+  .btn-action-nuke {
+    background: #fee2e2; color: #ef4444; border: none; border-radius: 16px;
+    padding: 10px 16px; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-action-nuke:hover { background: #ef4444; color: #fff; box-shadow: 0 4px 12px rgba(239,68,68,0.25); }
+  .btn-action-nuke:active { transform: scale(0.97); }
+
+  /* Settings Blocks */
+  .settings-block {
+    background: #fafafa; border: 1px solid rgba(0,0,0,0.04);
+    border-radius: 18px; padding: 24px; margin-bottom: 20px;
+  }
+  .settings-block h6 {
+    font-weight: 800; font-size: 14px; margin-bottom: 14px; color: #111;
+    border-left: 4px solid #111; padding-left: 10px; line-height: 1.3;
+  }
+  .settings-block label {
+    font-size: 12px; font-weight: 600; color: #64748b; margin: 10px 0 5px; display: block;
+  }
+  .settings-block input[type=text], .settings-block input[type=password], .settings-block select, .settings-block textarea {
+    width: 100%; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px;
+    padding: 10px 14px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s; color: #111;
+  }
+  .settings-block input[type=text]:focus, .settings-block input[type=password]:focus, .settings-block select:focus, .settings-block textarea:focus {
+    border-color: #111; box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  }
+  .settings-block textarea { min-height: 60px; resize: vertical; }
+
+  /* App Toast */
+  .app-toast {
+    position: fixed; top: -100px; left: 50%; transform: translateX(-50%);
+    background: rgba(17,17,17,0.95); color: #fff; padding: 14px 28px;
+    border-radius: 30px; font-size: 14px; font-weight: 800; z-index: 99999;
+    transition: top 0.4s cubic-bezier(0.32, 0.72, 0, 1.2);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.15); pointer-events: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .app-toast.show { top: 30px; }
+
+  /* Filter Pills */
+  .filter-pills { display: flex; gap: 8px; flex-wrap: wrap; }
   .filter-pill {
-    background: #1e293b; border: 1px solid var(--border); border-radius: 6px;
-    padding: 5px 11px; font-size: 12px; color: var(--mut); cursor: pointer; transition: all 0.15s;
+    background: #fff; border: 1.5px solid #e2e8f0; border-radius: 20px;
+    padding: 6px 15px; font-size: 12px; font-weight: 700; color: #64748b;
+    cursor: pointer; transition: all 0.2s; user-select: none;
   }
-  .filter-pill:hover { background: #334155; color: #fff; }
-  .filter-pill.active { background: var(--acc); color: #000; font-weight: 600; border-color: var(--acc); }
-
-  .ledger-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--card-glass); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .ledger-table th { background: #131d2e; text-align: left; padding: 11px 14px; font-size: 12px; color: var(--mut); font-weight: 600; border-bottom: 1px solid var(--border); }
-  .ledger-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--mut); }
-  .ledger-table tr:hover td { background: rgba(255,255,255,0.02); color: var(--txt); }
-  .tag-act { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 11px; font-weight: 600; }
-  .tag-reply { background: var(--acc-glow); color: var(--acc); }
-  .tag-wechat { background: var(--wechat-bg); color: var(--wechat); }
-  .tag-resume { background: var(--purple-bg); color: var(--purple); }
-  .tag-gate { background: var(--warn-bg); color: var(--warn); }
-  .tag-alert { background: var(--dan-bg); color: var(--dan); }
-  .tag-other { background: #1e293b; color: var(--mut); }
-
-  /* Settings Panel */
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } .navbar { flex-direction: column; gap: 12px; align-items: stretch; } .nav-right { justify-content: space-between; } }
-  .panel { background: var(--card-glass); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
-  .panel h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
-  .panel label { display: block; font-size: 12px; font-weight: 500; color: var(--mut); margin: 12px 0 5px; }
-  .panel input[type=text], .panel input[type=password], .panel select, .panel textarea {
-    width: 100%; background: #0b1120; color: var(--txt); border: 1px solid var(--border);
-    border-radius: 8px; padding: 9px 12px; font-size: 13px; font-family: inherit; outline: 0; transition: border-color 0.2s;
-  }
-  .panel input[type=text]:focus, .panel input[type=password]:focus, .panel select:focus, .panel textarea:focus { border-color: var(--acc); }
-  .panel textarea { min-height: 70px; resize: vertical; }
-
-  /* Spinner */
-  .spinner {
-    width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%;
-    border-top-color: #fff; animation: spin 0.6s linear infinite; display: inline-block; vertical-align: middle;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .filter-pill:hover { background: #f8fafc; color: #111; border-color: #cbd5e1; }
+  .filter-pill.active { background: #111; color: #fff; border-color: #111; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <!-- Top Navbar -->
-  <header class="navbar">
-    <div class="brand">
-      <div class="brand-icon">⚡</div>
-      <div class="brand-text">
-        <h1>BOSS求职守护 · 审批台</h1>
-        <div class="status-line">
-          <span id="guardPill" class="status-pill ok"><span class="dot dot-ok"></span> ● 守护运行中</span>
-          <span>·</span>
-          <span id="sub">正在同步…</span>
-        </div>
+<!-- Top Drop Floating Pill Toast -->
+<div id="appToast" class="app-toast"></div>
+<div id="toastBox" style="display:none"></div>
+
+<!-- Top Sticky Navbar -->
+<header class="admin-header">
+  <div class="d-flex align-items-center">
+    <div class="logo-squircle">⚡</div>
+    <div class="brand-text">
+      <h1>BOSS求职守护 · 审批台</h1>
+      <div class="status-line">
+        <span id="guardPill" class="soft-badge badge-pub"><span class="pulse-dot dot-green"></span> 守护运行中</span>
+        <span>·</span>
+        <span id="sub">正在同步…</span>
       </div>
     </div>
-    <div class="nav-right">
-      <nav class="tabs">
-        <button class="tab-btn active" data-tab="pending" onclick="switchTab('pending')">
-          📋 待办审批 <span id="pendingBadge" class="badge" style="display:none">0</span>
-        </button>
-        <button class="tab-btn" data-tab="ledger" onclick="switchTab('ledger')">
-          📜 实时台账
-        </button>
-        <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">
-          ⚙️ 系统设置
-        </button>
-      </nav>
-      <button class="btn-refresh" onclick="load(true)">🔄 刷新</button>
-    </div>
-  </header>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <button class="btn-black" style="padding:9px 20px;font-size:13px" onclick="load(true)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      刷新数据
+    </button>
+  </div>
+</header>
 
-  <!-- KPI Top Cards -->
-  <section class="stats" id="stats">
+<div class="wrap">
+  <!-- Dynamic Island Capsule Navigation -->
+  <div class="island-nav-row" id="adminTabsIsland">
+    <div class="island-capsule active" data-tab="pending" onclick="switchTab('pending')">
+      <svg class="island-svg" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"></path></svg>
+      <span class="capsule-text">待办审批</span>
+      <span id="pendingBadge" class="capsule-badge" style="display:none">0</span>
+    </div>
+    <div class="island-capsule" data-tab="ledger" onclick="switchTab('ledger')">
+      <svg class="island-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      <span class="capsule-text">实时台账</span>
+    </div>
+    <div class="island-capsule" data-tab="settings" onclick="switchTab('settings')">
+      <svg class="island-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      <span class="capsule-text">系统设置</span>
+    </div>
+  </div>
+
+  <!-- KPI Statistics Grid -->
+  <section class="stats-grid" id="stats">
     <div class="stat-card">
-      <div class="label"><span>待处理会话</span><span>📋</span></div>
-      <div class="val c-dan" id="statPending">0</div>
-      <div class="hint">需人工审核干预</div>
+      <div class="stat-label"><span>待处理会话</span><span>📋</span></div>
+      <div class="stat-val c-dan" id="statPending">0</div>
+      <div class="stat-hint">需人工审核干预</div>
     </div>
     <div class="stat-card">
-      <div class="label"><span>今日实发回复</span><span>💬</span></div>
-      <div class="val c-ok" id="statTodayReplied">0</div>
-      <div class="hint">拟人高斯发出</div>
+      <div class="stat-label"><span>今日实发回复</span><span>💬</span></div>
+      <div class="stat-val c-ok" id="statTodayReplied">0</div>
+      <div class="stat-hint">拟人高斯发出</div>
     </div>
     <div class="stat-card">
-      <div class="label"><span>今日巡检扫描</span><span>🔍</span></div>
-      <div class="val c-acc" id="statTodayScanned">0</div>
-      <div class="hint">消息中心雷达</div>
+      <div class="stat-label"><span>今日巡检扫描</span><span>🔍</span></div>
+      <div class="stat-val c-acc" id="statTodayScanned">0</div>
+      <div class="stat-hint">消息中心雷达</div>
     </div>
     <div class="stat-card">
-      <div class="label"><span>高意向猎聘</span><span>🔥</span></div>
-      <div class="val c-warn" id="statHighIntent">0</div>
-      <div class="hint">面试/Offer信号</div>
+      <div class="stat-label"><span>高意向猎聘</span><span>🔥</span></div>
+      <div class="stat-val c-warn" id="statHighIntent">0</div>
+      <div class="stat-hint">面试/Offer信号</div>
     </div>
     <div class="stat-card">
-      <div class="label"><span>累计安全回复</span><span>🛡️</span></div>
-      <div class="val" id="statRepliedTotal">0</div>
-      <div class="hint">零封号留痕</div>
+      <div class="stat-label"><span>累计安全回复</span><span>🛡️</span></div>
+      <div class="stat-val" id="statRepliedTotal">0</div>
+      <div class="stat-hint">零封号留痕</div>
     </div>
   </section>
 
   <!-- Tab 1: 待办审批 -->
   <main id="tab-pending" class="tab-content active">
-    <div class="section-title">📋 待人工决策（needs_human）</div>
-    <div id="pending">加载中…</div>
-    
-    <div style="margin-top:24px">
+    <div class="panel-card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0 d-flex align-items-center">
+          <svg class="title-icon red" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          待人工决策（needs_human）
+        </h5>
+        <span class="text-muted" style="font-size:12px;font-weight:500">优先处理触发安全门禁与高意向邀约的会话</span>
+      </div>
+      <div id="pending">加载中…</div>
+    </div>
+    <div class="panel-card">
       <details style="cursor:pointer;color:var(--mut);font-size:13px" id="resolvedBox">
-        <summary style="padding:8px 0;font-weight:500">📁 查看近期已处理会话记录 (Recently Handled)</summary>
-        <div id="resolvedList" style="margin-top:8px;background:var(--card-glass);border:1px solid var(--border);border-radius:10px;padding:12px 16px"></div>
+        <summary style="padding:4px 0;font-weight:700;color:var(--txt)">📁 查看近期已处理会话记录 (Recently Handled)</summary>
+        <div id="resolvedList" style="margin-top:12px;background:#f8fafc;border:1px solid rgba(0,0,0,0.04);border-radius:14px;padding:14px 18px"></div>
       </details>
     </div>
   </main>
 
   <!-- Tab 2: 实时台账 -->
   <main id="tab-ledger" class="tab-content">
-    <div class="ledger-bar">
-      <div class="filter-pills">
-        <span class="filter-pill active" data-filter="all" onclick="filterLedgerChip('all')">全部流水</span>
-        <span class="filter-pill" data-filter="reply" onclick="filterLedgerChip('reply')">智能回复</span>
-        <span class="filter-pill" data-filter="wechat" onclick="filterLedgerChip('wechat')">交换微信</span>
-        <span class="filter-pill" data-filter="resume" onclick="filterLedgerChip('resume')">发送简历</span>
-        <span class="filter-pill" data-filter="alert" onclick="filterLedgerChip('alert')">转人工告警</span>
-        <span class="filter-pill" data-filter="gate" onclick="filterLedgerChip('gate')">门禁拦截</span>
+    <div class="panel-card">
+      <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-4">
+        <div class="filter-pills">
+          <span class="filter-pill active" data-filter="all" onclick="filterLedgerChip('all')">全部流水</span>
+          <span class="filter-pill" data-filter="reply" onclick="filterLedgerChip('reply')">智能回复</span>
+          <span class="filter-pill" data-filter="wechat" onclick="filterLedgerChip('wechat')">交换微信</span>
+          <span class="filter-pill" data-filter="resume" onclick="filterLedgerChip('resume')">发送简历</span>
+          <span class="filter-pill" data-filter="alert" onclick="filterLedgerChip('alert')">转人工告警</span>
+          <span class="filter-pill" data-filter="gate" onclick="filterLedgerChip('gate')">门禁拦截</span>
+        </div>
+        <div class="admin-search-group" style="max-width:340px">
+          <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="快速搜索公司、动作或状态…" oninput="renderLedger()">
+        </div>
       </div>
-      <input type="text" id="ledgerFilter" class="search-input" placeholder="🔍 快速搜索公司或状态…" oninput="renderLedger()">
-    </div>
-    <div style="overflow-x:auto">
-      <table class="ledger-table" id="ledger">
-        <thead>
-          <tr>
-            <th style="width:140px">时间</th>
-            <th style="width:110px">动作</th>
-            <th style="width:200px">目标 / 会话</th>
-            <th>状态 / 归因 / 回复摘要</th>
-          </tr>
-        </thead>
-        <tbody id="ledgerBody"></tbody>
-      </table>
+      <div class="table-responsive">
+        <table class="table table-custom align-middle" id="ledger">
+          <thead>
+            <tr>
+              <th style="width:160px">时间</th>
+              <th style="width:130px">动作</th>
+              <th style="width:220px">目标 / 会话</th>
+              <th>状态 / 归因 / 回复摘要</th>
+            </tr>
+          </thead>
+          <tbody id="ledgerBody"></tbody>
+        </table>
+      </div>
     </div>
   </main>
 
   <!-- Tab 3: 系统设置 -->
   <main id="tab-settings" class="tab-content">
     <div id="settingsBox">
-      <div class="grid-2">
-        <div>
-          <!-- LLM Card -->
-          <div class="panel">
-            <h2>🔑 大模型 LLM 配置</h2>
-            <div style="font-size:12px;color:var(--mut);margin-bottom:10px" id="llmMeta">加载中…</div>
-            <label>API Key（DPAPI 本机加密落盘，安全脱敏）</label>
-            <input type="password" id="inKey" placeholder="留空 = 保持当前密钥不修改">
-            <label>Base URL 端点</label>
-            <input type="text" id="inBase">
-            <label>模型名称</label>
-            <input type="text" id="inModel">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:14px">
-              <input type="checkbox" id="inLLMMatch" style="width:auto"> 启用 LLM 智能匹配（岗位打分，关闭则回退关键词词表）
-            </label>
-            <div class="action-bar" style="margin-top:16px">
-              <button class="btn btn-primary" onclick="saveSettings()">保存配置</button>
-              <button class="btn btn-ghost" onclick="testLLM()">测试连接</button>
-              <span id="resLLM" style="font-size:12px;margin-left:8px"></span>
+      <div class="row g-4">
+        <!-- Col 1 -->
+        <div class="col-lg-6">
+          <!-- LLM Settings -->
+          <div class="panel-card">
+            <h5 class="fw-bold mb-3 d-flex align-items-center">
+              <svg class="title-icon blue" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              大模型 LLM 配置
+            </h5>
+            <div class="settings-block">
+              <div style="font-size:12px;color:var(--mut);margin-bottom:12px" id="llmMeta">加载中…</div>
+              <label>API Key（DPAPI 本机加密落盘，安全脱敏）</label>
+              <input type="password" id="inKey" placeholder="留空 = 保持当前密钥不修改">
+              <label>Base URL 端点</label>
+              <input type="text" id="inBase">
+              <label>模型名称</label>
+              <input type="text" id="inModel">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:14px">
+                <input type="checkbox" id="inLLMMatch" style="width:auto"> 启用 LLM 智能匹配（岗位打分，关闭则回退关键词词表）
+              </label>
+              <div class="d-flex align-items-center gap-3 mt-4">
+                <button class="btn-black" onclick="saveSettings()">保存配置</button>
+                <button class="btn-action-light" onclick="testLLM()">测试连接</button>
+                <span id="resLLM" style="font-size:12px"></span>
+              </div>
             </div>
           </div>
 
           <!-- Prefs Card -->
-          <div class="panel">
-            <h2>🎯 求职偏好（留空 = 大模型基于简历自主决断）</h2>
-            <label>向往岗位（逗号/换行分隔，高亮优先沟通）</label>
-            <textarea id="inWantJobs"></textarea>
-            <label>排斥岗位（命中黑名单直接过滤，不耗 Token）</label>
-            <textarea id="inAvoidJobs"></textarea>
-            <div class="grid-2" style="margin-top:4px">
-              <div><label>向往城市</label><textarea id="inWantCities"></textarea></div>
-              <div><label>排斥城市</label><textarea id="inAvoidCities"></textarea></div>
+          <div class="panel-card">
+            <h5 class="fw-bold mb-3 d-flex align-items-center">
+              <svg class="title-icon green" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              求职偏好设置
+            </h5>
+            <div class="settings-block">
+              <div style="font-size:12px;color:var(--mut);margin-bottom:10px">留空 = 大模型基于简历与岗位上下文自主决断</div>
+              <label>向往岗位（逗号/换行分隔，高亮优先沟通）</label>
+              <textarea id="inWantJobs"></textarea>
+              <label>排斥岗位（命中黑名单直接过滤，不耗 Token）</label>
+              <textarea id="inAvoidJobs"></textarea>
+              <div class="row g-2 mt-1">
+                <div class="col-6"><label>向往城市</label><textarea id="inWantCities"></textarea></div>
+                <div class="col-6"><label>排斥城市</label><textarea id="inAvoidCities"></textarea></div>
+              </div>
+              <div class="d-flex align-items-center gap-3 mt-4">
+                <button class="btn-black" onclick="savePrefs()">保存偏好</button>
+                <span id="resPrefs" style="font-size:12px"></span>
+              </div>
+              <div id="effInfo" style="font-size:12px;color:var(--mut);margin-top:14px;line-height:1.6"></div>
             </div>
-            <div class="action-bar" style="margin-top:16px">
-              <button class="btn btn-primary" onclick="savePrefs()">保存偏好</button>
-              <span id="resPrefs" style="font-size:12px;margin-left:8px"></span>
-            </div>
-            <div id="effInfo" style="font-size:12px;color:var(--mut);margin-top:12px;line-height:1.6"></div>
           </div>
         </div>
 
-        <div>
+        <!-- Col 2 -->
+        <div class="col-lg-6">
           <!-- Profile Card -->
-          <div class="panel">
-            <h2>📄 简历与画像中心</h2>
-            <div style="font-size:12px;color:var(--mut);margin-bottom:12px" id="profMeta">加载中…</div>
-            <label>上传简历文件（支持 .pdf / .docx / .txt / .md，≤5MB）</label>
-            <input type="file" id="inFile" accept=".pdf,.docx,.txt,.md" style="color:var(--mut);font-size:12px">
-            <label style="margin-top:14px">或直接粘贴简历文本</label>
-            <textarea id="inResume" placeholder="在此粘贴简历正文文本…" style="min-height:160px"></textarea>
-            <div class="action-bar" style="margin-top:16px">
-              <button class="btn btn-primary" onclick="saveProfile()">保存并由 AI 提炼画像</button>
-              <span id="resProfile" style="font-size:12px;margin-left:8px"></span>
+          <div class="panel-card">
+            <h5 class="fw-bold mb-3 d-flex align-items-center">
+              <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              简历与画像中心
+            </h5>
+            <div class="settings-block">
+              <div style="font-size:12px;color:var(--mut);margin-bottom:12px" id="profMeta">加载中…</div>
+              <label>上传简历文件（支持 .pdf / .docx / .txt / .md，≤5MB）</label>
+              <input type="file" id="inFile" accept=".pdf,.docx,.txt,.md" style="color:var(--mut);font-size:12px;padding:8px">
+              <label style="margin-top:14px">或直接粘贴简历文本</label>
+              <textarea id="inResume" placeholder="在此粘贴简历正文文本…" style="min-height:130px"></textarea>
+              <div class="d-flex align-items-center gap-3 mt-4">
+                <button class="btn-black" onclick="saveProfile()">保存并由 AI 提炼画像</button>
+                <span id="resProfile" style="font-size:12px"></span>
+              </div>
             </div>
           </div>
 
           <!-- Privacy & Automation Card -->
-          <div class="panel">
-            <h2>🛡️ 隐私保护与自动化权限</h2>
-            <div style="font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5">
-              自主决定是否允许系统全自动执行敏感物理动作；内置 Prompt 防套话铁律与出信前物理正则拦截门禁，防范诱导套取联系方式。
-            </div>
-            <div class="grid-2" style="margin-top:8px">
-              <div>
-                <label>换微信权限</label>
-                <select id="inPolicyWechat">
-                  <option value="auto">全自动 (auto)</option>
+          <div class="panel-card">
+            <h5 class="fw-bold mb-3 d-flex align-items-center">
+              <svg class="title-icon red" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              隐私保护与自动化权限
+            </h5>
+            <div class="settings-block">
+              <div style="font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5">
+                自主决定敏感物理动作执行级别；出信前物理正则拦截门禁，严禁泄露联系方式。
+              </div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label>换微信权限</label>
+                  <select id="inPolicyWechat">
+                    <option value="auto">全自动 (auto)</option>
+                    <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+                    <option value="manual">必须人工审批 (manual)</option>
+                    <option value="disabled">禁用该动作 (disabled)</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label>发简历权限</label>
+                  <select id="inPolicyResume">
+                    <option value="auto">全自动 (auto)</option>
+                    <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+                    <option value="manual">必须人工审批 (manual)</option>
+                    <option value="disabled">禁用该动作 (disabled)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mt-2">
+                <label>换电话权限</label>
+                <select id="inPolicyPhone">
+                  <option value="manual">必须人工审批 (manual，推荐)</option>
                   <option value="high_intent_only">仅高意向自动 (high_intent)</option>
-                  <option value="manual">必须人工审批 (manual)</option>
+                  <option value="auto">全自动 (auto)</option>
                   <option value="disabled">禁用该动作 (disabled)</option>
                 </select>
               </div>
-              <div>
-                <label>发简历权限</label>
-                <select id="inPolicyResume">
-                  <option value="auto">全自动 (auto)</option>
-                  <option value="high_intent_only">仅高意向自动 (high_intent)</option>
-                  <option value="manual">必须人工审批 (manual)</option>
-                  <option value="disabled">禁用该动作 (disabled)</option>
-                </select>
+              <div class="row g-2 mt-1">
+                <div class="col-6">
+                  <label>个人真实手机号（配置后防泄密物理锁死）</label>
+                  <input type="text" id="inContactPhone" placeholder="例如：13800000000">
+                </div>
+                <div class="col-6">
+                  <label>个人真实微信号（配置后防泄密物理锁死）</label>
+                  <input type="text" id="inContactWechat" placeholder="例如：wxid_xxxx">
+                </div>
               </div>
-            </div>
-            <div style="margin-top:8px">
-              <label>换电话权限</label>
-              <select id="inPolicyPhone">
-                <option value="manual">必须人工审批 (manual，推荐)</option>
-                <option value="high_intent_only">仅高意向自动 (high_intent)</option>
-                <option value="auto">全自动 (auto)</option>
-                <option value="disabled">禁用该动作 (disabled)</option>
-              </select>
-            </div>
-            <div class="grid-2" style="margin-top:8px">
-              <div>
-                <label>个人真实手机号（配置后防泄密物理锁死）</label>
-                <input type="text" id="inContactPhone" placeholder="例如：13800000000">
+              <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:12px;padding:12px 14px;font-size:12px;color:#dc2626;margin-top:14px;line-height:1.5">
+                🔒 <strong>防套话安全铁律</strong>：模型严禁在文本中吐出明文联系方式；若 HR 催促或诱导索要电话微信，系统仅允许引导官方交换。若模型被攻破输出明文信息，底层正则门禁将物理拦截并立即转人工告警。
               </div>
-              <div>
-                <label>个人真实微信号（配置后防泄密物理锁死）</label>
-                <input type="text" id="inContactWechat" placeholder="例如：wxid_xxxx">
+              <div class="d-flex align-items-center gap-3 mt-4">
+                <button class="btn-black" onclick="savePrivacyPolicy()">保存隐私权限设置</button>
+                <span id="resPrivacy" style="font-size:12px"></span>
               </div>
-            </div>
-            <div style="background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.25);border-radius:8px;padding:10px 12px;font-size:12px;color:#fda4af;margin-top:12px;line-height:1.5">
-              🔒 <strong>防套话安全铁律</strong>：模型严禁在文本中吐出明文联系方式；若 HR 催促或诱导索要电话微信，系统仅允许引导官方交换。若模型被攻破输出明文信息，底层正则门禁将物理拦截并立即转人工告警。
-            </div>
-            <div class="action-bar" style="margin-top:16px">
-              <button class="btn btn-primary" onclick="savePrivacyPolicy()">保存隐私权限设置</button>
-              <span id="resPrivacy" style="font-size:12px;margin-left:8px"></span>
             </div>
           </div>
 
           <!-- Browser Mode Card -->
-          <div class="panel">
-            <h2>🖥️ 浏览器后台运行设置</h2>
-            <div style="font-size:12px;color:var(--mut);margin-bottom:12px">
-              解决 BOSS 轮询时 Chrome 窗口时不时弹窗、置顶、抢占桌面输入焦点的问题。
-            </div>
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px;line-height:1.4">
-              <input type="checkbox" id="inBrowserSilent" style="width:auto;margin-top:3px">
-              <div>
-                <strong style="color:var(--txt)">静默后台巡检模式 (Silent Background Mode)</strong>
-                <div style="font-size:12px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行页面操作，绝不抢占前台键盘输入焦点与激活置顶。</div>
+          <div class="panel-card">
+            <h5 class="fw-bold mb-3 d-flex align-items-center">
+              <svg class="title-icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              浏览器后台运行设置
+            </h5>
+            <div class="settings-block">
+              <div style="font-size:12px;color:var(--mut);margin-bottom:12px">
+                解决 BOSS 轮询时 Chrome 窗口时不时弹窗、置顶、抢占桌面输入焦点的问题。
               </div>
-            </label>
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:14px;line-height:1.4">
-              <input type="checkbox" id="inBrowserMinimize" style="width:auto;margin-top:3px">
-              <div>
-                <strong style="color:var(--txt)">启动时窗口最小化 (Minimize On Start)</strong>
-                <div style="font-size:12px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏幕。</div>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px;line-height:1.4">
+                <input type="checkbox" id="inBrowserSilent" style="width:auto;margin-top:3px">
+                <div>
+                  <strong style="color:var(--txt)">静默后台巡检模式 (Silent Background Mode)</strong>
+                  <div style="font-size:12px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行页面操作，绝不抢占前台键盘输入焦点与激活置顶。</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:14px;line-height:1.4">
+                <input type="checkbox" id="inBrowserMinimize" style="width:auto;margin-top:3px">
+                <div>
+                  <strong style="color:var(--txt)">启动时窗口最小化 (Minimize On Start)</strong>
+                  <div style="font-size:12px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏幕。</div>
+                </div>
+              </label>
+              <div class="d-flex align-items-center gap-3 mt-4">
+                <button class="btn-black" onclick="saveBrowserSettings()">保存浏览器设置</button>
+                <span id="resBrowser" style="font-size:12px"></span>
               </div>
-            </label>
-            <div class="action-bar" style="margin-top:16px">
-              <button class="btn btn-primary" onclick="saveBrowserSettings()">保存浏览器设置</button>
-              <span id="resBrowser" style="font-size:12px;margin-left:8px"></span>
             </div>
           </div>
         </div>
@@ -789,9 +955,6 @@ PAGE = """<!DOCTYPE html>
     </div>
   </main>
 </div>
-
-<!-- Floating Toast Container -->
-<div id="toastBox"></div>
 
 <script>
 let TOKEN = new URLSearchParams(location.search).get('token') || '';
@@ -817,23 +980,32 @@ function esc(s) {
 }
 
 function showToast(msg, type = 'info') {
+  const pill = document.getElementById('appToast');
+  if (pill) {
+    const icon = type === 'success' ? '✅ ' : (type === 'error' ? '❌ ' : 'ℹ️ ');
+    pill.innerHTML = `<span>${icon}</span><span>${esc(msg)}</span>`;
+    pill.style.background = type === 'error' ? '#ef4444' : (type === 'success' ? '#111' : '#1e293b');
+    pill.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => {
+      pill.classList.remove('show');
+    }, 3200);
+  }
   const box = document.getElementById('toastBox');
-  if (!box) return;
-  const t = document.createElement('div');
-  t.className = 'toast ' + type;
-  const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
-  t.innerHTML = `<span>${icon}</span><span>${esc(msg)}</span>`;
-  box.appendChild(t);
-  setTimeout(() => {
-    t.style.opacity = '0';
-    t.style.transform = 'translateX(20px)';
-    t.style.transition = 'all 0.3s ease';
-    setTimeout(() => t.remove(), 300);
-  }, 3200);
+  if (box) {
+    const t = document.createElement('div');
+    t.className = 'toast ' + type;
+    t.innerHTML = `<span>${esc(msg)}</span>`;
+    box.appendChild(t);
+    setTimeout(() => t.remove(), 3200);
+  }
 }
 
 function switchTab(name) {
   currentTab = name;
+  document.querySelectorAll('.island-capsule').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === name);
+  });
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
   });
@@ -875,9 +1047,11 @@ async function load(isManual) {
     // 护栏状态
     const gp = document.getElementById('guardPill');
     if (d.guard.paused) {
-      gp.innerHTML = '<span class="dot dot-err"></span> ⛔ 风控熔断: ' + esc(d.guard.paused);
+      gp.className = 'soft-badge badge-rej';
+      gp.innerHTML = '<span class="pulse-dot dot-red"></span> ⛔ 风控熔断: ' + esc(d.guard.paused);
     } else {
-      gp.innerHTML = '<span class="dot dot-ok"></span> ● 守护运行中 (正常)';
+      gp.className = 'soft-badge badge-pub';
+      gp.innerHTML = '<span class="pulse-dot dot-green"></span> 守护运行中 (正常)';
     }
 
     // KPI 统计
@@ -908,84 +1082,87 @@ function renderPending() {
   const p = document.getElementById('pending');
   if (!pendingData.length) {
     p.innerHTML = `
-      <div class="empty-box">
-        <span class="empty-icon">🎉</span>
-        <h3 style="font-size:16px;color:#f8fafc;margin-bottom:6px">当前无待人工处理会话</h3>
-        <p style="font-size:13px;max-width:440px;margin:0 auto;line-height:1.6">求职守护智能引擎正在后台持续巡检，当遇到电话隐私红线、高意向邀约或决策边界时将自动呈现在此。</p>
+      <div class="empty-box" style="padding:40px 20px;text-align:center">
+        <span style="font-size:36px;display:block;margin-bottom:12px">🎉</span>
+        <h4 style="font-size:16px;font-weight:800;color:var(--txt);margin-bottom:6px">当前无待人工处理会话</h4>
+        <p style="font-size:13px;color:var(--mut);max-width:460px;margin:0 auto;line-height:1.6">求职守护智能引擎正在后台持续巡检，当遇到电话隐私红线、高意向邀约或决策边界时将自动呈现在此。</p>
       </div>`;
-  } else {
-    p.innerHTML = pendingData.map((c, i) => `
-      <div class="conv-card ${c.high_intent ? 'hi' : ''}">
-        <div class="conv-head">
-          <div class="who-wrap">
-            <div class="avatar">${esc((c.company || 'H').slice(0, 1))}</div>
-            <div class="who-info">
-              <div class="title">${esc(c.company)}</div>
-              <div class="sub-t">最后活跃：${esc(c.time || '刚刚')}</div>
-            </div>
-          </div>
+    return;
+  }
+  p.innerHTML = pendingData.map((c, i) => `
+    <div class="conv-card ${c.high_intent ? 'hi' : ''}">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="avatar-circle">${esc((c.company || 'H').slice(0, 1))}</div>
           <div>
-            ${c.high_intent ? '<span class="hi-badge">🔥 高意向邀约</span>' : ''}
+            <div style="font-size:16px;font-weight:800;color:var(--txt)">${esc(c.company)}</div>
+            <div style="font-size:12px;color:var(--mut);font-weight:500">最后活跃：${esc(c.time || '刚刚')}</div>
           </div>
         </div>
-
-        <div class="quote-box">
-          <div style="font-size:11px;color:var(--mut);margin-bottom:4px">💬 HR 最新消息</div>
-          <div>${c.last_msg ? esc(c.last_msg) : '<span style="color:var(--mut-dark)">（系统隐私拦截/对方发送联系方式，大模型已被门禁阻断，由人工接管）</span>'}</div>
-        </div>
-
-        <div class="reason-box">
-          <span>🛡️ 拦截原因：</span><span>${esc(c.reason || '大模型触发安全策略')}</span>
-        </div>
-
-        <div class="editor-wrap">
-          <div class="editor-label">
-            <span>✍️ 回复文案（可直接在此编辑，修改后一键发送）</span>
-            <span id="charCount${i}" style="color:var(--mut-dark);font-size:11px">已输入 ${(c.suggested || '').length} 字</span>
-          </div>
-          <textarea id="replyText${i}" oninput="document.getElementById('charCount${i}').textContent = '已输入 ' + this.value.length + ' 字'" placeholder="输入自定义回复文案…">${esc(c.suggested || '')}</textarea>
-          <div class="chips">
-            <span style="font-size:11px;color:var(--mut-dark);margin-right:4px;display:flex;align-items:center">快捷补齐:</span>
-            <span class="chip" onclick="addChip(${i},'方便加微信详细沟通吗？')">+ 加微信</span>
-            <span class="chip" onclick="addChip(${i},'稍后为您发送简历！')">+ 发简历</span>
-            <span class="chip" onclick="addChip(${i},'可随时配合线上初试')">+ 约初试</span>
-            <span class="chip" onclick="clearDraft(${i})">清空文案</span>
-          </div>
-        </div>
-
-        <div class="action-bar">
-          <button class="btn btn-primary" id="btnReply${i}" onclick="actReply(${i})">
-            <span>✈️ 发送回复</span>
-          </button>
-          <button class="btn btn-wechat" id="btnWx${i}" onclick="actWithText(${i},'exchange_wechat')">
-            <span>💬 换微信</span>
-          </button>
-          <button class="btn btn-resume" id="btnCv${i}" onclick="actWithText(${i},'send_resume')">
-            <span>📄 发简历</span>
-          </button>
-          <button class="btn btn-purple" id="btnAgree${i}" onclick="actWithText(${i},'agree_wechat')">
-            <span>🤝 同意换微信</span>
-          </button>
-          <button class="btn btn-done" id="btnDone${i}" onclick="act(${i},'mark_handled')" title="已在手机微信或BOSS端手动处理，直接标记为已完成消单">
-            <span>✅ 标记已处理</span>
-          </button>
-          <button class="btn btn-ghost" onclick="act(${i},'ignore')">
-            <span>✕ 忽略</span>
-          </button>
-          <div id="res${i}" style="margin-left:auto;font-size:12px;font-weight:500"></div>
+        <div>
+          ${c.high_intent ? '<span class="soft-badge badge-ai">🔥 高意向邀约</span>' : '<span class="soft-badge badge-pub">已拦截</span>'}
         </div>
       </div>
-    `).join('');
-  }
+
+      <div class="quote-box">
+        <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">💬 HR 最新消息</div>
+        <div>${c.last_msg ? esc(c.last_msg) : '<span style="color:var(--mut-dark)">（系统隐私拦截/对方发送联系方式，大模型已被门禁阻断，由人工接管）</span>'}</div>
+      </div>
+
+      <div class="reason-box">
+        <span>🛡️ 拦截原因：</span><span>${esc(c.reason || '大模型触发安全策略')}</span>
+      </div>
+
+      <div class="my-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span style="font-size:12px;font-weight:700;color:var(--txt)">✍️ 回复文案（可直接在此编辑，修改后一键发送）</span>
+          <span id="charCount${i}" style="color:var(--mut);font-size:11px">已输入 ${(c.suggested || '').length} 字</span>
+        </div>
+        <textarea id="replyText${i}" class="reply-textarea" oninput="document.getElementById('charCount${i}').textContent = '已输入 ' + this.value.length + ' 字'" placeholder="在此输入或微调自定义回复文案…">${esc(c.suggested || '')}</textarea>
+        <div class="chips-row">
+          <span style="font-size:11px;color:var(--mut);display:flex;align-items:center;font-weight:700;margin-right:2px">快捷补齐:</span>
+          <span class="chip-btn" onclick="addChip(${i},'方便加微信详细沟通吗？')">+ 加微信</span>
+          <span class="chip-btn" onclick="addChip(${i},'稍后为您发送简历！')">+ 发简历</span>
+          <span class="chip-btn" onclick="addChip(${i},'可随时配合线上初试')">+ 约初试</span>
+          <span class="chip-btn" onclick="clearDraft(${i})">清空文案</span>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap align-items-center gap-2 mt-3 pt-2" style="border-top:1px solid rgba(0,0,0,0.04)">
+        <button class="btn-black" id="btnReply${i}" onclick="actReply(${i})">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          发送回复
+        </button>
+        <button class="btn-action-wechat" id="btnWx${i}" onclick="actWithText(${i},'exchange_wechat')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          换微信
+        </button>
+        <button class="btn-action-resume" id="btnCv${i}" onclick="actWithText(${i},'send_resume')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          发简历
+        </button>
+        <button class="btn-action-light" id="btnAgree${i}" onclick="actWithText(${i},'agree_wechat')">
+          🤝 同意换微信
+        </button>
+        <button class="btn-action-light" id="btnDone${i}" onclick="act(${i},'mark_handled')" title="已在手机微信或BOSS端手动处理，直接标记为已完成消单">
+          ✅ 标记已处理
+        </button>
+        <button class="btn-action-nuke" onclick="act(${i},'ignore')">
+          ✕ 忽略
+        </button>
+        <div id="res${i}" style="margin-left:auto;font-size:12px;font-weight:700"></div>
+      </div>
+    </div>
+  `).join('');
 
   // 渲染近期已处理会话
   const rb = document.getElementById('resolvedList');
   if (rb) {
     if (!resolvedData.length) {
-      rb.innerHTML = '<div style="color:var(--mut-dark);font-size:12px;padding:8px 0">暂无近期处理记录</div>';
+      rb.innerHTML = '<div style="color:var(--mut-dark);font-size:12px;padding:4px 0">暂无近期处理记录</div>';
     } else {
       rb.innerHTML = resolvedData.map(r => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px">
+        <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid rgba(0,0,0,0.03);font-size:12px">
           <div><strong style="color:var(--txt)">${esc(r.company)}</strong> <span style="color:var(--mut)">(${esc(r.resolved_action || 'handled')})</span></div>
           <div style="color:var(--mut-dark)">${esc(r.resolved_time || '')}</div>
         </div>
@@ -1005,7 +1182,7 @@ async function actReply(i) {
     if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ 回复内容不能为空'; }
     return;
   }
-  if (btn) btn.innerHTML = '<span class="spinner"></span> 发送中…';
+  if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> 发送中…';
   if (el) { el.style.color = 'var(--acc)'; el.textContent = '正在通过 CDP 发送…'; }
   const body = { action: 'reply', company: c.company, text: text };
   try {
@@ -1020,7 +1197,7 @@ async function actReply(i) {
   } catch(e) {
     showToast('网络或执行异常: ' + e, 'error');
   } finally {
-    if (btn) btn.innerHTML = '<span>✈️ 发送回复</span>';
+    if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> 发送回复';
     setTimeout(() => load(false), 1200);
   }
 }
@@ -1118,18 +1295,18 @@ function renderLedger() {
   });
 
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--mut-dark)">无匹配台账流水</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-muted" style="font-size:13px">无匹配台账流水</td></tr>';
     return;
   }
 
-  tbody.innerHTML = filtered.slice(0, 40).map(r => {
-    let tagCls = 'tag-other';
+  tbody.innerHTML = filtered.slice(0, 50).map(r => {
+    let badgeCls = 'badge-blue';
     let actName = r.action;
-    if (r.action === 'reply') { tagCls = 'tag-reply'; actName = '智能回复'; }
-    else if (r.action.includes('wechat')) { tagCls = 'tag-wechat'; actName = '交换微信'; }
-    else if (r.action.includes('resume')) { tagCls = 'tag-resume'; actName = '发送简历'; }
-    else if (r.action.includes('alert')) { tagCls = 'tag-alert'; actName = '转人工告警'; }
-    else if (r.action.includes('gate')) { tagCls = 'tag-gate'; actName = '时间/门禁拦截'; }
+    if (r.action === 'reply') { badgeCls = 'badge-pub'; actName = '智能回复'; }
+    else if (r.action.includes('wechat')) { badgeCls = 'badge-pub'; actName = '交换微信'; }
+    else if (r.action.includes('resume')) { badgeCls = 'badge-purple'; actName = '发送简历'; }
+    else if (r.action.includes('alert')) { badgeCls = 'badge-rej'; actName = '转人工告警'; }
+    else if (r.action.includes('gate')) { badgeCls = 'badge-ai'; actName = '时间/门禁拦截'; }
 
     let stColor = 'var(--mut)';
     let st = r.status || '';
@@ -1139,10 +1316,10 @@ function renderLedger() {
 
     return `
       <tr>
-        <td style="white-space:nowrap;font-size:12px;color:var(--mut-dark)">${esc(r.ts)}</td>
-        <td><span class="tag-act ${tagCls}">${esc(actName)}</span></td>
-        <td style="font-weight:500;color:var(--txt)">${esc(r.company || '-')}</td>
-        <td style="color:${stColor}">${esc(st.slice(0, 50))}</td>
+        <td style="white-space:nowrap;font-size:12px;color:var(--mut);font-weight:600">${esc(r.ts)}</td>
+        <td><span class="soft-badge ${badgeCls}">${esc(actName)}</span></td>
+        <td style="font-weight:700;color:var(--txt)">${esc(r.company || '-')}</td>
+        <td style="color:${stColor};font-weight:500">${esc(st.slice(0, 60))}</td>
       </tr>
     `;
   }).join('');
