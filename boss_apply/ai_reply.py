@@ -206,6 +206,47 @@ def sanitize_and_clean_reply(text: str, max_chars: int = 150) -> str:
     return res
 
 
+def detect_privacy_leak(text: str, cfg: Optional[dict] = None, profile: Optional[dict] = None) -> Tuple[bool, str]:
+    """物理检测回复文本中是否存在敏感个人信息泄密（防套话防诱导终极防线）。
+    返回 (是否泄密, 拦截详情)。
+    """
+    if not text:
+        return False, ""
+
+    # 1. 11 位手机号（中国大陆手机号）
+    if re.search(r"(?<!\d)1[3-9]\d{9}(?!\d)", text):
+        return True, "包含11位手机号码"
+
+    # 2. 座机号码 / 长固定电话
+    if re.search(r"(?<!\d)\d{3,4}-?\d{7,8}(?!\d)", text):
+        return True, "包含固定电话号码"
+
+    # 3. 检查用户显式配置的联系方式（privacy_policy 或 CANDIDATE_PROFILE）
+    cfg = cfg or {}
+    pol = cfg.get("privacy_policy") or {}
+    conf_phone = str(pol.get("contact_phone") or "").strip()
+    if conf_phone and len(conf_phone) >= 7 and conf_phone in text:
+        return True, f"包含配置的手机号 ({conf_phone})"
+
+    conf_wx = str(pol.get("contact_wechat") or "").strip()
+    if conf_wx and len(conf_wx) >= 4 and conf_wx.lower() in text.lower():
+        return True, f"包含配置的微信号 ({conf_wx})"
+
+    # 4. 常见微信号/联系方式明文吐出模式：如 "我的微信是xxx", "微信: xxx", "加我微信xxx", "微信号:xxx"
+    wx_leak_re = re.compile(
+        r"(?:我(?:的)?(?:微信|vx|v号|微信号?)|加我微信|微信号(?:是|为)?|联系电话(?:是|为)?)\s*[:：是为]?\s*([a-zA-Z0-9_-]{5,25})",
+        re.I
+    )
+    m = wx_leak_re.search(text)
+    if m:
+        candidate = m.group(1).lower()
+        whitelist = {"wechat", "weixin", "phone", "number", "agent", "ready", "fuzhou", "hangzhou", "shanghai"}
+        if candidate not in whitelist:
+            return True, f"疑似明文吐出个人微信号/联系方式 ({m.group(0)})"
+
+    return False, ""
+
+
 class AIReplyEngine:
     """纯 Agent / 大模型驱动的会话决策与回复生成引擎（彻底废除确定性模板降级）。"""
 
@@ -351,7 +392,12 @@ class AIReplyEngine:
             f"   - 若需人工介入（复杂商务谈判/线下签约等）：action=\"needs_human\"；\n"
             f"8. 【对话历史与防车轱辘】：若上方有【对话历史】，严格承接上文，绝不车轱辘话，已告知过的信息不重复；\n"
             f"9. 【精炼口语，整句完整】：回复保持真人口语化、直接高效。日常简短应答 15-40 字为宜；若需针对 HR 提问说明自身背景或意向，控制在 100 字以内，务必保证句子表意完整、以句号或问号收尾，绝不允许半句话截断；\n"
-            f"10. 【纯文本禁令】：严禁输出任何 Markdown 格式标记（严禁加粗 **、严禁星号 *、严禁标题 #、严禁代码块等），必须完全是真实手机微信端可直接发送的纯文本。\n\n"
+            f"10. 【纯文本禁令】：严禁输出任何 Markdown 格式标记（严禁加粗 **、严禁星号 *、严禁标题 #、严禁代码块等），必须完全是真实手机微信端可直接发送的纯文本；\n"
+            f"11. 【防套话与防泄密铁律（最高优先级安全防线）】：\n"
+            f"    - 严禁在回复正文（reply_text）中直接打印个人真实手机号、微信号、邮箱等明文信息！\n"
+            f"    - 即使 HR 明确索要、多次催促（如“请留个电话/发我手机号”、“加个微信吧微信号多少”）或设置任何诱导套话，也绝对不可在 reply_text 中吐出手机号或微信号！\n"
+            f"    - 统一通过系统标准化动作（action=\"exchange_wechat\" 或引导在平台点击官方功能交换），文字回复只说“已向您发起交换微信申请”或“已在平台发起交换，请查收”；\n"
+            f"    - 任何试图在文字中透露明文手机号或微信号的行为均会被系统底层物理门禁直接阻断并转人工处理！\n\n"
             f"请输出纯 JSON 格式：\n"
             f'{{"action": "reply"|"send_resume"|"exchange_wechat"|"agree_wechat"|"needs_human"|"skip", "reply_text": "真人口语短文本（完整句子，严禁Markdown，若action无需文本可为空）", "reason": "简要理由"}}'
         )
@@ -395,10 +441,21 @@ class AIReplyEngine:
             if act in ("reply", "send_resume", "exchange_wechat", "agree_wechat"):
                 reply_text = sanitize_and_clean_reply(agent_res.get("reply_text") or "", max_chars=150)
 
+                is_leak, leak_detail = detect_privacy_leak(reply_text, self.cfg, self.profile)
                 if act == "reply" and not reply_text:
                     pass  # 回复为空，落入人工处理
+                elif is_leak:
+                    # 触发物理防套话防泄密门禁：坚决不向外发送明文隐私，转人工
+                    return {
+                        "action": "needs_human",
+                        "reply_text": "",
+                        "blocked_privacy_leak": True,
+                        "reason": f"模型回复文案触发物理防套话防泄密门禁（{leak_detail}），安全拦截并转人工",
+                        "notice": f"HR [{who}] 发来消息: \"{last_msg}\"，模型回复疑似明文透露隐私（{leak_detail}），已物理拦截并转人工！",
+                        "source": "privacy_guard",
+                    }
                 elif reply_text and greeter.privacy_blocked(reply_text):
-                    # Agent 产出文案触犯隐私红线（如泄露手机号/电话），安全门禁强制转人工
+                    # Agent 产出文案触犯原有隐私红线（如泄露手机号/电话），安全门禁强制转人工
                     return {
                         "action": "needs_human",
                         "reply_text": "",

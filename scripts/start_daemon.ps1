@@ -22,6 +22,7 @@ param(
     [switch]$Once,
     [switch]$Loop,
     [switch]$DryRun,
+    [switch]$Silent,
     [string]$ActiveHours = "",
     [double]$IntervalMin = 0.0,
     [double]$IntervalMax = 0.0
@@ -66,6 +67,28 @@ if (-not $chromeAlive) {
         exit 1
     }
 
+    # 读取配置确认是否使用最小化/静默模式
+    $isSilent = $Silent
+    try {
+        $cfgJsonPath = Join-Path $RepoRoot "config.json"
+        $localCfgJsonPath = Join-Path $RepoRoot "config.local.json"
+        $bMode = $null
+        if (Test-Path $localCfgJsonPath) {
+            $lData = Get-Content $localCfgJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($lData.browser) { $bMode = $lData.browser }
+        }
+        if (-not $bMode -and (Test-Path $cfgJsonPath)) {
+            $gData = Get-Content $cfgJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($gData.browser) { $bMode = $gData.browser }
+        }
+        if ($bMode -and ($bMode.minimize_on_start -or $bMode.silent_mode)) {
+            $isSilent = $true
+        }
+    } catch {}
+
+    $windowArg = if ($isSilent) { "--start-minimized" } else { "--start-maximized" }
+    $procWindowStyle = if ($isSilent) { "Minimized" } else { "Normal" }
+
     $chromeArgs = @(
         "--remote-debugging-port=9335",
         "--user-data-dir=$profilePath",
@@ -73,11 +96,14 @@ if (-not $chromeAlive) {
         "--no-default-browser-check",
         "--disable-background-networking",
         "--remote-allow-origins=*",
-        "--start-maximized",
+        $windowArg,
         "https://www.zhipin.com/web/geek/chat"
     )
 
-    Start-Process -FilePath $chromePath -ArgumentList $chromeArgs
+    Start-Process -FilePath $chromePath -ArgumentList $chromeArgs -WindowStyle $procWindowStyle
+    if ($isSilent) {
+        Write-Host "[静默模式] 浏览器已在后台最小化启动，避免抢占焦点与弹窗遮挡。" -ForegroundColor Magenta
+    }
     Write-Host "[拉起中] 等待 Chrome 9335 CDP 接口响应..." -ForegroundColor Cyan
 
     $maxWait = 15

@@ -1245,3 +1245,11 @@
 {"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:17:58", "scanned": 23, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 17:18:00"}
 {"action": "reply", "status": "ok", "company": "孟子权千广传媒招聘主管", "text_head": "您好！我在福州，强烈意向奔赴杭州全职到岗。我有数字媒体技术与直播GMV操盘经验，对这个岗位很有兴趣。初试建议先线上进行，方便您发一份详细的岗位JD吗？期待您的交流！", "conv": "17:19\n孟子权千广传媒招聘主管\n你好呀，还在找工作吗？有兴趣聊一下嘛~", "ts": "2026-09-09 17:22:43"}
 {"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:21:50", "scanned": 24, "candidates": 1, "replied": 1, "dry_run": false, "ts": "2026-09-09 17:22:43"}
+{"action": "job_fit_gate", "company": "华先生Talking猎头顾问", "job_title": "AI Agent产品经理 - 杭州/北京（猎头职位）", "allow": true, "attribution": "llm_match_pass", "hit_word": "", "verdict": "medium", "score": 15.0, "detail": "LLM: 方向契合杭州，但猎头薪资远超在校生门槛。", "ts": "2026-09-09 19:05:32"}
+{"action": "send_resume", "status": "no_verify", "company": "华先生Talking猎头顾问", "conv": "17:32\n华先生Talking猎头顾问\n👌", "text_sent": false, "ts": "2026-09-09 19:05:41"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 19:04:08", "scanned": 25, "candidates": 1, "replied": 0, "dry_run": false, "ts": "2026-09-09 19:05:41"}
+{"action": "reply", "status": "ok", "company": "华先生Talking猎头顾问", "text_head": "收到华先生，我马上整理简历发送给您。有合适机会请多帮忙。", "conv": "17:32\n华先生Talking猎头顾问\n👌", "ts": "2026-09-09 19:10:19"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 19:09:30", "scanned": 25, "candidates": 1, "replied": 1, "dry_run": false, "ts": "2026-09-09 19:10:19"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 19:14:59", "scanned": 25, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 19:15:00"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 19:18:41", "scanned": 25, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 19:18:42"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 19:23:01", "scanned": 25, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 19:23:03"}

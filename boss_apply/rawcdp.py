@@ -288,10 +288,30 @@ class RawCDP:
         finally:
             self.ws.settimeout(30)
 
-    def open_tab(self, url="about:blank"):
-        self.tab_id = self._send("Target.createTarget", {"url": url})["targetId"]
+    def open_tab(self, url="about:blank", background=True):
+        params = {"url": url}
+        if background:
+            params["background"] = True
+        self.tab_id = self._send("Target.createTarget", params)["targetId"]
         self.sid = self._send("Target.attachToTarget", {"targetId": self.tab_id, "flatten": True})["sessionId"]
         return self.tab_id
+
+    def minimize_window(self):
+        """尝试通过 CDP 将当前浏览器窗口最小化，避免抢占焦点或弹窗打扰用户。"""
+        try:
+            target_id = self.tab_id
+            if not target_id:
+                targets = self._send("Target.getTargets").get("targetInfos", [])
+                target_id = targets[0]["targetId"] if targets else None
+            if target_id:
+                win = self._send("Browser.getWindowForTarget", {"targetId": target_id})
+                win_id = win.get("windowId")
+                if win_id:
+                    self._send("Browser.setWindowBounds", {"windowId": win_id, "bounds": {"windowState": "minimized"}})
+                    return True
+        except Exception:
+            pass
+        return False
 
     def nav(self, url):
         return self._send("Page.navigate", {"url": url}, sid=self.sid)

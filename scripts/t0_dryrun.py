@@ -1292,6 +1292,104 @@ finally:
     flows._job_fit_gate = orig_fit
 
 
+print("== 29. 隐私权限自设、防套话门禁与浏览器后台静默运行 ==")
+
+# 29.1 动作权限策略 (check_privacy_permission)
+from scripts import daemon_auto_reply as _dar
+
+cfg_priv = {
+    "privacy_policy": {
+        "exchange_wechat": "high_intent_only",
+        "send_resume": "auto",
+        "exchange_phone": "manual",
+    }
+}
+# 发简历 auto 放行
+p_res_auto, _ = _dar.check_privacy_permission("send_resume", cfg_priv, hi_flag=False)
+check("发简历auto模式在普通意向下放行", p_res_auto is True)
+
+# 换微信 high_intent_only：非高意向拦截，高意向放行
+p_wx_low, reason_wx_low = _dar.check_privacy_permission("exchange_wechat", cfg_priv, hi_flag=False)
+check("换微信仅高意向模式在非高意向下拦截", p_wx_low is False and "仅高意向" in reason_wx_low)
+
+p_wx_hi, _ = _dar.check_privacy_permission("exchange_wechat", cfg_priv, hi_flag=True)
+check("换微信仅高意向模式在高意向下放行", p_wx_hi is True)
+
+# 换电话 manual：无论是否高意向均拦截转人工
+p_ph, reason_ph = _dar.check_privacy_permission("exchange_phone", cfg_priv, hi_flag=True)
+check("换电话manual模式无论是否高意向均拦截转人工", p_ph is False and "人工审批" in reason_ph)
+
+# 动作 disabled
+cfg_priv_dis = {"privacy_policy": {"exchange_wechat": "disabled"}}
+p_dis, r_dis = _dar.check_privacy_permission("exchange_wechat", cfg_priv_dis, hi_flag=True)
+check("动作disabled模式禁止自动执行", p_dis is False and "禁用" in r_dis)
+
+# 29.2 物理防套话与防泄密门禁 (detect_privacy_leak)
+from boss_apply import ai_reply as _air
+
+# 11 位手机号泄露拦截
+leak_phone, r_leak_phone = _air.detect_privacy_leak("我的手机号是13912345678，可以加我沟通")
+check("回复文案含11位手机号被物理门禁拦截", leak_phone is True and "手机号" in r_leak_phone)
+
+# 用户配置联系方式拦截
+cfg_user_contact = {
+    "privacy_policy": {
+        "contact_phone": "18888889999",
+        "contact_wechat": "zyt_creative_2026",
+    }
+}
+leak_cfg_wx, _ = _air.detect_privacy_leak("我的微信是zyt_creative_2026，随时联系", cfg=cfg_user_contact)
+check("回复文案包含配置的微信号被物理门禁拦截", leak_cfg_wx is True)
+
+# 常见微信号吐出模式拦截
+leak_pattern, _ = _air.detect_privacy_leak("加我微信abc_123456吧")
+check("回复文案包含常见微信吐出句式被物理门禁拦截", leak_pattern is True)
+
+# 正常业务短语与平台动作不误伤
+leak_safe, _ = _air.detect_privacy_leak("已向您发起交换微信申请，请查收")
+check("平台标准动作文案不被误伤", leak_safe is False)
+
+leak_biz, _ = _air.detect_privacy_leak("做过微信生态商业化与Agent开发")
+check("普通业务词微信生态不被误伤", leak_biz is False)
+
+# 29.3 RawCDP open_tab background=True 与 minimize_window
+import inspect
+sig = inspect.signature(_rc.RawCDP.open_tab)
+check("RawCDP.open_tab 默认 background=True", sig.parameters["background"].default is True)
+check("RawCDP 具备 minimize_window 方法", hasattr(_rc.RawCDP, "minimize_window"))
+
+# 29.4 Web 端 Settings API 读写 privacy_policy 与 browser
+from fastapi.testclient import TestClient
+client = TestClient(_aw.app)
+resp_get = client.get("/api/settings?token=boss-apply")
+check("Settings GET 包含 privacy_policy 节点", resp_get.status_code == 200 and "privacy_policy" in resp_get.json())
+check("Settings GET 包含 browser 节点", "browser" in resp_get.json())
+
+# 测试 POST 写入
+post_payload = {
+    "privacy_policy": {
+        "exchange_wechat": "high_intent_only",
+        "send_resume": "auto",
+        "exchange_phone": "manual",
+        "contact_phone": "13800138000",
+        "contact_wechat": "test_wx_id",
+    },
+    "browser": {
+        "silent_mode": True,
+        "minimize_on_start": True,
+    }
+}
+resp_post = client.post("/api/settings?token=boss-apply", json=post_payload)
+check("Settings POST 成功更新权限与浏览器设置", resp_post.status_code == 200 and resp_post.json().get("ok") is True)
+
+# 回读验证
+resp_get2 = client.get("/api/settings?token=boss-apply")
+pol_saved = resp_get2.json().get("privacy_policy") or {}
+br_saved = resp_get2.json().get("browser") or {}
+check("Settings 回读 privacy_policy 正确保存", pol_saved.get("exchange_wechat") == "high_intent_only" and pol_saved.get("contact_phone") == "13800138000")
+check("Settings 回读 browser 正确保存", br_saved.get("silent_mode") is True and br_saved.get("minimize_on_start") is True)
+
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

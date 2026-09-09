@@ -76,6 +76,17 @@
   "job_fit_gate": {
     "min_verdict": "medium"
   },
+  "privacy_policy": {
+    "exchange_wechat": "auto",
+    "send_resume": "auto",
+    "exchange_phone": "manual",
+    "contact_phone": "",
+    "contact_wechat": ""
+  },
+  "browser": {
+    "silent_mode": true,
+    "minimize_on_start": true
+  },
   "greeting": {
     "test": [
       "您好，看到贵司这个岗位与我的方向非常契合，已投递附件简历，期待您的回复，谢谢！"

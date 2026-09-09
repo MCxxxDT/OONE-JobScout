@@ -121,6 +121,8 @@ def api_settings_get(token: str = ""):
     llm = cfg.get("llm") or {}
     prefs = cfg.get("prefs") or {}
     eff = flows.effective_cities(cfg)
+    priv = cfg.get("privacy_policy") or {}
+    br = cfg.get("browser") or {}
     return {
         "llm": {
             "api_key_masked": secrets_mod.masked(llm.get("api_key") or ""),
@@ -129,6 +131,17 @@ def api_settings_get(token: str = ""):
             "model": llm.get("model") or "",
         },
         "llm_match": {"enabled": (cfg.get("llm_match") or {}).get("enabled", True)},
+        "privacy_policy": {
+            "exchange_wechat": priv.get("exchange_wechat", "auto"),
+            "send_resume": priv.get("send_resume", "auto"),
+            "exchange_phone": priv.get("exchange_phone", "manual"),
+            "contact_phone": priv.get("contact_phone", ""),
+            "contact_wechat": priv.get("contact_wechat", ""),
+        },
+        "browser": {
+            "silent_mode": br.get("silent_mode", True),
+            "minimize_on_start": br.get("minimize_on_start", True),
+        },
         "prefs": {
             "want_jobs": prefs.get("want_jobs") or [],
             "avoid_jobs": prefs.get("avoid_jobs") or [],
@@ -170,6 +183,35 @@ async def api_settings_post(request: Request, token: str = ""):
     if "llm_match_enabled" in body:
         _write_local("llm_match", {"enabled": bool(body["llm_match_enabled"])})
         changed.append("智能匹配开关已更新")
+
+    # 隐私与自动化权限更新
+    if "privacy_policy" in body and isinstance(body["privacy_policy"], dict):
+        pol = body["privacy_policy"]
+        clean_pol = {}
+        for k in ("exchange_wechat", "send_resume", "exchange_phone"):
+            if k in pol:
+                v = str(pol[k]).strip()
+                if v in ("auto", "high_intent_only", "manual", "disabled"):
+                    clean_pol[k] = v
+        for k in ("contact_phone", "contact_wechat"):
+            if k in pol:
+                clean_pol[k] = str(pol[k]).strip()
+        if clean_pol:
+            _write_local("privacy_policy", clean_pol)
+            changed.append("隐私与自动化权限已更新")
+
+    # 浏览器运行模式更新
+    if "browser" in body and isinstance(body["browser"], dict):
+        b_cfg = body["browser"]
+        clean_b = {}
+        if "silent_mode" in b_cfg:
+            clean_b["silent_mode"] = bool(b_cfg["silent_mode"])
+        if "minimize_on_start" in b_cfg:
+            clean_b["minimize_on_start"] = bool(b_cfg["minimize_on_start"])
+        if clean_b:
+            _write_local("browser", clean_b)
+            changed.append("浏览器运行设置已更新")
+
     return {"ok": True, "changed": changed or ["无变更"]}
 
 
@@ -488,11 +530,11 @@ PAGE = """<!DOCTYPE html>
   .panel { background: var(--card-glass); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
   .panel h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
   .panel label { display: block; font-size: 12px; font-weight: 500; color: var(--mut); margin: 12px 0 5px; }
-  .panel input[type=text], .panel input[type=password], .panel textarea {
+  .panel input[type=text], .panel input[type=password], .panel select, .panel textarea {
     width: 100%; background: #0b1120; color: var(--txt); border: 1px solid var(--border);
     border-radius: 8px; padding: 9px 12px; font-size: 13px; font-family: inherit; outline: 0; transition: border-color 0.2s;
   }
-  .panel input[type=text]:focus, .panel input[type=password]:focus, .panel textarea:focus { border-color: var(--acc); }
+  .panel input[type=text]:focus, .panel input[type=password]:focus, .panel select:focus, .panel textarea:focus { border-color: var(--acc); }
   .panel textarea { min-height: 70px; resize: vertical; }
 
   /* Spinner */
@@ -660,6 +702,86 @@ PAGE = """<!DOCTYPE html>
             <div class="action-bar" style="margin-top:16px">
               <button class="btn btn-primary" onclick="saveProfile()">保存并由 AI 提炼画像</button>
               <span id="resProfile" style="font-size:12px;margin-left:8px"></span>
+            </div>
+          </div>
+
+          <!-- Privacy & Automation Card -->
+          <div class="panel">
+            <h2>🛡️ 隐私保护与自动化权限</h2>
+            <div style="font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5">
+              自主决定是否允许系统全自动执行敏感物理动作；内置 Prompt 防套话铁律与出信前物理正则拦截门禁，防范诱导套取联系方式。
+            </div>
+            <div class="grid-2" style="margin-top:8px">
+              <div>
+                <label>换微信权限</label>
+                <select id="inPolicyWechat">
+                  <option value="auto">全自动 (auto)</option>
+                  <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+                  <option value="manual">必须人工审批 (manual)</option>
+                  <option value="disabled">禁用该动作 (disabled)</option>
+                </select>
+              </div>
+              <div>
+                <label>发简历权限</label>
+                <select id="inPolicyResume">
+                  <option value="auto">全自动 (auto)</option>
+                  <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+                  <option value="manual">必须人工审批 (manual)</option>
+                  <option value="disabled">禁用该动作 (disabled)</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:8px">
+              <label>换电话权限</label>
+              <select id="inPolicyPhone">
+                <option value="manual">必须人工审批 (manual，推荐)</option>
+                <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+                <option value="auto">全自动 (auto)</option>
+                <option value="disabled">禁用该动作 (disabled)</option>
+              </select>
+            </div>
+            <div class="grid-2" style="margin-top:8px">
+              <div>
+                <label>个人真实手机号（配置后防泄密物理锁死）</label>
+                <input type="text" id="inContactPhone" placeholder="例如：13800000000">
+              </div>
+              <div>
+                <label>个人真实微信号（配置后防泄密物理锁死）</label>
+                <input type="text" id="inContactWechat" placeholder="例如：wxid_xxxx">
+              </div>
+            </div>
+            <div style="background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.25);border-radius:8px;padding:10px 12px;font-size:12px;color:#fda4af;margin-top:12px;line-height:1.5">
+              🔒 <strong>防套话安全铁律</strong>：模型严禁在文本中吐出明文联系方式；若 HR 催促或诱导索要电话微信，系统仅允许引导官方交换。若模型被攻破输出明文信息，底层正则门禁将物理拦截并立即转人工告警。
+            </div>
+            <div class="action-bar" style="margin-top:16px">
+              <button class="btn btn-primary" onclick="savePrivacyPolicy()">保存隐私权限设置</button>
+              <span id="resPrivacy" style="font-size:12px;margin-left:8px"></span>
+            </div>
+          </div>
+
+          <!-- Browser Mode Card -->
+          <div class="panel">
+            <h2>🖥️ 浏览器后台运行设置</h2>
+            <div style="font-size:12px;color:var(--mut);margin-bottom:12px">
+              解决 BOSS 轮询时 Chrome 窗口时不时弹窗、置顶、抢占桌面输入焦点的问题。
+            </div>
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px;line-height:1.4">
+              <input type="checkbox" id="inBrowserSilent" style="width:auto;margin-top:3px">
+              <div>
+                <strong style="color:var(--txt)">静默后台巡检模式 (Silent Background Mode)</strong>
+                <div style="font-size:12px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行页面操作，绝不抢占前台键盘输入焦点与激活置顶。</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:14px;line-height:1.4">
+              <input type="checkbox" id="inBrowserMinimize" style="width:auto;margin-top:3px">
+              <div>
+                <strong style="color:var(--txt)">启动时窗口最小化 (Minimize On Start)</strong>
+                <div style="font-size:12px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏幕。</div>
+              </div>
+            </label>
+            <div class="action-bar" style="margin-top:16px">
+              <button class="btn btn-primary" onclick="saveBrowserSettings()">保存浏览器设置</button>
+              <span id="resBrowser" style="font-size:12px;margin-left:8px"></span>
             </div>
           </div>
         </div>
@@ -1036,6 +1158,18 @@ async function loadSettings() {
   document.getElementById('inAvoidJobs').value = (s.prefs.avoid_jobs || []).join('，');
   document.getElementById('inWantCities').value = (s.prefs.want_cities || []).join('，');
   document.getElementById('inAvoidCities').value = (s.prefs.avoid_cities || []).join('，');
+
+  const priv = s.privacy_policy || {};
+  if (document.getElementById('inPolicyWechat')) document.getElementById('inPolicyWechat').value = priv.exchange_wechat || 'auto';
+  if (document.getElementById('inPolicyResume')) document.getElementById('inPolicyResume').value = priv.send_resume || 'auto';
+  if (document.getElementById('inPolicyPhone')) document.getElementById('inPolicyPhone').value = priv.exchange_phone || 'manual';
+  if (document.getElementById('inContactPhone')) document.getElementById('inContactPhone').value = priv.contact_phone || '';
+  if (document.getElementById('inContactWechat')) document.getElementById('inContactWechat').value = priv.contact_wechat || '';
+
+  const br = s.browser || {};
+  if (document.getElementById('inBrowserSilent')) document.getElementById('inBrowserSilent').checked = br.silent_mode !== false;
+  if (document.getElementById('inBrowserMinimize')) document.getElementById('inBrowserMinimize').checked = br.minimize_on_start !== false;
+
   document.getElementById('profMeta').textContent = s.profile.has_resume
     ? `已存简历 ${s.profile.resume_chars} 字（${s.profile.source}，${s.profile.updated_at}）` + (s.profile.has_refined ? ` · 画像已提炼：${s.profile.refined_summary}` : ' · 画像未提炼')
     : '未上传简历（使用内置画像）';
@@ -1124,6 +1258,48 @@ async function saveProfile() {
     showToast('保存异常: ' + e, 'error');
   }
 }
+
+async function savePrivacyPolicy() {
+  const el = document.getElementById('resPrivacy');
+  const body = {
+    privacy_policy: {
+      exchange_wechat: document.getElementById('inPolicyWechat').value,
+      send_resume: document.getElementById('inPolicyResume').value,
+      exchange_phone: document.getElementById('inPolicyPhone').value,
+      contact_phone: document.getElementById('inContactPhone').value.trim(),
+      contact_wechat: document.getElementById('inContactWechat').value.trim(),
+    }
+  };
+  const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (el) {
+    el.style.color = d.ok ? 'var(--ok)' : 'var(--dan)';
+    el.textContent = d.ok ? '✅ ' + (d.changed || []).join('；') : '❌ 保存失败';
+  }
+  if (d.ok) {
+    showToast('隐私与自动化权限设置已保存！', 'success');
+    loadSettings();
+  }
+}
+
+async function saveBrowserSettings() {
+  const el = document.getElementById('resBrowser');
+  const body = {
+    browser: {
+      silent_mode: document.getElementById('inBrowserSilent').checked,
+      minimize_on_start: document.getElementById('inBrowserMinimize').checked,
+    }
+  };
+  const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (el) {
+    el.style.color = d.ok ? 'var(--ok)' : 'var(--dan)';
+    el.textContent = d.ok ? '✅ ' + (d.changed || []).join('；') : '❌ 保存失败';
+  }
+  if (d.ok) {
+    showToast('浏览器运行设置已保存！', 'success');
+    loadSettings();
+  }
+}
+
 load(false);
 setInterval(() => load(false), 30000);
 </script>

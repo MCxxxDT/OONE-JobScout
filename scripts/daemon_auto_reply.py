@@ -26,6 +26,7 @@ import random
 import re
 import sys
 import time
+from typing import Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -164,6 +165,45 @@ def _out_of_window_kind(now, active_hours, soft_close_hard_limit):
     if now.time() >= _parse_hhmm(str(soft_close_hard_limit), datetime.time(23, 30)) or now.time() < ah_start:
         return "hard_sleep"
     return "soft_close"
+
+
+def check_privacy_permission(action: str, cfg: dict, hi_flag: bool) -> Tuple[bool, str]:
+    """核查动作是否允许根据 privacy_policy 自动执行。
+    返回 (是否放行, 拦截/降级原因)。
+    策略模式: auto（全自动）| high_intent_only（仅高意向自动）| manual（必须人工审批）| disabled（禁用）
+    """
+    pol = (cfg or {}).get("privacy_policy") or {}
+    key_map = {
+        "exchange_wechat": "exchange_wechat",
+        "agree_wechat": "exchange_wechat",
+        "send_resume": "send_resume",
+        "exchange_phone": "exchange_phone",
+    }
+    pol_key = key_map.get(action)
+    if not pol_key:
+        return True, ""
+
+    default_mode = "manual" if pol_key == "exchange_phone" else "auto"
+    mode = pol.get(pol_key, default_mode)
+
+    action_cn = {
+        "exchange_wechat": "换微信",
+        "agree_wechat": "同意换微信",
+        "send_resume": "发简历",
+        "exchange_phone": "换电话",
+    }.get(action, action)
+
+    if mode == "auto":
+        return True, ""
+    elif mode == "high_intent_only":
+        if hi_flag:
+            return True, ""
+        return False, f"{action_cn}策略为[仅高意向自动]，当前会话未达到高意向标准，转人工审批"
+    elif mode == "manual":
+        return False, f"{action_cn}策略为[必须人工审批]，已转入人工审批台"
+    elif mode == "disabled":
+        return False, f"{action_cn}动作已被用户设置为[禁用]，禁止自动执行并转人工"
+    return True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +493,15 @@ def run_cycle(cfg, engine, args, st=None):
         hi_flag, hi_why = air.detect_high_intent(conv)
         if hi_flag:
             print(f"  [🔥高意向] 检测到高意向信号（{hi_why}），告警与台账升级标记")
+
+        # 5.5 隐私与自动化权限门禁（Web 工作台自主配置拦截与降级）
+        if action in ("send_resume", "exchange_wechat", "agree_wechat", "exchange_phone"):
+            allow_auto, perm_reason = check_privacy_permission(action, cfg, hi_flag)
+            if not allow_auto:
+                print(f"  [🔒权限门禁拦截] 动作 {action} 触发自主安全策略: {perm_reason}")
+                action = "needs_human"
+                reason = f"{reason}；[权限门禁] {perm_reason}"
+                notice = f"HR [{who}] 触发动作 {action}，但因{perm_reason}，已安全转人工审批"
 
         if notice:
             print(f"  [📢异步提醒] {notice}")
