@@ -1161,7 +1161,55 @@ check("早08:59硬休眠", _k26(_dt26.datetime(2026, 9, 9, 8, 59), "09:30-22:00"
 check("晚22:30软收工", _k26(_dt26.datetime(2026, 9, 9, 22, 30), "09:30-22:00", "23:30") == "soft_close")
 check("晚23:35硬休眠", _k26(_dt26.datetime(2026, 9, 9, 23, 35), "09:30-22:00", "23:30") == "hard_sleep")
 
+print("== 27. 沟通缺陷与动作断链修复校验（身份防混淆/系统消息过滤/动作分发解耦/真人感禁令）==")
 
+# 27.1 系统提示正则是涵盖所有系统回执与事件
+check("SYSTEM_MSG_RE拦截您已拒绝交换微信", bool(flows.SYSTEM_MSG_RE.search("您已拒绝交换微信")))
+check("SYSTEM_MSG_RE拦截对方请求交换微信", bool(flows.SYSTEM_MSG_RE.search("对方请求交换微信")))
+check("SYSTEM_MSG_RE拦截双方已交换微信", bool(flows.SYSTEM_MSG_RE.search("双方已交换微信")))
+check("SYSTEM_MSG_RE拦截打招呼成功", bool(flows.SYSTEM_MSG_RE.search("打招呼成功，请等待回复")))
+check("SYSTEM_MSG_RE拦截已撤回", bool(flows.SYSTEM_MSG_RE.search("已撤回一条消息")))
+
+# 27.2 历史解析清洗 clean_conversation_history 剔除系统消息
+raw_history_samples = [
+    {"role": "me", "text": "您好！"},
+    {"role": "system", "text": "打招呼成功"},
+    {"role": "hr", "text": "发份简历来看看"},
+    {"role": "system", "text": "对方请求交换微信"},
+    {"role": "system", "text": "您已拒绝交换微信"},
+]
+cleaned_history = _gr.clean_conversation_history(raw_history_samples)
+check("clean_conversation_history剔除系统提示", len(cleaned_history) == 2)
+check("clean_conversation_history仅保留me与hr", [m["role"] for m in cleaned_history] == ["me", "hr"])
+
+# 27.3 ai_reply 支持动作扩展（send_resume, exchange_wechat, agree_wechat）
+engine_act = _air.AIReplyEngine(cfg)
+res_cv = engine_act.decide_and_generate(
+    {"who": "测试HR", "last_msg": "发个简历"},
+    agent_generator=lambda c, p: {"action": "send_resume", "reply_text": "感谢您的详细介绍，已发您简历", "reason": "HR索要简历"}
+)
+check("decide_and_generate支持send_resume", res_cv["action"] == "send_resume")
+check("八股文被自动清洗", "感谢您的详细介绍" not in res_cv["reply_text"])
+check("send_resume保留有效伴随文本", "已发您简历" in res_cv["reply_text"])
+
+res_agree = engine_act.decide_and_generate(
+    {"who": "测试HR", "last_msg": "加个微信"},
+    agent_generator=lambda c, p: {"action": "agree_wechat", "reply_text": "好的，已同意交换微信"}
+)
+check("decide_and_generate支持agree_wechat", res_agree["action"] == "agree_wechat")
+
+# 27.4 系统消息作为 last_msg 时自动判定为 skip
+res_sys_skip = engine_act.decide_and_generate({"who": "测试HR", "last_msg": "您已拒绝交换微信"})
+check("系统提示last_msg直接被安全门禁skip", res_sys_skip["action"] == "skip")
+
+# 27.5 chat_agree_wechat 集成管线
+orig_agree = flows.chat_agree_wechat
+try:
+    flows.chat_agree_wechat = lambda c, comp: {"ok": True, "mock": "agree_wechat", "comp": comp}
+    res_card_agree = _fb.handle_card_action(cfg, {"action": "agree_wechat", "company": "测试科技"})
+    check("handle_card_action派发agree_wechat", res_card_agree.get("ok") is True and res_card_agree["result"]["mock"] == "agree_wechat")
+finally:
+    flows.chat_agree_wechat = orig_agree
 
 
 shutil.rmtree(DRY, ignore_errors=True)

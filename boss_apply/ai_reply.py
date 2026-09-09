@@ -141,6 +141,25 @@ def is_recent_message(time_str: str, max_age_hours: int = 24) -> bool:
     return False
 
 
+# 客服式八股文铁血禁令（命中即过滤，严禁人机感）
+FORBIDDEN_PHRASES = (
+    "感谢您的详细介绍",
+    "感谢您的详细说明",
+    "感谢您的介绍",
+    "感谢详细介绍",
+    "期待进一步沟通",
+    "期待与您进一步沟通",
+    "期待与您的进一步沟通",
+    "希望能有机会加入",
+    "希望有机会加入",
+    "非常荣幸",
+    "祝好",
+    "祝工作顺利",
+    "祝您生活愉快",
+    "祝您工作顺利",
+)
+
+
 class AIReplyEngine:
     """纯 Agent / 大模型驱动的会话决策与回复生成引擎（彻底废除确定性模板降级）。"""
 
@@ -202,19 +221,21 @@ class AIReplyEngine:
             if lines:
                 jd_section = "\n【会话关联岗位与JD（供研判含金量）】\n" + "\n".join(lines) + "\n"
 
-        # 对话历史注入（daemon 每轮从聊天面板现场抓取，与 HR 所见零漂移）
+        # 对话历史注入（daemon 每轮从聊天面板现场抓取，严格过滤系统提示与噪声）
         history_section = ""
         history = conv.get("history") or []
         if isinstance(history, list) and history:
-            role_label = {"me": "我方", "hr": "HR", "system": "[系统]"}
+            role_label = {"me": "我方", "hr": "HR"}
             h_lines = []
             for m in history:
                 if not isinstance(m, dict):
                     continue
-                label = role_label.get(m.get("role"), "[系统]")
+                role = m.get("role")
+                if role not in ("me", "hr"):
+                    continue
                 text = (m.get("text") or "").strip()
                 if text:
-                    h_lines.append(f"{label}: {text}")
+                    h_lines.append(f"{role_label[role]}: {text}")
             if h_lines:
                 history_section = (
                     "\n【对话历史（最近%d条，已标注发言方，按时间正序）】\n" % len(h_lines)
@@ -241,32 +262,51 @@ class AIReplyEngine:
             pl.append("- 未列出的维度由你基于候选人背景自主决断")
             prefs_section = "\n【用户求职偏好】\n" + "\n".join(pl) + "\n"
 
+        def _fmt(val):
+            if isinstance(val, list):
+                return "、".join(str(x) for x in val if str(x).strip())
+            return str(val).strip() if val is not None else ""
+
+        hl_parts = []
+        for k in ("tech_highlights", "business_highlights", "highlights", "summary"):
+            s = _fmt(self.profile.get(k))
+            if s:
+                hl_parts.append(s)
+        highlights_str = "；".join(hl_parts) if hl_parts else "具备扎实的产品与工程落地实践"
+
         return (
             f"【候选人真实画像】\n"
-            f"- 姓名：{self.profile['name']}\n"
-            f"- 学历与专业：{self.profile['school']} · {self.profile['major']}\n"
-            f"- 毕业届别与状态：{self.profile['grade_desc']}（目前2026年9月处于秋招黄金期，毕业设计已交付，无在校日常课程）\n"
-            f"- 常驻地与意向城市：目前常驻【{self.profile['current_city']}】，核心意向奔赴【{self.profile['target_region']}】发展\n"
-            f"- 到岗与稳定性：{self.profile['availability']}\n"
-            f"- 薪资底线诉求：{self.profile['salary_requirement']}\n"
-            f"- 核心优势：全栈MCP/Agent工程落地经验 + 200人团队月操盘10万GMV的商业化即战力\n"
+            f"- 姓名：{self.profile.get('name', '张烨韬')}\n"
+            f"- 学历与专业：{self.profile.get('school', '')} · {self.profile.get('major', '')}\n"
+            f"- 毕业届别与状态：{self.profile.get('grade_desc', '2027届应届在读生')}（目前2026年9月处于秋招黄金期，毕业设计已交付，无在校日常课程）\n"
+            f"- 常驻地与意向城市：目前常驻【{self.profile.get('current_city', '福州')}】，核心意向奔赴【{self.profile.get('target_region', '江浙沪')}】发展\n"
+            f"- 到岗与稳定性：{self.profile.get('availability', '合适机会随时奔赴全职到岗')}\n"
+            f"- 薪资底线诉求：{self.profile.get('salary_requirement', '实习薪资能覆盖租房与生活开销')}\n"
+            f"- 核心优势：{highlights_str}\n"
             f"{prefs_section}"
             f"{jd_section}"
             f"{history_section}\n"
             f"【当前HR与最新消息】\n"
             f"- 对话方：{who}\n"
             f"- HR最新消息：\"{last_msg}\"\n\n"
-            f"【Agent 沟通策略与心法】\n"
-            f"1. 问常驻地 / 能否线下面试（如在杭州吗/在本地吗/人在哪/接受线下吗）：真诚告知目前常驻福州，表达强烈意向奔赴江浙沪，并提议初试先通过线上（腾讯会议等方式）高效推进，合适随时到岗；\n"
-            f"2. 问期望薪资（如期望薪资是多少/对实习待遇有什么要求）：说明考虑跨城前往江浙沪全职实习，主要希望能覆盖当地基础租房与生活开销（如日薪180-250左右或有房补即可）；核心依然最看重业务与团队匹配度，并索要详细JD；\n"
-            f"3. 索要联系方式（微信/电话/邮箱）：引导留存平台沟通更及时，反客为主索要岗位详细JD；\n"
-            f"4. 邀约面试 / 问到岗时间：说明学业与时间相对具备弹性，主动索要岗位JD与具体安排，绝不擅自承诺死时间；\n"
-            f"5. 三不原则：不承诺（时间保留弹性）、不拒绝（保持积极开放）、不负责（主动索要详细JD互相了解）；\n"
-            f"6. 若上方提供了【会话关联岗位与JD】：结合JD研判含金量后见人下菜碟——大模型/Agent核心产品岗可显著提升热情并呼应JD匹配点；披着AI外衣的销售/地推/杂役岗保持礼貌太极、点到为止，不深聊不主动推进；\n"
-            f"7. 若上方提供了【对话历史】：严格承接上文推进，绝不车轱辘话——已告知过的信息（如常驻地、到岗意向）不重复原话表述，直接回应HR最新问题的增量部分；\n"
-            f"8. 绝对隐私红线：严禁在文案中输出真实11位手机号、座机电话、微信号或外部链接。\n\n"
+            f"【Agent 沟通策略与铁律（拒绝人机，真人口语化，直接高效）】\n"
+            f"1. 【铁血禁令（绝对禁止）】：严禁出现“感谢您的详细介绍”、“期待进一步沟通”、“希望有机会加入”、“非常荣幸”、“祝好”等任何客服式/三段式礼貌八股废话！开门见山直接说事；\n"
+            f"2. 【严禁无脑索要JD】：严禁无脑索要“完整JD/汇报线/技术栈”——除非 HR 仅发了“在吗/发个简历”且上下文完全没有任何职位信息，否则一律禁止主动索要 JD；\n"
+            f"3. 【闭合性问题直球回答】：遇到诸如“能否线下面试？”、“早九晚七能接受吗？”、“目前在职还是离职？”等闭合提问，必须在 15 字内正面肯定直答（如：“可以线下面试”、“时间没问题可以接受”、“目前已离职随时到岗”），绝不允许顾左右而言他或打太极；\n"
+            f"4. 【问常驻地 / 地点】：真诚告知目前常驻福州，强烈意向奔赴江浙沪发展；初试可提议先通过线上高效推进；\n"
+            f"5. 【问薪资 / 待遇】：说明跨城前往江浙沪全职实习，主要希望能覆盖当地基础租房与生活开销即可，以业务和团队匹配为主；\n"
+            f"6. 【三不原则与见人下菜碟】：不承诺死时间、不拒绝机会、见人下菜碟（结合JD研判，核心岗提升热情，杂役销售岗点到为止；严禁泄露真实11位手机号、微信号）；\n"
+            f"7. 【动作协同规则】：\n"
+            f"   - 若对方索要简历：action=\"send_resume\"，reply_text=\"已发您附件简历，请查收\"；\n"
+            f"   - 若对方要微信或双方契合度高：action=\"exchange_wechat\"，reply_text=\"已向您发起交换微信申请\"；\n"
+            f"   - 若对方发起了交换微信：action=\"agree_wechat\"，reply_text=\"已同意交换微信\"；\n"
+            f"   - 若日常沟通对话：action=\"reply\"，直接回复短文本；\n"
+            f"   - 若无需回复：action=\"skip\"，reply_text=\"\"；\n"
+            f"   - 若需人工介入（复杂商务谈判/线下签约等）：action=\"needs_human\"；\n"
+            f"8. 【对话历史与防车轱辘】：若上方有【对话历史】，严格承接上文，绝不车轱辘话，已告知过的信息不重复；\n"
+            f"9. 【极致短小精悍】：reply_text 严格控制在 35 字以内，模拟真实手机微信打字习惯：直接、口语化、高效、不卑不亢。\n\n"
             f"请输出纯 JSON 格式：\n"
-            f'{{"action": "reply"|"needs_human"|"skip", "reason": "理由", "reply_text": "50-100字拟人高情商回复（表达开放，反索JD）"}}'
+            f'{{"action": "reply"|"send_resume"|"exchange_wechat"|"agree_wechat"|"needs_human"|"skip", "reply_text": "35字以内真人口语短文本（若action无需文本可为空）", "reason": "简要理由"}}'
         )
 
     def decide_and_generate(self, conv: dict, agent_generator: Optional[Any] = None) -> dict:
@@ -276,9 +316,12 @@ class AIReplyEngine:
         last_msg = (conv.get("last_msg") or "").strip()
         who = conv.get("who") or ""
 
-        # 1. 基础门禁：无实质内容跳过
+        # 1. 基础门禁：无实质内容或纯系统提示跳过
         if not last_msg:
             return {"action": "skip", "reply_text": "", "reason": "消息为空", "source": "rule"}
+        from .flows import SYSTEM_MSG_RE
+        if SYSTEM_MSG_RE.search(last_msg):
+            return {"action": "skip", "reply_text": "", "reason": "系统提示事件非HR发言，跳过", "source": "rule"}
 
         prompt = self.build_agent_prompt(conv)
         gen = agent_generator or self.agent_generator
@@ -302,11 +345,16 @@ class AIReplyEngine:
         # 3. Agent 成功产出回复时的处理与门禁
         if isinstance(agent_res, dict) and agent_res.get("action"):
             act = agent_res.get("action")
-            if act == "reply":
+            if act in ("reply", "send_resume", "exchange_wechat", "agree_wechat"):
                 reply_text = (agent_res.get("reply_text") or "").strip()
-                if not reply_text:
+                # 过滤八股文禁令短语
+                for ban in FORBIDDEN_PHRASES:
+                    reply_text = reply_text.replace(ban, "")
+                reply_text = re.sub(r"^[，。！,!\s]+|[，。！,!\s]+$", "", reply_text).strip()
+
+                if act == "reply" and not reply_text:
                     pass  # 回复为空，落入人工处理
-                elif greeter.privacy_blocked(reply_text):
+                elif reply_text and greeter.privacy_blocked(reply_text):
                     # Agent 产出文案触犯隐私红线（如泄露手机号/电话），安全门禁强制转人工
                     return {
                         "action": "needs_human",
@@ -317,9 +365,9 @@ class AIReplyEngine:
                     }
                 else:
                     return {
-                        "action": "reply",
+                        "action": act,
                         "reply_text": reply_text[:120],
-                        "reason": agent_res.get("reason") or "Agent智能生成拟人回复",
+                        "reason": agent_res.get("reason") or f"Agent执行动作: {act}",
                         "notice": agent_res.get("notice") or "",
                         "source": agent_res.get("source") or "agent",
                     }
@@ -373,7 +421,7 @@ class AIReplyEngine:
             payload = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "你是一名求职助理 Agent，代表求职者回复招聘平台HR消息。严格输出纯JSON。"},
+                    {"role": "system", "content": "你是一名求职助理 Agent，代表求职者回复招聘平台HR消息。严格输出纯JSON。单条回复必须极短（35字内），真人日常口语化，杜绝客服八股文。"},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,
@@ -390,11 +438,19 @@ class AIReplyEngine:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     msg = resp_data["choices"][0]["message"]
                     content = (msg.get("content") or "").strip()
-                    content = re.sub(r"^```json\s*", "", content)
+                    content = re.sub(r"^```(?:json)?\s*", "", content)
                     content = re.sub(r"```$", "", content).strip()
                     parsed = json.loads(content)
                     if isinstance(parsed, dict) and "action" in parsed:
-                        return parsed
+                        act = parsed.get("action")
+                        if act in ("reply", "send_resume", "exchange_wechat", "agree_wechat", "needs_human", "skip"):
+                            reply_text = (parsed.get("reply_text") or "").strip()
+                            for ban in FORBIDDEN_PHRASES:
+                                reply_text = reply_text.replace(ban, "")
+                            reply_text = re.sub(r"^[，。！,!\s]+|[，。！,!\s]+$", "", reply_text).strip()
+                            parsed["reply_text"] = reply_text[:35]
+                            return parsed
         except Exception:
             pass
         return None
+

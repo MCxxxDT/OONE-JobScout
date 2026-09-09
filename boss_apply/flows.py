@@ -280,13 +280,23 @@ def filter_greeted(jobs):
 # 2026-09-08 沉心传媒复发案例：用户婉拒微信交换后，侧栏最新预览变成
 # "您已经成功拒绝了对方交换微信请求"（系统回执），旧词表未覆盖 → 被误判为
 # HR 发言 → daemon 答非所问又回了一条。交换请求的同意/拒绝回执全部纳入。
+# 2026-09-09 加固：全面覆盖各类系统回执、交换提示、打招呼成功、撤回等系统非对话消息。
 SYSTEM_MSG_RE = re.compile(
     r"^您的附件简历"
     r"|已发送给(?:Boss|对方)"
     r"|^对方已同意"
-    r"|(?:成功)?(?:同意|拒绝)(?:了)?对方交换(?:微信|电话|联系方式)"
+    r"|^对方请求交换"
+    r"|^请求交换(?:微信|电话|联系方式)"
+    r"|^双方已交换"
+    r"|^打招呼成功"
+    r"|^已撤回"
+    r"|^您已(?:经)?(?:成功)?(?:同意|拒绝)"
+    r"|您已(?:经)?(?:成功)?(?:同意|拒绝)"
+    r"|(?:成功)?(?:同意|拒绝)(?:了)?(?:对方)?交换(?:微信|电话|联系方式)"
     r"|(?:微信|电话)(?:交换|已交换)"
     r"|^已(?:同意|拒绝)和对方交换"
+    r"|对方发起了交换"
+    r"|交换请求已发送"
 )
 # 短促礼貌结束语（精确匹配，HR 独发即视为对话自然闭环）
 CLOSING_WORDS = ("谢谢", "感谢", "好的", "好嘞", "收到", "嗯嗯", "ok", "OK")
@@ -324,7 +334,7 @@ def parse_conv(raw, openers):
     return {"time": time_s, "who": who, "status": status,
             "last_msg": preview[:120],
             "needs_reply_guess": bool(preview) and not from_us and not is_system and not is_closing,
-            "needs_human": greeter.privacy_blocked(preview)}
+            "needs_human": not is_system and greeter.privacy_blocked(preview)}
 
 
 def chat_inbox(cfg):
@@ -435,6 +445,33 @@ def chat_send_resume(cfg, company):
     finally:
         sess.close_tab()
         sess.close()
+
+
+def chat_agree_wechat(cfg, company):
+    """按公司名点开会话并点击【同意交换微信】官方按钮。写台账 action=agree_wechat。
+    受岗位适配门禁（_job_fit_gate）保护。"""
+    gate = _job_fit_gate(cfg, company)
+    if not gate["allow"]:
+        ledger.append({"action": "agree_wechat", "status": "blocked_job_fit",
+                       "company": company,
+                       "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
+        return {"ok": False, "blocked": "job_fit", "company": company,
+                "attribution": gate["attribution"], "detail": gate["detail"]}
+    sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
+    try:
+        sess.open_tab()
+        r = greeter.agree_wechat_via_chat(sess, company)
+        ledger.append({"action": "agree_wechat", "status": r.get("status", "ok"),
+                       "company": company, "conv": r.get("conv")})
+        return {"ok": r.get("status") in ("ok", "already_agreed"), "company": company, "result": r}
+    except Exception as e:
+        ledger.append({"action": "agree_wechat", "status": "failed",
+                       "company": company, "error": str(e)[:200]})
+        return {"ok": False, "company": company, "error": str(e)[:300]}
+    finally:
+        sess.close_tab()
+        sess.close()
+
 
 
 def chat_job_detail(cfg, company=None, fetch_jd=True, fetch_history=True):

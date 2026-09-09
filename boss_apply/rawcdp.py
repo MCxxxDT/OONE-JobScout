@@ -99,6 +99,60 @@ DETAIL_JS = """
 })()
 """
 
+# 会话消息历史提取（CDP evaluate 注入）：
+# 精确识别 CSS class 区分身份，过滤系统提示节点与杂音，返回结构化序列
+CHAT_HISTORY_JS = """
+(() => {
+  const list = document.querySelector('.chat-message .im-list');
+  if (!list) return JSON.stringify({r: 'no_list'});
+  const TIME_RE = /^(?:\\d{2}-\\d{2} \\d{1,2}:\\d{2}|\\d{4}-\\d{2}-\\d{2}[ T]\\d{1,2}:\\d{2}.*|昨天.*|\\d{1,2}:\\d{2}|\\d{1,2}月\\d{1,2}日.*)$/;
+  const DROP = new Set(['已读', '未读', '拒绝', '同意', '收下', '送达']);
+  const SYS_PAT = /^(?:您已|您已经|已撤回|打招呼成功|对方已同意|对方请求|双方已交换|请求交换|您的附件简历)/;
+  const msgs = [];
+  for (const it of list.querySelectorAll('.message-item')) {
+    const cls = String(it.className || '');
+    const isSysNode = cls.includes('item-system') || cls.includes('chat-sysmsg') || cls.includes('sys-notice') || cls.includes('message-system') || cls.includes('chat-notice');
+    let role = null;
+    if (cls.includes('item-myself') || cls.includes('chat-item--right') || cls.includes('item-self')) {
+      role = 'me';
+    } else if (cls.includes('item-friend') || cls.includes('chat-item--left') || cls.includes('item-other')) {
+      role = 'hr';
+    } else if (isSysNode) {
+      role = 'system';
+    }
+    if (!role) continue;
+    const raw = (it.innerText || '').replace(/\\n/g, '|');
+    const parts = raw.split('|').map(s => s.trim())
+      .filter(s => s && !TIME_RE.test(s) && !DROP.has(s));
+    const text = parts.join(' ').slice(0, 120);
+    if (!text) continue;
+    if (isSysNode || SYS_PAT.test(text)) {
+      role = 'system';
+    }
+    msgs.push({role: role, text: text});
+  }
+  return JSON.stringify({messages: msgs, count: msgs.length, source: 'dom'});
+})()
+"""
+
+
+def clean_conversation_history(history):
+    """过滤掉系统消息与系统提示，严格只返回求职者(me)与招聘方(hr)的真实消息序列：
+    [{"role": "me" | "hr", "text": "..."}]"""
+    if not history or not isinstance(history, list):
+        return []
+    sys_re = re.compile(r"^(?:您已|您已经|已撤回|打招呼成功|对方已同意|对方请求|请求交换|双方已交换|您的附件简历)")
+    res = []
+    for m in history:
+        if not isinstance(m, dict):
+            continue
+        r = m.get("role")
+        t = (m.get("text") or "").strip()
+        if r in ("me", "hr") and t and not sys_re.search(t):
+            res.append({"role": r, "text": t})
+    return res
+
+
 
 def active_days(text):
     """与 scraper.boss_active_days 相同语义；未匹配返回 -1（未知=放行）。"""

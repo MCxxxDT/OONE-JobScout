@@ -544,7 +544,7 @@ async def api_action(request: Request, token: str = ""):
     body = await request.json()
     act = body.get("action")
     company = body.get("company") or ""
-    if act not in ("reply", "exchange_wechat", "send_resume", "ignore") or not company:
+    if act not in ("reply", "exchange_wechat", "send_resume", "agree_wechat", "ignore") or not company:
         return JSONResponse({"ok": False, "error": "invalid action or company"}, status_code=400)
     if act == "reply" and not (body.get("text") or "").strip():
         return JSONResponse({"ok": False, "error": "reply text empty"}, status_code=400)

@@ -359,6 +359,10 @@ def handle_card_action(cfg: dict, action_payload: dict) -> dict:
         res = flows.chat_send_resume(cfg, company)
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
+    if act == "agree_wechat":
+        res = flows.chat_agree_wechat(cfg, company)
+        return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
+
     if act == "ignore":
         ledger.append({
             "action": "card_ignore",

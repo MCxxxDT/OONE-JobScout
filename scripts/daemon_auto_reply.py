@@ -125,8 +125,11 @@ def _handled_since_hr_msg(rows, who, conv_time, action, status=None, exclude_dry
 
 
 def already_replied(rows, who, conv_time):
-    """防重发：该公司已有成功回复(action=reply, status=ok)且发生在 HR 最后消息之后。"""
-    return _handled_since_hr_msg(rows, who, conv_time, "reply", status="ok")
+    """防重发：该公司已有成功回复或动作(reply/send_resume/exchange_wechat/agree_wechat, status=ok)且发生在 HR 最后消息之后。"""
+    for act in ("reply", "send_resume", "exchange_wechat", "agree_wechat"):
+        if _handled_since_hr_msg(rows, who, conv_time, act, status="ok"):
+            return True
+    return False
 
 
 def already_alerted(rows, who, conv_time):
@@ -402,6 +405,42 @@ def run_cycle(cfg, engine, args, st=None):
         else:
             print(f"  [JD注入] 未取到岗位详情（{str(jd_res.get('error'))[:80]}），按无JD上下文决策。")
 
+        # 5.2.1 真实发言方与系统回执安全核验（根治身份混淆与回复系统消息）
+        # A. 若抓到会话历史，以真实消息流倒序寻找最后一条有效发言
+        if conv.get("history"):
+            last_real = None
+            for m in reversed(conv["history"]):
+                if isinstance(m, dict) and m.get("role") in ("me", "hr"):
+                    last_real = m
+                    break
+            if last_real and last_real.get("role") == "me":
+                print(f"  [身份防混淆] 会话历史显示最新发言为我方（\"{last_real.get('text')[:30]}\"），HR未再发言，跳过。")
+                ledger.append({
+                    "action": "daemon_skip",
+                    "company": who,
+                    "reason": "历史最后发言为我方，防重复回复",
+                    "last_msg": last_msg[:60],
+                    "dry_run": args.dry_run,
+                })
+                continue
+            if last_real and last_real.get("role") == "hr":
+                real_hr_text = (last_real.get("text") or "").strip()
+                if real_hr_text:
+                    conv["last_msg"] = real_hr_text
+                    last_msg = real_hr_text
+
+        # B. 检查最新消息是否为系统提示（如侧栏预览为"您已拒绝交换微信"等）
+        if flows.SYSTEM_MSG_RE.search(last_msg):
+            print(f"  [系统提示跳过] 最新消息为系统事件/非HR真实发言（\"{last_msg[:30]}\"），跳过。")
+            ledger.append({
+                "action": "daemon_skip",
+                "company": who,
+                "reason": "最新消息为系统提示事件，非HR发言",
+                "last_msg": last_msg[:60],
+                "dry_run": args.dry_run,
+            })
+            continue
+
         # 5.3 AI 决策（conv 已携带 job 字段 → 决策 prompt 注入 JD 与对话历史）
         decision = engine.decide_and_generate(conv)
         action = decision.get("action")
@@ -462,14 +501,15 @@ def run_cycle(cfg, engine, args, st=None):
             print(f"  [呼叫人工] 状态: {status_str}")
             continue
 
-        if action == "reply":
-            print(f"  [决策: 自动太极回复] 来源: {source} | 理由: {reason}")
-            print(f"  [回复文案] {reply_text}")
+        if action in ("reply", "send_resume", "exchange_wechat", "agree_wechat"):
+            print(f"  [决策: 自动执行动作 -> {action}] 来源: {source} | 理由: {reason}")
+            if reply_text:
+                print(f"  [伴随回复文案] {reply_text}")
 
             if args.dry_run:
-                print("  [DRY-RUN 仿真] 本次处于仿真模式，不向 CDP 发送实际点击与输入。")
+                print(f"  [DRY-RUN 仿真] 本次处于仿真模式，不向 CDP 发送实际物理动作({action})与输入。")
                 ledger.append({
-                    "action": "dryrun_reply",
+                    "action": f"dryrun_{action}",
                     "company": who,
                     "last_msg": last_msg,
                     "reply_text": reply_text,
@@ -490,16 +530,48 @@ def run_cycle(cfg, engine, args, st=None):
 
                 # 拟人化打字等待（高斯分布：真人打字节奏更接近正态）
                 delay = behav.gauss_delay(args.typing_delay_min, args.typing_delay_max)
-                print(f"  [拟人等待] 模拟阅读与输入打字，等待 {delay:.1f} 秒...")
+                print(f"  [拟人等待] 模拟阅读与操作间隔，等待 {delay:.1f} 秒...")
                 time.sleep(delay)
 
-                # 实际调用 flows.chat_reply 按公司名/会话标识匹配回复
-                res = flows.chat_reply(cfg, who, reply_text)
-                if res.get("ok"):
-                    print(f"  [发送成功] 已送达 {who}！")
+                act_ok = True
+                # 物理动作触发
+                if action == "send_resume":
+                    print(f"  [物理动作] 正在通过 CDP 点击【发送简历】按钮...")
+                    res_act = flows.chat_send_resume(cfg, who)
+                    if not res_act.get("ok"):
+                        print(f"  [动作异常] 发送简历失败: {res_act.get('error') or res_act.get('blocked')}")
+                        act_ok = False
+                    else:
+                        print(f"  [动作成功] 附件简历已成功发送至 {who}！")
+                elif action == "exchange_wechat":
+                    print(f"  [物理动作] 正在通过 CDP 点击【换微信】官方按钮...")
+                    res_act = flows.chat_exchange_wechat(cfg, who)
+                    if not res_act.get("ok"):
+                        print(f"  [动作异常] 发起交换微信失败: {res_act.get('error') or res_act.get('blocked')}")
+                        act_ok = False
+                    else:
+                        print(f"  [动作成功] 交换微信官方申请已送达 {who}！")
+                elif action == "agree_wechat":
+                    print(f"  [物理动作] 正在通过 CDP 点击【同意交换微信】按钮...")
+                    res_act = flows.chat_agree_wechat(cfg, who)
+                    if not res_act.get("ok"):
+                        print(f"  [动作异常] 同意交换微信失败: {res_act.get('error') or res_act.get('blocked')}")
+                        act_ok = False
+                    else:
+                        print(f"  [动作成功] 已同意 {who} 的交换微信申请！")
+
+                # 伴随短文本发送（若有）
+                if reply_text:
+                    res_text = flows.chat_reply(cfg, who, reply_text)
+                    if res_text.get("ok"):
+                        print(f"  [文案发送成功] 伴随消息已送达 {who}！")
+                    else:
+                        print(f"  [文案发送失败] 错误: {res_text.get('error') or res_text.get('blocked')}")
+                        if action == "reply":
+                            act_ok = False
+
+                if act_ok:
                     replied_count += 1
-                else:
-                    print(f"  [发送失败] 错误: {res.get('error') or res.get('blocked')}")
 
     print(f"\n  [周期结束] 本轮处理完成: 实际/仿真回复 {replied_count} 条。")
     ledger.append({

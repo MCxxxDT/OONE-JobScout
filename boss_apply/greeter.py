@@ -504,6 +504,69 @@ def send_resume_via_chat(sess, company, poll_s=12):
             "note": "clicked but no new message appeared in chat"}
 
 
+AGREE_WECHAT_BTN_JS = """
+(() => {
+  const list = document.querySelector('.chat-message .im-list');
+  if (!list) return JSON.stringify({r: 'no_list'});
+  const btns = Array.from(list.querySelectorAll('button, .btn, [class*="btn"], span, a'));
+  let target = null;
+  for (let i = btns.length - 1; i >= 0; i--) {
+    const b = btns[i];
+    const txt = (b.innerText || '').trim();
+    if (txt === '同意' || txt === '同意交换' || txt === '接受' || txt === '收下') {
+      const rect = b.getBoundingClientRect();
+      const style = window.getComputedStyle(b);
+      if (rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden') {
+        target = b;
+        break;
+      }
+    }
+  }
+  if (!target) {
+    const textAll = list.innerText || '';
+    if (textAll.includes('已同意') || textAll.includes('双方已交换')) {
+      return JSON.stringify({r: 'already_agreed'});
+    }
+    return JSON.stringify({r: 'notfound'});
+  }
+  const rect = target.getBoundingClientRect();
+  return JSON.stringify({
+    r: 'found',
+    x: Math.round(rect.left + rect.width / 2),
+    y: Math.round(rect.top + rect.height / 2)
+  });
+})()
+"""
+
+
+def agree_wechat_via_chat(sess, company, poll_s=12):
+    """消息中心按公司名点开会话并点击【同意交换微信】按钮。
+    受信任点击同意按钮 → 轮询可见确认弹窗（若有）点击确定 → 消息区核验。"""
+    info, head = _open_conversation_input(sess, (company or "").strip(), poll_s)
+    if not info:
+        raise RuntimeError("conversation/input not found for %r (head=%r)" % (company, head))
+
+    pos = _ev(sess, AGREE_WECHAT_BTN_JS)
+    if not isinstance(pos, dict):
+        raise RuntimeError("agree_wechat button probe failed: %r" % (pos,))
+    if pos.get("r") == "already_agreed":
+        return {"status": "already_agreed", "company": company, "conv": head}
+    if pos.get("r") != "found":
+        return {"status": "notfound", "company": company, "conv": head, "note": "agree button not found in chat"}
+
+    _trusted_click(sess, int(pos["x"]), int(pos["y"]))
+
+    # 轮询可见确认弹窗（最多 ~3s）
+    for _ in range(6):
+        time.sleep(0.5)
+        dlg = _ev(sess, VISIBLE_SURE_DIALOG_JS)
+        if isinstance(dlg, dict) and dlg.get("r") == "dialog":
+            _trusted_click(sess, int(dlg["x"]), int(dlg["y"]))
+            break
+
+    return {"status": "ok", "action": "agree_wechat", "company": company, "conv": head}
+
+
 def send_greeting_raw(sess, job, cfg):
     """裸CDP版打招呼（调用前调用方需已导航到职位详情页且 wait_ready 通过）。
     注意：点击"立即沟通"即可能建立沟通关系，视为消耗一次机会。
@@ -614,41 +677,22 @@ def get_active_conversation_job(sess):
     return None
 
 
-# 聊天历史提取（2026-09-08 真机侦察）：消息列表在 .chat-message .im-list，
-# 每个 .message-item 的 class 标注发言方：item-myself=我方 / item-friend=HR / item-system=平台系统消息。
-# innerText 带时间戳前缀（"08-31 17:12|"、"昨天 19:20|"、"10:34||"）与"已读"、卡片按钮（"拒绝|同意"）噪声，需过滤。
-CHAT_HISTORY_JS = """
-(() => {
-  const list = document.querySelector('.chat-message .im-list');
-  if (!list) return JSON.stringify({r: 'no_list'});
-  const TIME_RE = /^(?:\\d{2}-\\d{2} \\d{1,2}:\\d{2}|\\d{4}-\\d{2}-\\d{2}[ T]\\d{1,2}:\\d{2}.*|昨天.*|\\d{1,2}:\\d{2}|\\d{1,2}月\\d{1,2}日.*)$/;
-  const DROP = new Set(['已读', '未读', '拒绝', '同意', '收下']);
-  const msgs = [];
-  for (const it of list.querySelectorAll('.message-item')) {
-    const cls = String(it.className || '');
-    let role = null;
-    if (cls.includes('item-myself')) role = 'me';
-    else if (cls.includes('item-friend')) role = 'hr';
-    else if (cls.includes('item-system')) role = 'system';
-    if (!role) continue;
-    const raw = (it.innerText || '').replace(/\\n/g, '|');
-    const parts = raw.split('|').map(s => s.trim())
-      .filter(s => s && !TIME_RE.test(s) && !DROP.has(s));
-    const text = parts.join(' ').slice(0, 120);
-    if (text) msgs.push({role: role, text: text});
-  }
-  return JSON.stringify({messages: msgs, count: msgs.length, source: 'dom'});
-})()
-"""
+# 聊天历史提取：直接复用 rawcdp 中精确支持 item-myself/chat-item--right/item-friend/chat-item--left/item-system/chat-sysmsg
+# 并过滤系统提示文本与时间戳/已读杂音的 CHAT_HISTORY_JS，以及 clean_conversation_history 辅助函数
+from .rawcdp import CHAT_HISTORY_JS, clean_conversation_history
 
 
-def get_active_conversation_history(sess, limit=20):
+def get_active_conversation_history(sess, limit=20, filter_system=False):
     """提取当前激活会话的最近聊天历史（只读，零发送）。
     返回 [{role, text}]（role: me=我方 / hr=对方 / system=平台系统消息），
+    若 filter_system=True，则过滤剔除 system 消息，仅保留 me 与 hr。
     最多 limit 条（取最近的）；提取失败返回 None（历史是增强项，不阻塞决策）。"""
     res = _ev(sess, CHAT_HISTORY_JS)
     if isinstance(res, dict) and res.get("messages") is not None:
         msgs = res.get("messages") or []
+        if filter_system:
+            msgs = [m for m in msgs if m.get("role") in ("me", "hr")]
         return msgs[-int(limit):] if limit else msgs
     return None
+
 
