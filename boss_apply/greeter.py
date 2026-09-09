@@ -324,6 +324,21 @@ def send_message_via_chat(sess, company, text, poll_s=12):
     return {"conv": head, "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
 
 
+def send_message_in_current_conv(sess, text):
+    """在当前已处于激活状态的会话输入框中直接填充并发送短文本（零二次页面跳转与会话重选）。
+    以发送后输入框清零为准验证成功；返回 {filled_len, send_via, post}；失败抛异常。"""
+    info = _ev(sess, _probe_js())
+    if not (isinstance(info, dict) and info.get("inputTag")):
+        raise RuntimeError("input not ready in current conversation")
+    r3 = _ev(sess, _fill_js(text))
+    if not (isinstance(r3, dict) and r3.get("r") == "filled"):
+        raise RuntimeError("fill failed: %r" % (r3,))
+    ok, r4, post = _send_verified(sess)
+    if not ok:
+        raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
+    return {"filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
+
+
 # 工具栏按钮受信任点击 + 可见弹窗确认（2026-09-08 换微信误发换电话事故修复）：
 # 病理：① el.click() 合成点击被 BOSS Vue 的 isTrusted 过滤静默忽略，工具栏按钮
 # 点击从未生效；② DOM 永久预埋"确认与对方交换电话吗"隐藏弹窗（.panel-contact

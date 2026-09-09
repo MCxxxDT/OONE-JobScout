@@ -534,41 +534,44 @@ def run_cycle(cfg, engine, args, st=None):
                 time.sleep(delay)
 
                 act_ok = True
-                # 物理动作触发
+                # 物理动作触发与伴随文本（同会话单标签页执行）
                 if action == "send_resume":
-                    print(f"  [物理动作] 正在通过 CDP 点击【发送简历】按钮...")
-                    res_act = flows.chat_send_resume(cfg, who)
+                    print(f"  [物理动作] 正在通过 CDP 点击【发送简历】按钮 (伴随文本: {'有' if reply_text else '无'})...")
+                    res_act = flows.chat_send_resume(cfg, who, reply_text=reply_text)
                     if not res_act.get("ok"):
                         print(f"  [动作异常] 发送简历失败: {res_act.get('error') or res_act.get('blocked')}")
                         act_ok = False
                     else:
                         print(f"  [动作成功] 附件简历已成功发送至 {who}！")
+                        if reply_text and res_act.get("text_result"):
+                            print(f"  [文案伴随] 伴随消息已送达 {who}！")
                 elif action == "exchange_wechat":
-                    print(f"  [物理动作] 正在通过 CDP 点击【换微信】官方按钮...")
-                    res_act = flows.chat_exchange_wechat(cfg, who)
+                    print(f"  [物理动作] 正在通过 CDP 点击【换微信】官方按钮 (伴随文本: {'有' if reply_text else '无'})...")
+                    res_act = flows.chat_exchange_wechat(cfg, who, reply_text=reply_text)
                     if not res_act.get("ok"):
                         print(f"  [动作异常] 发起交换微信失败: {res_act.get('error') or res_act.get('blocked')}")
                         act_ok = False
                     else:
                         print(f"  [动作成功] 交换微信官方申请已送达 {who}！")
+                        if reply_text and res_act.get("text_result"):
+                            print(f"  [文案伴随] 伴随消息已送达 {who}！")
                 elif action == "agree_wechat":
-                    print(f"  [物理动作] 正在通过 CDP 点击【同意交换微信】按钮...")
-                    res_act = flows.chat_agree_wechat(cfg, who)
+                    print(f"  [物理动作] 正在通过 CDP 点击【同意交换微信】按钮 (伴随文本: {'有' if reply_text else '无'})...")
+                    res_act = flows.chat_agree_wechat(cfg, who, reply_text=reply_text)
                     if not res_act.get("ok"):
                         print(f"  [动作异常] 同意交换微信失败: {res_act.get('error') or res_act.get('blocked')}")
                         act_ok = False
                     else:
                         print(f"  [动作成功] 已同意 {who} 的交换微信申请！")
-
-                # 伴随短文本发送（若有）
-                if reply_text:
+                        if reply_text and res_act.get("text_result"):
+                            print(f"  [文案伴随] 伴随消息已送达 {who}！")
+                elif action == "reply":
                     res_text = flows.chat_reply(cfg, who, reply_text)
                     if res_text.get("ok"):
-                        print(f"  [文案发送成功] 伴随消息已送达 {who}！")
+                        print(f"  [文案发送成功] 消息已送达 {who}！")
                     else:
                         print(f"  [文案发送失败] 错误: {res_text.get('error') or res_text.get('blocked')}")
-                        if action == "reply":
-                            act_ok = False
+                        act_ok = False
 
                 if act_ok:
                     replied_count += 1

@@ -762,6 +762,8 @@ _r401 = _tc18.get("/", params={"token": "wrong"})
 check("首页错误token返回401页面", _r401.status_code == 401)
 _r_ok = _tc18.get("/", params={"token": _want18})
 check("首页正确token返回工作台页面", _r_ok.status_code == 200 and "审批台" in _r_ok.text)
+check("首页包含可编辑回复框与actReply", "replyText" in _r_ok.text and "actReply" in _r_ok.text)
+check("首页包含伴随发送按钮与同意换微信", "agree_wechat" in _r_ok.text and "actWithText" in _r_ok.text)
 
 # 18.3 overview API
 _r_ov = _tc18.get("/api/overview", params={"token": _want18})
@@ -1210,6 +1212,20 @@ try:
     check("handle_card_action派发agree_wechat", res_card_agree.get("ok") is True and res_card_agree["result"]["mock"] == "agree_wechat")
 finally:
     flows.chat_agree_wechat = orig_agree
+
+# 27.6 handle_card_action 传递伴随文本验证
+orig_ex = flows.chat_exchange_wechat
+try:
+    received = {}
+    def mock_ex(c, comp, reply_text=""):
+        received["comp"] = comp
+        received["reply_text"] = reply_text
+        return {"ok": True, "status": "ok"}
+    flows.chat_exchange_wechat = mock_ex
+    res_card_ex = _fb.handle_card_action(cfg, {"action": "exchange_wechat", "company": "腾讯互娱", "text": "加您微信了，请查收"})
+    check("handle_card_action传递伴随文本", res_card_ex.get("ok") is True and received["reply_text"] == "加您微信了，请查收")
+finally:
+    flows.chat_exchange_wechat = orig_ex
 
 
 shutil.rmtree(DRY, ignore_errors=True)

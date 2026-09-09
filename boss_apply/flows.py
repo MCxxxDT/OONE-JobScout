@@ -391,12 +391,13 @@ def chat_reply(cfg, company, text):
         sess.close()
 
 
-def chat_exchange_wechat(cfg, company):
+def chat_exchange_wechat(cfg, company, reply_text=""):
     """按公司名点开会话并点击【换微信】官方按钮。写台账 action=exchange_wechat。
     2026-09-08：greeter 层已加固（受信任点击+弹窗标题校验），no_dialog/no_verify
     状态如实返回 ok=False（不再谎报成功）。
     2026-09-09：岗位适配门禁——执行前 judge_job_fit 判定（prefs 规则优先/LLM 语义兜底/
-    零硬编码），拒绝时归因留痕（job_fit_gate + status=blocked_job_fit），防销售地推岗误发。"""
+    零硬编码），拒绝时归因留痕（job_fit_gate + status=blocked_job_fit），防销售地推岗误发。
+    若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
     gate = _job_fit_gate(cfg, company)
     if not gate["allow"]:
         ledger.append({"action": "exchange_wechat", "status": "blocked_job_fit",
@@ -408,9 +409,18 @@ def chat_exchange_wechat(cfg, company):
     try:
         sess.open_tab()
         r = greeter.exchange_wechat_via_chat(sess, company)
+        text_res = None
+        if reply_text and r.get("status") in ("ok", "already_sent"):
+            try:
+                time.sleep(1.0)
+                tr = greeter.send_message_in_current_conv(sess, reply_text)
+                text_res = {"status": "ok", "result": tr}
+            except Exception as te:
+                text_res = {"status": "failed", "error": str(te)[:200]}
         ledger.append({"action": "exchange_wechat", "status": r.get("status", "ok"),
-                       "company": company, "conv": r.get("conv")})
-        return {"ok": r.get("status") == "ok", "company": company, "result": r}
+                       "company": company, "conv": r.get("conv"),
+                       "text_sent": bool(text_res and text_res.get("status") == "ok")})
+        return {"ok": r.get("status") == "ok", "company": company, "result": r, "text_result": text_res}
     except Exception as e:
         ledger.append({"action": "exchange_wechat", "status": "failed",
                        "company": company, "error": str(e)[:200]})
@@ -420,10 +430,11 @@ def chat_exchange_wechat(cfg, company):
         sess.close()
 
 
-def chat_send_resume(cfg, company):
+def chat_send_resume(cfg, company, reply_text=""):
     """按公司名点开会话并点击【发简历】官方按钮。写台账 action=send_resume。
     2026-09-08：greeter 层已加固，no_verify 状态如实返回 ok=False。
-    2026-09-09：岗位适配门禁——与换微信同链路（judge_job_fit），拒绝归因留痕。"""
+    2026-09-09：岗位适配门禁——与换微信同链路（judge_job_fit），拒绝归因留痕。
+    若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
     gate = _job_fit_gate(cfg, company)
     if not gate["allow"]:
         ledger.append({"action": "send_resume", "status": "blocked_job_fit",
@@ -435,9 +446,18 @@ def chat_send_resume(cfg, company):
     try:
         sess.open_tab()
         r = greeter.send_resume_via_chat(sess, company)
+        text_res = None
+        if reply_text and r.get("status") in ("ok", "already_sent"):
+            try:
+                time.sleep(1.0)
+                tr = greeter.send_message_in_current_conv(sess, reply_text)
+                text_res = {"status": "ok", "result": tr}
+            except Exception as te:
+                text_res = {"status": "failed", "error": str(te)[:200]}
         ledger.append({"action": "send_resume", "status": r.get("status", "ok"),
-                       "company": company, "conv": r.get("conv")})
-        return {"ok": r.get("status") == "ok", "company": company, "result": r}
+                       "company": company, "conv": r.get("conv"),
+                       "text_sent": bool(text_res and text_res.get("status") == "ok")})
+        return {"ok": r.get("status") == "ok", "company": company, "result": r, "text_result": text_res}
     except Exception as e:
         ledger.append({"action": "send_resume", "status": "failed",
                        "company": company, "error": str(e)[:200]})
@@ -447,9 +467,9 @@ def chat_send_resume(cfg, company):
         sess.close()
 
 
-def chat_agree_wechat(cfg, company):
+def chat_agree_wechat(cfg, company, reply_text=""):
     """按公司名点开会话并点击【同意交换微信】官方按钮。写台账 action=agree_wechat。
-    受岗位适配门禁（_job_fit_gate）保护。"""
+    受岗位适配门禁（_job_fit_gate）保护。若传入 reply_text，在同会话中伴随发送短文本。"""
     gate = _job_fit_gate(cfg, company)
     if not gate["allow"]:
         ledger.append({"action": "agree_wechat", "status": "blocked_job_fit",
@@ -461,9 +481,18 @@ def chat_agree_wechat(cfg, company):
     try:
         sess.open_tab()
         r = greeter.agree_wechat_via_chat(sess, company)
+        text_res = None
+        if reply_text and r.get("status") in ("ok", "already_agreed"):
+            try:
+                time.sleep(1.0)
+                tr = greeter.send_message_in_current_conv(sess, reply_text)
+                text_res = {"status": "ok", "result": tr}
+            except Exception as te:
+                text_res = {"status": "failed", "error": str(te)[:200]}
         ledger.append({"action": "agree_wechat", "status": r.get("status", "ok"),
-                       "company": company, "conv": r.get("conv")})
-        return {"ok": r.get("status") in ("ok", "already_agreed"), "company": company, "result": r}
+                       "company": company, "conv": r.get("conv"),
+                       "text_sent": bool(text_res and text_res.get("status") == "ok")})
+        return {"ok": r.get("status") in ("ok", "already_agreed"), "company": company, "result": r, "text_result": text_res}
     except Exception as e:
         ledger.append({"action": "agree_wechat", "status": "failed",
                        "company": company, "error": str(e)[:200]})

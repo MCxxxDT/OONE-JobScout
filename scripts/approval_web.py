@@ -373,11 +373,15 @@ async function load() {
       <div class="who">${esc(c.company)} ${c.high_intent ? '<span class="hi">🔥高意向</span>' : ''} <span class="muted">${esc(c.time)}</span></div>
       <div class="msg">HR: ${esc(c.last_msg)}</div>
       <div class="msg muted">决策理由: ${esc(c.reason)}</div>
-      ${c.suggested ? `<div class="draft">📝 推荐回复: ${esc(c.suggested)}</div>` : ''}
+      <div class="draft" style="margin:8px 0 6px">
+        <label style="display:block;font-size:12px;color:var(--mut);margin-bottom:4px">📝 回复草稿（支持直接编辑后发送）：</label>
+        <textarea id="replyText${i}" style="width:100%;min-height:50px;background:#0f172a;color:var(--txt);border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:13px;resize:vertical;" placeholder="可在此直接编辑或输入回复内容…">${esc(c.suggested || '')}</textarea>
+      </div>
       <div class="btns">
-        ${c.suggested ? `<button class="b1" onclick="act(${i},'reply')">发送推荐回复</button>` : ''}
-        <button onclick="act(${i},'exchange_wechat')">换微信</button>
-        <button onclick="act(${i},'send_resume')">发简历</button>
+        <button class="b1" onclick="actReply(${i})">发送回复</button>
+        <button onclick="actWithText(${i},'exchange_wechat')">换微信</button>
+        <button onclick="actWithText(${i},'send_resume')">发简历</button>
+        <button onclick="actWithText(${i},'agree_wechat')">同意换微信</button>
         <button class="b3" onclick="act(${i},'ignore')">忽略</button>
         <span id="res${i}" class="ok"></span>
       </div>
@@ -404,12 +408,45 @@ async function loadSettings() {
     + (eff.unknown_cities.length ? ` <span class="err">未识别城市：${eff.unknown_cities.map(esc).join('、')}</span>` : '')
     + '<br>生效关键词：' + (eff.keywords.map(esc).join('、') || '（空）');
 }
+async function actReply(i) {
+  const c = window._pending[i];
+  const el = document.getElementById('res' + i);
+  const box = document.getElementById('replyText' + i);
+  const text = (box ? box.value : (c.suggested || '')).trim();
+  if (!text) {
+    el.className = 'err';
+    el.textContent = '❌ 回复内容不能为空';
+    return;
+  }
+  el.className = 'ok'; el.textContent = '发送中…';
+  const body = { action: 'reply', company: c.company, text: text };
+  const d = await api('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  el.className = d.ok ? 'ok' : 'err';
+  el.textContent = d.ok ? '✅ 已发送' : ('❌ ' + (d.error || '失败'));
+  setTimeout(load, 1500);
+}
+async function actWithText(i, action) {
+  const c = window._pending[i];
+  const el = document.getElementById('res' + i);
+  const box = document.getElementById('replyText' + i);
+  const text = box ? box.value.trim() : '';
+  el.className = 'ok'; el.textContent = '执行中…';
+  const body = { action: action, company: c.company };
+  if (text) body.text = text;
+  const d = await api('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  el.className = d.ok ? 'ok' : 'err';
+  el.textContent = d.ok ? '✅ 已执行' : ('❌ ' + (d.error || '失败'));
+  setTimeout(load, 1500);
+}
 async function act(i, action) {
   const c = window._pending[i];
   const el = document.getElementById('res' + i);
   el.className = 'ok'; el.textContent = '执行中…';
   const body = { action: action, company: c.company };
-  if (action === 'reply') body.text = c.suggested;
+  if (action === 'reply') {
+    const box = document.getElementById('replyText' + i);
+    body.text = (box ? box.value : (c.suggested || '')).trim();
+  }
   const d = await api('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   el.className = d.ok ? 'ok' : 'err';
   el.textContent = d.ok ? '✅ 已执行' : ('❌ ' + (d.error || '失败'));

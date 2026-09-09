@@ -351,16 +351,17 @@ def handle_card_action(cfg: dict, action_payload: dict) -> dict:
         res = flows.chat_reply(cfg, company, text)
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
+    text = (action_payload.get("text") or "").strip()
     if act == "exchange_wechat":
-        res = flows.chat_exchange_wechat(cfg, company)
+        res = flows.chat_exchange_wechat(cfg, company, reply_text=text) if text else flows.chat_exchange_wechat(cfg, company)
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
     if act == "send_resume":
-        res = flows.chat_send_resume(cfg, company)
+        res = flows.chat_send_resume(cfg, company, reply_text=text) if text else flows.chat_send_resume(cfg, company)
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
     if act == "agree_wechat":
-        res = flows.chat_agree_wechat(cfg, company)
+        res = flows.chat_agree_wechat(cfg, company, reply_text=text) if text else flows.chat_agree_wechat(cfg, company)
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
     if act == "ignore":
