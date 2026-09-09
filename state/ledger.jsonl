@@ -1231,3 +1231,15 @@
 {"action": "daemon_gate_sleep", "current_time": "2026-09-09 02:48:05", "active_hours": "09:30-22:00", "wait_seconds": 24114, "ts": "2026-09-09 02:48:07"}
 {"action": "daemon_gate_sleep", "current_time": "2026-09-09 03:18:07", "active_hours": "09:30-22:00", "wait_seconds": 22312, "ts": "2026-09-09 03:18:08"}
 {"action": "daemon_gate_sleep", "current_time": "2026-09-09 03:31:25", "active_hours": "09:30-22:00", "wait_seconds": 21514, "ts": "2026-09-09 03:31:27"}
+{"action": "reply", "status": "ok", "company": "王先生多益网络招聘者", "text_head": "感谢您的建议！我会尽快联系邹先生。我对游戏运营岗位很感兴趣，特别是内容创作与营销策划部分，我的数字媒体技术背景和AI工具应用经验或能契合。能否提供完整JD或实习安排细节？期待进一步交流！", "conv": "10:25\n王先生多益网络招聘者\n同学可以找我司邹先生这位HR了解下运营岗位", "ts": "2026-09-09 16:53:27"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 16:52:41", "scanned": 23, "candidates": 2, "replied": 1, "dry_run": false, "ts": "2026-09-09 16:53:27"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 16:58:06", "scanned": 23, "candidates": 1, "replied": 0, "dry_run": false, "ts": "2026-09-09 16:58:08"}
+{"action": "job_fit_gate", "company": "华先生Talking猎头顾问", "job_title": "AI Agent产品经理 - 杭州/北京（猎头职位）", "allow": true, "attribution": "llm_match_pass", "hit_word": "", "verdict": "high", "score": 25.0, "detail": "LLM: AI Agent方向高度对口，技术栈契合，杭州符合意向。", "ts": "2026-09-09 16:58:24"}
+{"action": "exchange_wechat", "status": "already_sent", "company": "华先生Talking猎头顾问", "conv": "08月31日\n华先生Talking猎头顾问\n华先生的手机号：*****", "ts": "2026-09-09 16:58:27"}
+{"action": "job_fit_gate", "company": "华先生Talking猎头顾问", "job_title": "AI Agent产品经理 - 杭州/北京（猎头职位）", "allow": true, "attribution": "llm_match_pass", "hit_word": "", "verdict": "high", "score": 25.0, "detail": "LLM: 方向契合，技术强匹配，杭州符合意向。", "ts": "2026-09-09 16:59:10"}
+{"action": "exchange_wechat", "status": "already_sent", "company": "华先生Talking猎头顾问", "conv": "08月31日\n华先生Talking猎头顾问\n华先生的手机号：*****", "ts": "2026-09-09 16:59:14"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:02:05", "scanned": 23, "candidates": 1, "replied": 0, "dry_run": false, "ts": "2026-09-09 17:02:06"}
+{"action": "reply", "status": "ok", "company": "华先生Talking猎头顾问", "text_head": "好的华先生，我这就去整理发送。考虑到社招岗位与我的阶段不符，想请您多帮忙留意下贵司在杭州或北京的**实习/应届AI产品岗**。我有全栈Agent工程落地和商业化实操经验，对Vibe Coding和大模型协同办公方向非常感兴趣且有深度实践。方", "conv": "17:05\n华先生Talking猎头顾问\n您直接发我简历就好了，我微信加人太多，信息很容易被", "ts": "2026-09-09 17:07:46"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:06:44", "scanned": 23, "candidates": 1, "replied": 1, "dry_run": false, "ts": "2026-09-09 17:07:46"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:13:18", "scanned": 23, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 17:13:19"}
+{"action": "daemon_cycle_summary", "timestamp": "2026-09-09 17:17:58", "scanned": 23, "candidates": 0, "replied": 0, "dry_run": false, "ts": "2026-09-09 17:18:00"}

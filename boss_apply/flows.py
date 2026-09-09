@@ -420,7 +420,8 @@ def chat_exchange_wechat(cfg, company, reply_text=""):
         ledger.append({"action": "exchange_wechat", "status": r.get("status", "ok"),
                        "company": company, "conv": r.get("conv"),
                        "text_sent": bool(text_res and text_res.get("status") == "ok")})
-        return {"ok": r.get("status") == "ok", "company": company, "result": r, "text_result": text_res}
+        is_ok = (r.get("status") == "ok") or (r.get("status") == "already_sent")
+        return {"ok": is_ok, "status": r.get("status"), "company": company, "result": r, "text_result": text_res}
     except Exception as e:
         ledger.append({"action": "exchange_wechat", "status": "failed",
                        "company": company, "error": str(e)[:200]})
@@ -457,7 +458,8 @@ def chat_send_resume(cfg, company, reply_text=""):
         ledger.append({"action": "send_resume", "status": r.get("status", "ok"),
                        "company": company, "conv": r.get("conv"),
                        "text_sent": bool(text_res and text_res.get("status") == "ok")})
-        return {"ok": r.get("status") == "ok", "company": company, "result": r, "text_result": text_res}
+        is_ok = (r.get("status") == "ok") or (r.get("status") == "already_sent")
+        return {"ok": is_ok, "status": r.get("status"), "company": company, "result": r, "text_result": text_res}
     except Exception as e:
         ledger.append({"action": "send_resume", "status": "failed",
                        "company": company, "error": str(e)[:200]})
@@ -492,7 +494,8 @@ def chat_agree_wechat(cfg, company, reply_text=""):
         ledger.append({"action": "agree_wechat", "status": r.get("status", "ok"),
                        "company": company, "conv": r.get("conv"),
                        "text_sent": bool(text_res and text_res.get("status") == "ok")})
-        return {"ok": r.get("status") in ("ok", "already_agreed"), "company": company, "result": r, "text_result": text_res}
+        is_ok = (r.get("status") == "ok") or (r.get("status") == "already_agreed")
+        return {"ok": is_ok, "status": r.get("status"), "company": company, "result": r, "text_result": text_res}
     except Exception as e:
         ledger.append({"action": "agree_wechat", "status": "failed",
                        "company": company, "error": str(e)[:200]})

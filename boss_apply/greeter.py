@@ -159,6 +159,7 @@ def _pick_conversation_js(company):
     """消息中心会话定位：优先按公司名匹配；company 为空才取最新一条。
     严格匹配（审计补丁#3）：指定公司未命中时直接返回 notfound，严禁退回 newest，
     防止把回复发给最新会话的无关 HR。
+    支持去除空白符（\\s/\\xa0）匹配，容忍侧栏公司名与标题的空格排版差异。
     不直接 el.click()（BOSS 列表项对合成 click 无响应，2026-08-31 实测），
     返回元素视口坐标，由调用方走 CDP Input.dispatchMouseEvent 派发受信任点击。"""
     return """
@@ -169,10 +170,26 @@ def _pick_conversation_js(company):
     const t = li.innerText || '';
     return t.length > 12 && /(?:\\d{1,2}:\\d{2}|\\d{1,2}月\\d{1,2}日|昨天|\\d{4}年)/.test(t);
   };
+  const clean = (s) => (s || '').replace(/[\\s\\xa0\\u3000]/g, '');
   let target = null, picked = 'none';
   if (company) {
+    const targetClean = clean(company);
+    // 1. 无空白全匹配
     for (const li of lis) {
-      if ((li.innerText || '').indexOf(company) >= 0 && isConv(li)) { target = li; picked = 'company'; break; }
+      if (isConv(li) && clean(li.innerText).indexOf(targetClean) >= 0) {
+        target = li; picked = 'company_exact'; break;
+      }
+    }
+    // 2. 双向子串与核心前缀匹配（防公司名或HR名中带空格、换行、顾问等前缀后缀差异）
+    if (!target) {
+      for (const li of lis) {
+        if (!isConv(li)) continue;
+        const textClean = clean(li.innerText);
+        const sub = targetClean.slice(0, Math.min(targetClean.length, 6));
+        if (sub.length >= 2 && textClean.indexOf(sub) >= 0) {
+          target = li; picked = 'company_sub'; break;
+        }
+      }
     }
     if (!target) return JSON.stringify({r: 'notfound', picked: 'company_missing', company: company});
   }
@@ -348,7 +365,8 @@ TOOLBAR_BTN_POS_JS = """
 (() => {
   const btn = document.querySelector(%s);
   if (!btn) return JSON.stringify({r: 'notfound'});
-  if (btn.classList.contains('unable')) return JSON.stringify({r: 'unable'});
+  const cls = String(btn.className || '');
+  if (btn.classList.contains('unable') || cls.includes('disabled') || btn.hasAttribute('disabled')) return JSON.stringify({r: 'unable'});
   const rect = btn.getBoundingClientRect();
   if (rect.width <= 0) return JSON.stringify({r: 'notfound'});
   return JSON.stringify({r: 'found', x: Math.round(rect.left + rect.width / 2),
@@ -429,6 +447,10 @@ def exchange_wechat_via_chat(sess, company, poll_s=12):
             confirmed = dlg
             break
     if confirmed is None:
+        # 如果会话历史中已有请求交换微信记录，直接判定为 already_sent（此前已发起，无需重复发送）
+        if wx_before > 0:
+            return {"status": "already_sent", "company": company, "conv": head,
+                    "note": "wechat button clicked without dialog and chat already contains 请求交换微信"}
         # 无弹窗：部分状态可能直接发送，靠消息区核验判定
         return {"status": "no_dialog", "company": company, "conv": head,
                 "note": "wechat button clicked but no visible confirm dialog"}
