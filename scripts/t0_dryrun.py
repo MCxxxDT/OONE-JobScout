@@ -429,9 +429,9 @@ orig_reply = flows.chat_reply
 orig_wechat = flows.chat_exchange_wechat
 orig_resume = flows.chat_send_resume
 try:
-    flows.chat_reply = lambda c, comp, txt: {"ok": True, "mock": "reply", "comp": comp, "txt": txt}
-    flows.chat_exchange_wechat = lambda c, comp: {"ok": True, "mock": "exchange_wechat", "comp": comp}
-    flows.chat_send_resume = lambda c, comp: {"ok": True, "mock": "send_resume", "comp": comp}
+    flows.chat_reply = lambda c, comp, txt, **kw: {"ok": True, "mock": "reply", "comp": comp, "txt": txt}
+    flows.chat_exchange_wechat = lambda c, comp, **kw: {"ok": True, "mock": "exchange_wechat", "comp": comp}
+    flows.chat_send_resume = lambda c, comp, **kw: {"ok": True, "mock": "send_resume", "comp": comp}
 
     res_reply = _fb.handle_card_action(cfg, {"action": "reply", "company": "测试科技", "text": "回复测试"})
     check("handle_card_action 派发 reply", res_reply.get("ok") is True and res_reply["result"]["mock"] == "reply")
@@ -1217,13 +1217,14 @@ finally:
 orig_ex = flows.chat_exchange_wechat
 try:
     received = {}
-    def mock_ex(c, comp, reply_text=""):
+    def mock_ex(c, comp, reply_text="", force=False):
         received["comp"] = comp
         received["reply_text"] = reply_text
+        received["force"] = force
         return {"ok": True, "status": "ok"}
     flows.chat_exchange_wechat = mock_ex
     res_card_ex = _fb.handle_card_action(cfg, {"action": "exchange_wechat", "company": "腾讯互娱", "text": "加您微信了，请查收"})
-    check("handle_card_action传递伴随文本", res_card_ex.get("ok") is True and received["reply_text"] == "加您微信了，请查收")
+    check("handle_card_action传递伴随文本", res_card_ex.get("ok") is True and received["reply_text"] == "加您微信了，请查收" and received["force"] is True)
 finally:
     flows.chat_exchange_wechat = orig_ex
 
@@ -1236,6 +1237,59 @@ check("sanitize合理长度不截断整句", len(cleaned_md) == len(raw_md_text)
 long_over_text = "好的华先生，我这就去整理发送。考虑到社招岗位与我的阶段不符，想请您多帮忙留意下贵司在杭州或北京的实习/应届AI产品岗。我有全栈Agent工程落地和商业化实操经验，对Vibe Coding和大模型协同办公方向非常感兴趣且有深度实践。方便的话想请教下您这边有相关的机会吗？"
 safe_cut = _air.sanitize_and_clean_reply(long_over_text, max_chars=110)
 check("sanitize超长安全截断于句号不挂残词", safe_cut.endswith("。") and not safe_cut.endswith("方。") and not safe_cut.endswith("方"))
+
+
+print("== 28. 第一优先级硬编码与逻辑死锁修复校验 ==")
+# 28.1 城市码剥离 '市' 后缀容错
+from boss_apply import citycodes as _cc
+check("城市名带市正确匹配城市码", _cc.lookup("北京市") == "101010100" and _cc.lookup("杭州市") == "101210100")
+check("城市名不带市保持正确匹配", _cc.lookup("北京") == "101010100")
+
+# 28.2 动态城市配额漏洞修复（不在静态配置中的新意向城市不再为 0 拦截）
+_g28 = guard.Guard(cfg)
+check("静态配置中城市配额正常", _g28.city_left("上海") > 0)
+check("动态新城市赋予单城默认配额不为0", _g28.city_left("苏州") == 15)
+check("城市名带市与不带市归一化", _g28.city_left("苏州市") == 15)
+_g28.record_greet("苏州市")
+check("记录打招呼后带市和不带市共享消耗", _g28.city_left("苏州") == 14 and _g28.city_left("苏州市") == 14)
+
+# 28.3 聊天历史字符截断放宽至 1000 字符
+from boss_apply import rawcdp as _rc
+check("DOM历史消息切片已扩容至1000字符", ".slice(0, 1000)" in _rc.CHAT_HISTORY_JS and ".slice(0, 120)" not in _rc.CHAT_HISTORY_JS)
+
+# 28.4 审批台短公司名消单与标记已处理
+from scripts import approval_web as _aw
+dummy_rows = [
+    {"action": "human_alert_card", "company": "腾讯", "ts": "2026-09-09 18:00:00"},
+    {"action": "mark_handled", "company": "腾讯科技", "ts": "2026-09-09 18:05:00", "status": "ok"},
+    {"action": "human_alert_card", "company": "快手", "ts": "2026-09-09 18:00:00"},
+    {"action": "exchange_wechat", "company": "快手", "ts": "2026-09-09 18:06:00", "status": "already_sent"},
+]
+res_tx, act_tx, _, _ = _aw._is_alert_resolved("2026-09-09 18:00:00", "腾讯", dummy_rows)
+check("短公司名(2字符)子串正确消单", res_tx is True and act_tx == "mark_handled")
+
+res_ks, act_ks, _, _ = _aw._is_alert_resolved("2026-09-09 18:00:00", "快手", dummy_rows)
+check("短公司名already_sent正确消单", res_ks is True and act_ks == "exchange_wechat")
+
+# 28.5 人工审批显式派发 force=True 放行门禁
+orig_fit = flows._job_fit_gate
+try:
+    flows._job_fit_gate = lambda c, comp: {"allow": False, "attribution": "test_block", "detail": "blocked"}
+    # 未指定 force 时应被门禁拦截
+    res_blocked = flows.chat_exchange_wechat(cfg, "测试销售公司")
+    check("默认门禁正常拦截不符岗位", res_blocked.get("ok") is False and res_blocked.get("blocked") == "job_fit")
+    
+    # 模拟人工审批台传入 force=True
+    from boss_apply import greeter
+    orig_wx_flow = greeter.exchange_wechat_via_chat
+    try:
+        greeter.exchange_wechat_via_chat = lambda s, comp: {"status": "ok", "conv": "mock"}
+        res_forced = flows.chat_exchange_wechat(cfg, "测试销售公司", force=True)
+        check("人工审批force=True放行跳过门禁", res_forced.get("ok") is True)
+    finally:
+        greeter.exchange_wechat_via_chat = orig_wx_flow
+finally:
+    flows._job_fit_gate = orig_fit
 
 
 shutil.rmtree(DRY, ignore_errors=True)

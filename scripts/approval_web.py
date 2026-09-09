@@ -14,6 +14,7 @@
   访问：http://127.0.0.1:8788/?token=boss-apply
 """
 import argparse
+import asyncio
 import datetime
 import json
 import os
@@ -184,7 +185,7 @@ async def api_settings_test(request: Request, token: str = ""):
     key = (body.get("api_key") or "").strip() or llm.get("api_key") or ""
     if not (base and key):
         return {"ok": False, "error": "缺少 base_url 或 api_key"}
-    ok, ms, err = _llm_ping(base, key, model)
+    ok, ms, err = await asyncio.to_thread(_llm_ping, base, key, model)
     return {"ok": ok, "latency_ms": ms, "error": err}
 
 
@@ -433,6 +434,8 @@ PAGE = """<!DOCTYPE html>
   .btn-resume:hover { background: linear-gradient(135deg, #4338ca, #3730a3); }
   .btn-purple { background: linear-gradient(135deg, #9333ea, #7e22ce); box-shadow: 0 2px 10px rgba(147,51,234,0.25); }
   .btn-purple:hover { background: linear-gradient(135deg, #7e22ce, #6b21a8); }
+  .btn-done { background: linear-gradient(135deg, #0d9488, #0f766e); box-shadow: 0 2px 10px rgba(13,148,136,0.25); }
+  .btn-done:hover { background: linear-gradient(135deg, #0f766e, #115e59); }
   .btn-ghost { background: #1e293b; color: var(--mut); border: 1px solid var(--border); }
   .btn-ghost:hover { background: #334155; color: var(--txt); }
 
@@ -841,6 +844,9 @@ function renderPending() {
           <button class="btn btn-purple" id="btnAgree${i}" onclick="actWithText(${i},'agree_wechat')">
             <span>🤝 同意换微信</span>
           </button>
+          <button class="btn btn-done" id="btnDone${i}" onclick="act(${i},'mark_handled')" title="已在手机微信或BOSS端手动处理，直接标记为已完成消单">
+            <span>✅ 标记已处理</span>
+          </button>
           <button class="btn btn-ghost" onclick="act(${i},'ignore')">
             <span>✕ 忽略</span>
           </button>
@@ -943,8 +949,13 @@ async function act(i, action) {
   try {
     const d = await api('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (d.ok) {
-      showToast('已完成忽略操作', 'info');
-      if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已忽略'; }
+      if (action === 'mark_handled') {
+        showToast('已将该会话标记为已处理！', 'success');
+        if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已标记完成'; }
+      } else {
+        showToast('已完成忽略操作', 'info');
+        if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已忽略'; }
+      }
     } else {
       showToast('操作失败: ' + (d.error || '未知'), 'error');
       if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + (d.error || '失败'); }
@@ -1121,7 +1132,7 @@ setInterval(() => load(false), 30000);
 
 
 def _is_alert_resolved(alert_ts, company, rows):
-    """判断该告警是否已被后续动作处理过（回复、换微信、发简历、同意换微信、忽略或跳过）。"""
+    """判断该告警是否已被后续动作处理过（回复、换微信、发简历、同意换微信、忽略或标记完成）。"""
     valid_actions = {
         "reply": {"ok"},
         "exchange_wechat": {"ok", "already_sent"},
@@ -1129,14 +1140,17 @@ def _is_alert_resolved(alert_ts, company, rows):
         "agree_wechat": {"ok", "already_agreed"},
         "card_ignore": None,
         "ignore": None,
+        "mark_handled": None,
         "daemon_skip": None,
     }
-    company_clean = (company or "").replace(" ", "")
+    company_clean = (company or "").replace(" ", "").lower()
     for r in rows:
-        row_comp = (r.get("company") or "").replace(" ", "")
+        row_comp = (r.get("company") or "").replace(" ", "").lower()
+        if not row_comp or not company_clean:
+            continue
         matched = (row_comp == company_clean or 
-                   (len(company_clean) >= 4 and company_clean in row_comp) or 
-                   (len(row_comp) >= 4 and row_comp in company_clean))
+                   (len(company_clean) >= 2 and company_clean in row_comp) or 
+                   (len(row_comp) >= 2 and row_comp in company_clean))
         if not matched:
             continue
         ts = r.get("ts") or ""
@@ -1185,8 +1199,8 @@ def api_overview(token: str = ""):
         is_res, act, ts, st = _is_alert_resolved(a.get("ts") or "", c, rows)
         item = {
             "company": c,
-            "last_msg": (a.get("last_msg") or "")[:200],
-            "reason": (a.get("reason") or "")[:150],
+            "last_msg": (a.get("last_msg") or "")[:500],
+            "reason": (a.get("reason") or "")[:200],
             "suggested": a.get("suggested_reply") or "",
             "time": a.get("ts") or "",
             "high_intent": bool(a.get("high_intent")),
@@ -1214,8 +1228,8 @@ def api_overview(token: str = ""):
             "replied": len([r for r in replied_ok if (r.get("ts") or "").startswith(today)]),
         },
         "guard": guardmod.Guard(cfg).summary(),
-        "pending": pending[:20],
-        "resolved": resolved[:20],
+        "pending": pending[:100],
+        "resolved": resolved[:100],
         "ledger": [
             {"ts": r.get("ts") or "", "action": r.get("action") or "",
              "company": r.get("company") or r.get("title") or "",
@@ -1233,7 +1247,7 @@ async def api_action(request: Request, token: str = ""):
     body = await request.json()
     act = body.get("action")
     company = body.get("company") or ""
-    if act not in ("reply", "exchange_wechat", "send_resume", "agree_wechat", "ignore") or not company:
+    if act not in ("reply", "exchange_wechat", "send_resume", "agree_wechat", "ignore", "mark_handled") or not company:
         return JSONResponse({"ok": False, "error": "invalid action or company"}, status_code=400)
     if act == "reply" and not (body.get("text") or "").strip():
         return JSONResponse({"ok": False, "error": "reply text empty"}, status_code=400)

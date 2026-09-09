@@ -124,7 +124,7 @@ CHAT_HISTORY_JS = """
     const raw = (it.innerText || '').replace(/\\n/g, '|');
     const parts = raw.split('|').map(s => s.trim())
       .filter(s => s && !TIME_RE.test(s) && !DROP.has(s));
-    const text = parts.join(' ').slice(0, 120);
+    const text = parts.join(' ').slice(0, 1000);
     if (!text) continue;
     if (isSysNode || SYS_PAT.test(text)) {
       role = 'system';

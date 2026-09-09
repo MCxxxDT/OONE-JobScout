@@ -429,7 +429,7 @@ def exchange_wechat_via_chat(sess, company, poll_s=12):
     if not info:
         raise RuntimeError("conversation/input not found for %r (head=%r)" % (company, head))
 
-    wx_before = _chat_msg_count(sess, "/请求交换微信/")
+    wx_before = _chat_msg_count(sess, "/(?:请求交换微信|交换微信|加微信|微信号|等待对方同意|已向对方请求)/")
     phone_before = _chat_msg_count(sess, "/请求交换电话/")
 
     r = _toolbar_trusted_click(sess, "'.btn-weixin'")
@@ -475,7 +475,7 @@ def exchange_wechat_via_chat(sess, company, poll_s=12):
     sent = False
     for _ in range(10):
         time.sleep(0.5)
-        if _chat_msg_count(sess, "/请求交换微信/") > wx_before:
+        if _chat_msg_count(sess, "/(?:请求交换微信|交换微信|加微信|微信号|等待对方同意|已向对方请求)/") > wx_before:
             sent = True
             break
     phone_after = _chat_msg_count(sess, "/请求交换电话/")
@@ -537,6 +537,10 @@ def send_resume_via_chat(sess, company, poll_s=12):
         time.sleep(0.5)
         if total_msgs() > before:
             return {"status": "ok", "action": "send_resume", "company": company, "conv": head}
+    # 历史核验：若已有发送简历痕迹，判定为 already_sent，避免无谓转人工死锁
+    resume_cnt = _chat_msg_count(sess, "/(?:已发送附件简历|已发送简历|向对方发送了简历|简历已发送)/")
+    if resume_cnt > 0:
+        return {"status": "already_sent", "company": company, "conv": head, "note": "chat already contains sent resume"}
     return {"status": "no_verify", "company": company, "conv": head,
             "note": "clicked but no new message appeared in chat"}
 

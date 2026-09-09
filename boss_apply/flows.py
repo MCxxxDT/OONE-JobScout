@@ -391,20 +391,22 @@ def chat_reply(cfg, company, text):
         sess.close()
 
 
-def chat_exchange_wechat(cfg, company, reply_text=""):
+def chat_exchange_wechat(cfg, company, reply_text="", force=False):
     """按公司名点开会话并点击【换微信】官方按钮。写台账 action=exchange_wechat。
     2026-09-08：greeter 层已加固（受信任点击+弹窗标题校验），no_dialog/no_verify
     状态如实返回 ok=False（不再谎报成功）。
     2026-09-09：岗位适配门禁——执行前 judge_job_fit 判定（prefs 规则优先/LLM 语义兜底/
     零硬编码），拒绝时归因留痕（job_fit_gate + status=blocked_job_fit），防销售地推岗误发。
+    若 force=True（人工审批台显式派发），放行跳过门禁。
     若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
-    gate = _job_fit_gate(cfg, company)
-    if not gate["allow"]:
-        ledger.append({"action": "exchange_wechat", "status": "blocked_job_fit",
-                       "company": company,
-                       "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
-        return {"ok": False, "blocked": "job_fit", "company": company,
-                "attribution": gate["attribution"], "detail": gate["detail"]}
+    if not force:
+        gate = _job_fit_gate(cfg, company)
+        if not gate["allow"]:
+            ledger.append({"action": "exchange_wechat", "status": "blocked_job_fit",
+                           "company": company,
+                           "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
+            return {"ok": False, "blocked": "job_fit", "company": company,
+                    "attribution": gate["attribution"], "detail": gate["detail"]}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()
@@ -431,18 +433,20 @@ def chat_exchange_wechat(cfg, company, reply_text=""):
         sess.close()
 
 
-def chat_send_resume(cfg, company, reply_text=""):
+def chat_send_resume(cfg, company, reply_text="", force=False):
     """按公司名点开会话并点击【发简历】官方按钮。写台账 action=send_resume。
     2026-09-08：greeter 层已加固，no_verify 状态如实返回 ok=False。
     2026-09-09：岗位适配门禁——与换微信同链路（judge_job_fit），拒绝归因留痕。
+    若 force=True（人工审批台显式派发），放行跳过门禁。
     若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
-    gate = _job_fit_gate(cfg, company)
-    if not gate["allow"]:
-        ledger.append({"action": "send_resume", "status": "blocked_job_fit",
-                       "company": company,
-                       "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
-        return {"ok": False, "blocked": "job_fit", "company": company,
-                "attribution": gate["attribution"], "detail": gate["detail"]}
+    if not force:
+        gate = _job_fit_gate(cfg, company)
+        if not gate["allow"]:
+            ledger.append({"action": "send_resume", "status": "blocked_job_fit",
+                           "company": company,
+                           "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
+            return {"ok": False, "blocked": "job_fit", "company": company,
+                    "attribution": gate["attribution"], "detail": gate["detail"]}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()

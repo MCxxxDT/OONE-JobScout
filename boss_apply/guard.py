@@ -90,14 +90,27 @@ class Guard:
         return True, wait
 
     def record_greet(self, city):
+        clean = (city or "").strip().rstrip("市")
         self.s["greet_count"] += 1
-        self.s["city_counts"][city] = self.s["city_counts"].get(city, 0) + 1
+        self.s["city_counts"][clean] = self.s["city_counts"].get(clean, 0) + 1
         self.s["last_greet_ts"] = time.time()
         self.save()
 
     def city_left(self, city):
-        quota = next((c["quota"] for c in self.cfg["cities"] if c["name"] == city), 0)
-        return max(0, quota - self.s["city_counts"].get(city, 0))
+        clean = (city or "").strip().rstrip("市")
+        quota = None
+        for c in self.cfg.get("cities", []):
+            c_name = (c.get("name") or "").strip().rstrip("市")
+            if c_name == clean:
+                quota = c.get("quota")
+                break
+        if quota is None:
+            # 动态城市默认配额（不低于 15，且不超过单日总上限）
+            quota = min(self.cfg.get("default_city_quota", 15), self.cfg.get("daily_limit", 30))
+        used = self.s["city_counts"].get(clean, 0)
+        if clean != city and city in self.s["city_counts"]:
+            used += self.s["city_counts"].get(city, 0)
+        return max(0, quota - used)
 
     def summary(self):
         return {

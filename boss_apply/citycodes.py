@@ -56,7 +56,7 @@ CITY_CODES = {
 
 def lookup(name, cfg=None):
     """城市名 → 城市码。优先 config 的 citycodes_extra 追加映射，再查内置表。
-    找不到返回 None。"""
+    找不到返回 None。支持自动剥离 '市' 后缀（如 '北京市' -> '北京'）。"""
     name = (name or "").strip()
     if not name:
         return None
@@ -64,7 +64,11 @@ def lookup(name, cfg=None):
     if cfg:
         extra = {str(k).strip().lower(): v for k, v in (cfg.get("citycodes_extra") or {}).items()}
     table = {k.lower(): v for k, v in CITY_CODES.items()}
-    return extra.get(name.lower()) or table.get(name.lower())
+    clean = name.rstrip("市").strip()
+    return (extra.get(name.lower()) or
+            table.get(name.lower()) or
+            extra.get(clean.lower()) or
+            table.get(clean.lower()))
 
 
 def resolve_cities(names, cfg=None):
