@@ -71,9 +71,9 @@
     "max_age_hours": 360,
     "soft_close_hard_limit": "23:30",
     "auto_apply": true,
-    "apply_window": "10:00-14:00",
+    "apply_window": "09:30-14:00",
     "apply_max_pages": 3,
-    "apply_top_n": 15,
+    "apply_top_n": 30,
     "apply_fetch_detail": true
   },
   "llm_match": {
