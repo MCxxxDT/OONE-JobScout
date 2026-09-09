@@ -1282,12 +1282,20 @@ try:
     # 模拟人工审批台传入 force=True
     from boss_apply import greeter
     orig_wx_flow = greeter.exchange_wechat_via_chat
+    orig_rawcdp_cls28 = flows.rawcdp.RawCDP
+    class MockRawCDP28:
+        def __init__(self, *args, **kwargs): pass
+        def open_tab(self, *args, **kwargs): pass
+        def close_tab(self): pass
+        def close(self): pass
     try:
+        flows.rawcdp.RawCDP = MockRawCDP28
         greeter.exchange_wechat_via_chat = lambda s, comp: {"status": "ok", "conv": "mock"}
         res_forced = flows.chat_exchange_wechat(cfg, "测试销售公司", force=True)
         check("人工审批force=True放行跳过门禁", res_forced.get("ok") is True)
     finally:
         greeter.exchange_wechat_via_chat = orig_wx_flow
+        flows.rawcdp.RawCDP = orig_rawcdp_cls28
 finally:
     flows._job_fit_gate = orig_fit
 
@@ -1454,6 +1462,109 @@ try:
     check("Prefs POST 成功保存 job_mode", resp_prefs_mode.status_code == 200 and resp_prefs_mode.json().get("ok") is True)
     resp_job_mode_get2 = client.get("/api/settings?token=boss-apply")
     check("Prefs 更新后 job_mode 为 intern", resp_job_mode_get2.json().get("job_mode") == "intern")
+
+    print("== 31. 每日自动智能投递管线（三阶段全局择优 + 模态感知 + Web控制）==")
+    from boss_apply import daily_apply
+
+    # 31.1 Guard 每日扫描状态标记与翻转
+    g31 = guard.Guard(cfg)
+    check("Guard 初始 is_scan_done 为 False", g31.is_scan_done() is False)
+    g31.mark_scan_done()
+    check("mark_scan_done 后 is_scan_done 为 True", g31.is_scan_done() is True)
+    check("Guard summary 包含 scan_done_today", g31.summary().get("scan_done_today") is True)
+    g31.s["date"] = "1970-01-01"
+    g31._rollover()
+    check("跨日 rollover 后 scan_done_today 重置为 False", g31.is_scan_done() is False)
+
+    # 31.2 collect_candidates 候选收集与硬过滤
+    mock_jobs_pool = [
+        {"title": "AI产品经理实习", "company": "测试大厂A", "salary": "200-300/天", "href": "/job/101.html", "tags": "实习,本科", "boss_active": 0},
+        {"title": "销售代表", "company": "测试黑名单B", "salary": "5-8K", "href": "/job/102.html", "tags": "销售", "boss_active": 0},
+        {"title": "AI产品经理实习", "company": "测试大厂A", "salary": "200-300/天", "href": "/job/101.html", "tags": "实习", "boss_active": 0},
+        {"title": "大模型产品经理", "company": "测试独角兽C", "salary": "300-400/天", "href": "/job/103.html", "tags": "27届", "boss_active": 0},
+    ]
+    orig_search_jobs31 = flows.rawcdp.RawCDP.search_jobs
+    orig_open_tab31 = flows.rawcdp.RawCDP.open_tab
+    orig_close_tab31 = flows.rawcdp.RawCDP.close_tab
+    flows.rawcdp.RawCDP.open_tab = lambda self, **kw: None
+    flows.rawcdp.RawCDP.close_tab = lambda self: None
+    flows.rawcdp.RawCDP.search_jobs = lambda self, kw, c, p, experience=None: list(mock_jobs_pool)
+    try:
+        cfg31 = dict(cfg, job_mode="intern", cities=[{"name": "杭州", "code": "101210100", "quota": 10}], keywords=["AI产品"])
+        cands, c_stats = daily_apply.collect_candidates(cfg31, guard.Guard(cfg31), max_pages=1, fetch_detail=False)
+        check("collect_candidates 正确收集候选", len(cands) >= 2)
+        check("去重生效，相同 href 不重复收集", len(cands) == 2)
+        check("销售岗被 hard_filter 剔除", all("销售" not in c["job"]["title"] for c in cands))
+        check("候选携带 experience 门禁参数 108", all(c["job"].get("experience") == "108" for c in cands))
+
+        # 31.3 rank_and_plan 批量打分与全局排序
+        orig_match_batch = daily_apply.llm_match.match_batch
+        daily_apply.llm_match.match_batch = lambda jobs, cfg: {
+            0: {"score": 28.5, "verdict": "high", "reason": "背景高度契合"},
+            1: {"score": 12.0, "verdict": "medium", "reason": "部分匹配"},
+        }
+        try:
+            plan31, r_stats = daily_apply.rank_and_plan(cands, cfg31, top_n=10)
+            check("rank_and_plan 返回计划列表", len(plan31) == 2)
+            check("按得分降序排序 (high在前)", len(plan31) >= 2 and plan31[0]["score"] >= plan31[1]["score"])
+            check("写入 daily_plan.json 成功", os.path.exists(r_stats["plan_path"]))
+            with open(r_stats["plan_path"], "r", encoding="utf-8") as f:
+                saved_plan = json.load(f)
+            check("daily_plan.json 包含高分候选", len(saved_plan) == 2 and saved_plan[0]["score"] == 28.5)
+        finally:
+            daily_apply.llm_match.match_batch = orig_match_batch
+
+        # 31.4 execute_daily_plan 执行投递
+        orig_execute_jobs = daily_apply.flows.execute_jobs
+        daily_apply.flows.execute_jobs = lambda cfg, g, plan, max_count=15: {
+            "executed": len(plan[:max_count]), "results": [{"ok": True, "title": j["title"]} for j in plan[:max_count]],
+            "guard": g.summary()
+        }
+        try:
+            exec_res = daily_apply.execute_daily_plan(cfg31, guard.Guard(cfg31), top_n=1)
+            check("execute_daily_plan 限制 Top N 投递", exec_res.get("executed") == 1)
+        finally:
+            daily_apply.flows.execute_jobs = orig_execute_jobs
+
+        # 31.5 scan_and_apply_daily 整体 dry_run 验证
+        daily_apply.llm_match.match_batch = lambda jobs, cfg: {
+            0: {"score": 25.0, "verdict": "high", "reason": "dry run 测试"},
+            1: {"score": 15.0, "verdict": "medium", "reason": "dry run 测试"},
+        }
+        try:
+            dry_report = daily_apply.scan_and_apply_daily(cfg31, dry_run=True)
+            check("scan_and_apply_daily dry-run 返回成功", dry_report.get("phase") == "dry_run_complete")
+            check("dry-run 生成候选与计划", dry_report.get("candidates_count") >= 2 and dry_report.get("plan_count") >= 1)
+        finally:
+            daily_apply.llm_match.match_batch = orig_match_batch
+
+    finally:
+        flows.rawcdp.RawCDP.search_jobs = orig_search_jobs31
+        flows.rawcdp.RawCDP.open_tab = orig_open_tab31
+        flows.rawcdp.RawCDP.close_tab = orig_close_tab31
+
+    # 31.6 Web 端 Settings API 读写 auto_apply 回环
+    resp_settings_aa = client.get("/api/settings?token=boss-apply")
+    check("Settings GET 包含 auto_apply 节点", resp_settings_aa.status_code == 200 and "auto_apply" in resp_settings_aa.json())
+    check("auto_apply 包含 enabled 与 apply_top_n", "enabled" in resp_settings_aa.json()["auto_apply"] and "apply_top_n" in resp_settings_aa.json()["auto_apply"])
+
+    post_aa_payload = {
+        "auto_apply": {
+            "enabled": True,
+            "apply_window": "09:30-12:00",
+            "apply_top_n": 20,
+            "apply_max_pages": 4,
+            "apply_fetch_detail": False
+        }
+    }
+    resp_post_aa = client.post("/api/settings?token=boss-apply", json=post_aa_payload)
+    check("Settings POST 成功更新 auto_apply", resp_post_aa.status_code == 200 and resp_post_aa.json().get("ok") is True)
+
+    resp_get_aa2 = client.get("/api/settings?token=boss-apply")
+    aa_saved = resp_get_aa2.json().get("auto_apply") or {}
+    check("Settings 回读 auto_apply.apply_top_n 为 20", aa_saved.get("apply_top_n") == 20)
+    check("Settings 回读 auto_apply.apply_window 正确保存", aa_saved.get("apply_window") == "09:30-12:00")
+    check("Settings 回读 auto_apply.apply_fetch_detail 为 False", aa_saved.get("apply_fetch_detail") is False)
 finally:
     cfgmod.LOCAL_CFG_PATH = _orig_local_path29
 

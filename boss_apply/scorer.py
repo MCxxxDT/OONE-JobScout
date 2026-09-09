@@ -78,7 +78,7 @@ def score(job, detail, cfg):
             return 0, "kill: title role-gate %r" % k
 
     # boss_active: -1/None = 新版卡片无此字段（未知），放行；详情页会补验
-    ba = job.get("boss_active", 999)
+    ba = job.get("boss_active", -1)
     if ba is not None and ba >= 0 and ba > cfg.get("boss_active_max_days", 14):
         return 0, "boss inactive > %d days" % cfg.get("boss_active_max_days", 14)
 

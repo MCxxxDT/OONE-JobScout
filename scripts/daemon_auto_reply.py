@@ -37,7 +37,7 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from boss_apply import ai_reply as air, browser as behav, config as cfgmod, feishu_bot, flows, guard as guardmod, ledger
+from boss_apply import ai_reply as air, browser as behav, config as cfgmod, daily_apply, feishu_bot, flows, guard as guardmod, ledger
 
 
 # ---------------------------------------------------------------------------
@@ -348,6 +348,35 @@ def run_cycle(cfg, engine, args, st=None):
         return {"status": "guard_paused", "reason": str(pause_reason)}
     if st is not None:
         st["guard_alerted"] = False  # 正常巡检中，重置熔断告警状态
+
+    # 2.5 每日自动投递扫描（Phase 1~4，活跃窗口内每日一次）
+    daemon_cfg = cfg.get("daemon") or {}
+    auto_apply = daemon_cfg.get("auto_apply", True)
+    if auto_apply and in_active and not soft_close:
+        g_apply = guardmod.Guard(cfg)
+        if not g_apply.is_scan_done():
+            apply_window = str(daemon_cfg.get("apply_window", "10:00-14:00"))
+            try:
+                aw_start_s, aw_end_s = apply_window.split("-")
+                aw_start = _parse_hhmm(aw_start_s, datetime.time(10, 0))
+                aw_end = _parse_hhmm(aw_end_s, datetime.time(14, 0))
+                in_apply_window = aw_start <= now.time() <= aw_end
+            except Exception:
+                in_apply_window = True  # 解析失败默认允许
+            if in_apply_window:
+                print("  [🎯 每日自动投递] 进入投递扫描窗口，启动三阶段管线...")
+                try:
+                    report = daily_apply.scan_and_apply_daily(cfg, dry_run=args.dry_run)
+                    g_apply.mark_scan_done()
+                    print(f"  [🎯 每日投递完成] 阶段: {report.get('phase')} | "
+                          f"候选: {report.get('candidates_count', 0)} | "
+                          f"计划: {report.get('plan_count', 0)} | "
+                          f"投递: {(report.get('execute') or {}).get('executed', 0)}")
+                except Exception as e:
+                    print(f"  [🎯 每日投递异常] {e}")
+                    ledger.append({"action": "daily_apply_error", "error": str(e)[:200]})
+        else:
+            pass  # 今日扫描已完成，静默跳过
 
     # 3. 裸CDP读取消息中心
     print("  [CDP] 正在拉取消息中心会话列表...")

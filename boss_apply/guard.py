@@ -14,6 +14,7 @@ _DEFAULT = {
     "paused_reason": None,
     "last_greet_ts": 0.0,
     "last_search_ts": 0.0,
+    "scan_done_today": False,
 }
 
 
@@ -41,6 +42,7 @@ class Guard:
             self.s["search_count"] = 0
             self.s["city_counts"] = {}
             self.s["paused_reason"] = None
+            self.s["scan_done_today"] = False
             self.save()
 
     def save(self):
@@ -120,4 +122,13 @@ class Guard:
             "city_counts": self.s["city_counts"],
             "search_count": self.s["search_count"],
             "paused_reason": self.s["paused_reason"],
+            "scan_done_today": self.s.get("scan_done_today", False),
         }
+
+    # ---------- 每日投递扫描标记 ----------
+    def is_scan_done(self):
+        return bool(self.s.get("scan_done_today", False))
+
+    def mark_scan_done(self):
+        self.s["scan_done_today"] = True
+        self.save()

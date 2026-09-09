@@ -126,8 +126,16 @@ def api_settings_get(token: str = ""):
     eff = flows.effective_cities(cfg)
     priv = cfg.get("privacy_policy") or {}
     br = cfg.get("browser") or {}
+    daemon_cfg = cfg.get("daemon") or {}
     return {
         "job_mode": cfg.get("job_mode", "intern"),
+        "auto_apply": {
+            "enabled": daemon_cfg.get("auto_apply", True),
+            "apply_window": daemon_cfg.get("apply_window", "10:00-14:00"),
+            "apply_max_pages": daemon_cfg.get("apply_max_pages", 3),
+            "apply_top_n": daemon_cfg.get("apply_top_n", 15),
+            "apply_fetch_detail": daemon_cfg.get("apply_fetch_detail", True),
+        },
         "llm": {
             "api_key_masked": secrets_mod.masked(llm.get("api_key") or ""),
             "key_source": _key_source(cfg),
@@ -222,6 +230,24 @@ async def api_settings_post(request: Request, token: str = ""):
         if jm in ("intern", "campus", "mix", "all"):
             _write_local("job_mode", jm)
             changed.append("求职定向模态已更新为 %s" % jm)
+
+    # 每日自动投递设置更新
+    if "auto_apply" in body and isinstance(body["auto_apply"], dict):
+        aa = body["auto_apply"]
+        clean_aa = {}
+        if "enabled" in aa:
+            clean_aa["auto_apply"] = bool(aa["enabled"])
+        if "apply_window" in aa:
+            clean_aa["apply_window"] = str(aa["apply_window"]).strip()
+        if "apply_max_pages" in aa:
+            clean_aa["apply_max_pages"] = max(1, min(10, int(aa["apply_max_pages"])))
+        if "apply_top_n" in aa:
+            clean_aa["apply_top_n"] = max(1, min(50, int(aa["apply_top_n"])))
+        if "apply_fetch_detail" in aa:
+            clean_aa["apply_fetch_detail"] = bool(aa["apply_fetch_detail"])
+        if clean_aa:
+            _write_local("daemon", clean_aa)
+            changed.append("每日自动投递设置已更新")
 
     return {"ok": True, "changed": changed or ["无变更"]}
 
@@ -929,6 +955,56 @@ PAGE = """<!DOCTYPE html>
               <div id="effInfo" style="font-size:12px;color:var(--mut);margin-top:14px;line-height:1.6"></div>
             </div>
           </div>
+
+          <!-- Auto-Apply Card -->
+          <div class="panel-card">
+            <h5 class="fw-bold mb-3 d-flex align-items-center">
+              <svg class="title-icon purple" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              每日自动智能投递
+            </h5>
+            <div class="settings-block">
+              <div style="font-size:12px;color:var(--mut);margin-bottom:12px">
+                在工作时间窗口内，由大模型遍历全城岗位、精读JD、综合评估择优生成计划并自动投递。
+              </div>
+              <div class="d-flex align-items-center justify-content-between p-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
+                <div>
+                  <strong style="font-size:13px;color:#111;display:block">启用每日自动投递 (Auto Apply)</strong>
+                  <span style="font-size:11px;color:var(--mut)">开启后后台守护进程每日自动启动一轮多阶段全城扫描与择优投递</span>
+                </div>
+                <label class="form-switch-apple">
+                  <input type="checkbox" id="inAutoApplyEnabled" checked>
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+              <div class="row g-2 mt-2">
+                <div class="col-6">
+                  <label>投递扫描时段（推荐避开早晚高峰）</label>
+                  <input type="text" id="inApplyWindow" placeholder="10:00-14:00" value="10:00-14:00">
+                </div>
+                <div class="col-6">
+                  <label>单日择优投递上限（Top N）</label>
+                  <input type="number" id="inApplyTopN" min="1" max="50" value="15">
+                </div>
+              </div>
+              <div class="row g-2 mt-1">
+                <div class="col-6">
+                  <label>每词搜索深度（页数）</label>
+                  <input type="number" id="inApplyMaxPages" min="1" max="10" value="3">
+                </div>
+                <div class="col-6">
+                  <label>JD 精读深度评估</label>
+                  <select id="inApplyFetchDetail">
+                    <option value="true">开启（加载详情页精读JD，更精准）</option>
+                    <option value="false">关闭（仅依列表卡片粗打分，速度快）</option>
+                  </select>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-3 mt-4">
+                <button class="btn-black" onclick="saveAutoApply()">保存投递设置</button>
+                <span id="resAutoApply" style="font-size:12px"></span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Col 2 -->
@@ -1491,6 +1567,13 @@ async function loadSettings() {
   if (document.getElementById('inBrowserSilent')) document.getElementById('inBrowserSilent').checked = br.silent_mode !== false;
   if (document.getElementById('inBrowserMinimize')) document.getElementById('inBrowserMinimize').checked = br.minimize_on_start !== false;
 
+  const aa = s.auto_apply || {};
+  if (document.getElementById('inAutoApplyEnabled')) document.getElementById('inAutoApplyEnabled').checked = aa.enabled !== false;
+  if (document.getElementById('inApplyWindow')) document.getElementById('inApplyWindow').value = aa.apply_window || '10:00-14:00';
+  if (document.getElementById('inApplyTopN')) document.getElementById('inApplyTopN').value = aa.apply_top_n || 15;
+  if (document.getElementById('inApplyMaxPages')) document.getElementById('inApplyMaxPages').value = aa.apply_max_pages || 3;
+  if (document.getElementById('inApplyFetchDetail')) document.getElementById('inApplyFetchDetail').value = String(aa.apply_fetch_detail !== false);
+
   document.getElementById('profMeta').textContent = s.profile.has_resume
     ? `已存简历 ${s.profile.resume_chars} 字（${s.profile.source}，${s.profile.updated_at}）` + (s.profile.has_refined ? ` · 画像已提炼：${s.profile.refined_summary}` : ' · 画像未提炼')
     : '未上传简历（使用内置画像）';
@@ -1622,6 +1705,28 @@ async function saveBrowserSettings() {
   }
   if (d.ok) {
     showToast('浏览器运行设置已保存！', 'success');
+    loadSettings();
+  }
+}
+
+async function saveAutoApply() {
+  const el = document.getElementById('resAutoApply');
+  const body = {
+    auto_apply: {
+      enabled: document.getElementById('inAutoApplyEnabled').checked,
+      apply_window: document.getElementById('inApplyWindow').value.trim(),
+      apply_top_n: parseInt(document.getElementById('inApplyTopN').value) || 15,
+      apply_max_pages: parseInt(document.getElementById('inApplyMaxPages').value) || 3,
+      apply_fetch_detail: document.getElementById('inApplyFetchDetail').value === 'true',
+    }
+  };
+  const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (el) {
+    el.style.color = d.ok ? 'var(--ok)' : 'var(--dan)';
+    el.textContent = d.ok ? '✅ ' + (d.changed || []).join('；') : '❌ 保存失败';
+  }
+  if (d.ok) {
+    showToast('每日自动投递设置已保存！', 'success');
     loadSettings();
   }
 }
