@@ -2349,8 +2349,12 @@ function togglePlaygroundSettings() {
   if (arrow) arrow.textContent = isShow ? '▼ 展开设定' : '▲ 折叠设定';
 }
 
+let pgConversationHistory = [];
+
 function clearPlaygroundChat() {
-  pgChatMessages = [];
+  pgConversationHistory = [];
+  const histEl = document.getElementById('pgHistory');
+  if (histEl) histEl.value = '';
   const flow = document.getElementById('pgChatFlow');
   if (flow) {
     flow.innerHTML = `
@@ -2456,6 +2460,16 @@ function loadPlaygroundPreset(key) {
   document.getElementById('pgCity').value = p.city;
   document.getElementById('pgJd').value = p.jd;
   document.getElementById('pgHistory').value = p.history;
+  
+  // 从预设初始化连续历史
+  pgConversationHistory = (p.history || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(line => {
+    if (line.startsWith('我方:') || line.startsWith('我方：')) {
+      return { role: 'me', text: line.replace(/^我方[:：]\s*/, '') };
+    } else {
+      return { role: 'hr', text: line.replace(/^HR[:：]\s*/, '') };
+    }
+  });
+
   syncChatHeader();
   document.getElementById('pgMsg').value = p.msg;
   showToast(`已载入场景：${p.company} · ${p.job}`, 'info');
@@ -2483,6 +2497,23 @@ async function runPlaygroundSimulation() {
   // 清空输入框
   if (msgInput) msgInput.value = '';
   
+  // 若 pgConversationHistory 为空但右侧文本框有手动填入的内容，先行解析同步
+  if (pgConversationHistory.length === 0) {
+    const rawHist = (document.getElementById('pgHistory') ? document.getElementById('pgHistory').value : '').trim();
+    if (rawHist) {
+      pgConversationHistory = rawHist.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(line => {
+        if (line.startsWith('我方:') || line.startsWith('我方：')) {
+          return { role: 'me', text: line.replace(/^我方[:：]\s*/, '') };
+        } else {
+          return { role: 'hr', text: line.replace(/^HR[:：]\s*/, '') };
+        }
+      });
+    }
+  }
+
+  // 传给后端的历史：本轮之前的全部累计上下文（不含本条尚未作答的消息）
+  const histLines = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text);
+
   // 左侧渲染 HR 消息
   appendChatMessage('hr', msg);
   
@@ -2493,9 +2524,6 @@ async function runPlaygroundSimulation() {
   const statusEl = document.getElementById('pgStatusHint');
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.style.color = 'var(--acc)'; statusEl.textContent = '大模型思考中…'; }
-
-  const histLines = (document.getElementById('pgHistory') ? document.getElementById('pgHistory').value : '')
-    .split(/\\r?\\n/).map(s => s.trim()).filter(Boolean);
 
   const payload = {
     message: msg,
@@ -2526,6 +2554,15 @@ async function runPlaygroundSimulation() {
     const act = dec.action || 'reply';
     const replyText = d.cleaned_reply || dec.reply_text || dec.suggested_reply || `(执行动作：${act})`;
     appendChatMessage('agent', replyText, { action: act, latency_ms: d.latency_ms });
+
+    // 本轮问答闭环：把当前 HR 消息与 Agent 回复一并沉淀入连续历史池
+    pgConversationHistory.push({ role: 'hr', text: msg });
+    pgConversationHistory.push({ role: 'me', text: replyText });
+
+    // 实时同步回写到右侧历史输入框，保持多轮上下文完全透明与连贯
+    if (document.getElementById('pgHistory')) {
+      document.getElementById('pgHistory').value = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text).join('\n');
+    }
 
     // 右侧更新透视与门禁数据
     renderPlaygroundResult(d);
