@@ -78,19 +78,27 @@ def load_all() -> List[Dict[str, Any]]:
     return rows
 
 
+_STOP_CHARS = set("你我的了吗吧在是有一个不啊哦嗯呢这那你我他她它")
+
+
+def _extract_tokens(text: str) -> set:
+    s = str(text or "").lower().strip()
+    if not s:
+        return set()
+    words = set(re.findall(r"[a-z0-9_]{2,}", s))
+    chars = [c for c in s if "\u4e00" <= c <= "\u9fa5"]
+    bigrams = set("".join(chars[i:i+2]) for i in range(len(chars) - 1)) if len(chars) >= 2 else set()
+    meaningful_chars = set(c for c in chars if c not in _STOP_CHARS)
+    return words | bigrams | meaningful_chars
+
+
 def _compute_overlap_score(query: str, target: str) -> float:
-    """计算简易字符与分词重合度（针对中文短语）。"""
-    if not query or not target:
+    """计算特征分词与 Bigram 重合度（针对中文短语与英文技术词）。"""
+    tq = _extract_tokens(query)
+    tt = _extract_tokens(target)
+    if not tq or not tt:
         return 0.0
-    q_clean = set(re.findall(r"[\u4e00-\u9fa5a-zA-Z0-9]{2,}", query))
-    t_clean = set(re.findall(r"[\u4e00-\u9fa5a-zA-Z0-9]{2,}", target))
-    if not q_clean or not t_clean:
-        q_chars = set(c for c in query if "\u4e00" <= c <= "\u9fa5")
-        t_chars = set(c for c in target if "\u4e00" <= c <= "\u9fa5")
-        if not q_chars or not t_chars:
-            return 0.0
-        return len(q_chars & t_chars) / max(len(q_chars), 1)
-    return len(q_clean & t_clean) / max(len(q_clean), 1)
+    return len(tq & tt) / max(len(tq), 1)
 
 
 def find_similar_demonstrations(
@@ -117,11 +125,15 @@ def find_similar_demonstrations(
         msg_sim = _compute_overlap_score(hr_msg, r_msg)
         job_sim = _compute_overlap_score(job_title, r_job)
 
+        # 严格门禁：消息内容必须有实质相关性（msg_sim >= 0.25），严禁在完全不相关的问题间跨意图强套
+        if msg_sim < 0.25:
+            continue
+
         total_sim = msg_sim * 0.75 + job_sim * 0.25
         if opt:
-            total_sim += 0.25
+            total_sim += 0.15
 
-        if total_sim > 0.15:
+        if total_sim >= 0.35:
             gold_reply = opt if opt else r.get("ai_reply", "")
             candidates.append({
                 "sim": total_sim,
@@ -138,17 +150,18 @@ def find_similar_demonstrations(
 
 
 def format_fewshot_prompt(hr_msg: str, job_title: str = "") -> str:
-    """将检索到的历史高分示范与人工优化案例格式化为 Prompt 注入段落。"""
+    """将检索到的历史高分示范与人工优化案例格式化为 Prompt 注入段落。
+    严格仅在遇到强相关问题时注入，并标注为离线样本，避免模型当成本场对话历史。"""
     demos = find_similar_demonstrations(hr_msg, job_title=job_title, top_k=2)
     if not demos:
         return ""
 
     lines = [
-        "【过往沟通真实高分示范与人工优化经验（极为宝贵，请参考其情商分寸与说话节奏，结合本次场景自主变奏）】:"
+        "【Few-shot 历史参考样本（注意：仅为以往同类提问的情商分寸借鉴，绝非本场对话，严禁套用于无关首句或当成本场前序）】:"
     ]
     for idx, d in enumerate(demos, 1):
         tag = "（★候选人本人优化改写示范）" if d["is_human_optimized"] else f"（用户实测打分: {d['score']}分）"
         lines.append(f"{idx}. HR曾发问：“{d['hr_msg']}”")
         lines.append(f"   高分回应示范{tag}：“{d['gold_reply']}”")
-    lines.append("注意：以上先例旨在示范真实人类从容、真实、不卑不亢的情感温度，严禁机械死记硬背，结合当前上下文自主组织语言。\n")
+    lines.append("注意：以上先例仅供在面对同类特定提问时参考真实人类从容不卑不亢的说话质感，当前首句打招呼严禁套用。\n")
     return "\n".join(lines) + "\n"

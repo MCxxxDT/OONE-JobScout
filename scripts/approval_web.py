@@ -528,7 +528,7 @@ PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>BOSS求职守护 · 运营中枢</title>
+<title>BOSS求职守护 · 审批台</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -602,78 +602,344 @@ PAGE = """<!DOCTYPE html>
   @keyframes pulseB { 0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); } 70% { box-shadow: 0 0 0 8px rgba(59,130,246,0); } 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); } }
   @keyframes pulseR { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 70% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
 
-  /* Signature Dynamic Island Capsule Navigation */
-  .island-nav-row {
+  /* Master App Layout with Left Sidebar */
+  .app-layout {
     display: flex;
-    gap: 10px;
+    min-height: 100vh;
     width: 100%;
-    margin-bottom: 25px;
-    padding: 8px 6px;
-    position: sticky;
-    top: 72px;
-    z-index: 990;
-    background: rgba(244, 245, 247, 0.92);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-radius: 0 0 20px 20px;
+    position: relative;
   }
 
-  .island-capsule {
-    flex: 1;
-    height: 52px;
-    border-radius: 26px;
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+  /* Left Sidebar Navigation */
+  .app-sidebar {
+    width: 220px;
+    background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1050;
+    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1), transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 2px 0 16px rgba(0,0,0,0.02);
+  }
+
+  .sidebar-header {
+    height: 64px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+  }
+  .sidebar-brand-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #0f172a;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 900;
+    flex-shrink: 0;
+    box-shadow: 0 4px 10px rgba(15,23,42,0.15);
+  }
+  .sidebar-brand-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-brand-title {
+    font-size: 14px;
+    font-weight: 900;
+    color: #0f172a;
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+  }
+  .sidebar-brand-sub {
+    font-size: 11px;
+    color: #94a3b8;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .sidebar-toggle-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
     color: #64748b;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.45s cubic-bezier(0.32, 0.72, 0, 1.2);
+    transition: all 0.2s;
+    padding: 0;
+  }
+  .sidebar-toggle-btn:hover {
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+  }
+  .sidebar-toggle-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    fill: none;
+    transition: transform 0.28s;
+  }
+
+  /* Sidebar Navigation Container */
+  .sidebar-nav, .island-nav-row {
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    overflow-y: auto;
+    width: 100%;
+    margin-bottom: 0;
+    background: transparent;
+    position: static;
+  }
+
+  /* Sidebar Nav Items (inherits .island-capsule for test compatibility) */
+  .island-capsule {
+    width: 100%;
+    height: 44px;
+    border-radius: 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 12px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
+    margin: 0;
+    flex: none;
+    user-select: none;
     overflow: hidden;
     white-space: nowrap;
-    user-select: none;
   }
-
+  .island-capsule:hover {
+    background: #f8fafc;
+    color: #0f172a;
+  }
   .island-capsule.active {
-    flex: 2.8;
-    background: #ffffff;
-    color: #111111;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-    border-color: #ffffff;
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+    flex: none;
   }
-  .island-capsule:active { transform: scale(0.97); }
+  .island-capsule:active { transform: scale(0.98); }
 
   .island-svg {
-    width: 20px !important;
-    height: 20px !important;
-    min-width: 20px !important;
-    min-height: 20px !important;
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
     stroke: currentColor !important;
     stroke-width: 2.2 !important;
     fill: none !important;
     stroke-linecap: round;
     stroke-linejoin: round;
-    transition: margin 0.35s;
+    margin-right: 10px !important;
     flex-shrink: 0 !important;
     display: block;
   }
-  .island-capsule.active .island-svg { margin-right: 8px; }
+  .island-capsule.active .island-svg {
+    stroke: #ffffff !important;
+  }
 
   .capsule-text {
-    opacity: 0; max-width: 0; font-size: 14px; font-weight: 800;
-    transition: all 0.35s ease; display: inline-block; letter-spacing: 0.3px;
+    opacity: 1 !important;
+    max-width: 130px !important;
+    font-size: 13px;
+    font-weight: 700;
+    display: inline-block;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .island-capsule.active .capsule-text { opacity: 1; max-width: 160px; }
 
   .capsule-badge {
-    background: #ef4444; color: #fff; font-size: 11px; font-weight: 800;
-    padding: 1px 7px; border-radius: 10px; margin-left: 6px; line-height: 16px;
+    background: #ef4444; color: #fff; font-size: 10px; font-weight: 800;
+    padding: 1px 6px; border-radius: 8px; margin-left: auto; line-height: 16px;
     display: inline-block;
   }
+
+  /* Sidebar Footer */
+  .sidebar-footer {
+    padding: 14px 14px 16px;
+    border-top: 1px solid #f1f5f9;
+    background: #fafbfc;
+  }
+  .sidebar-status-pill {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #059669;
+    margin-bottom: 4px;
+  }
+  .sidebar-sync-text {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 500;
+  }
+
+  /* Collapsed Sidebar on Desktop */
+  .app-sidebar.collapsed {
+    width: 64px;
+  }
+  .app-sidebar.collapsed .sidebar-brand-info,
+  .app-sidebar.collapsed .capsule-text,
+  .app-sidebar.collapsed .sidebar-footer,
+  .app-sidebar.collapsed .capsule-badge {
+    display: none !important;
+  }
+  .app-sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 0 8px;
+  }
+  .app-sidebar.collapsed .island-capsule {
+    justify-content: center;
+    padding: 0;
+  }
+  .app-sidebar.collapsed .island-capsule .island-svg {
+    margin-right: 0 !important;
+  }
+  .app-sidebar.collapsed .sidebar-toggle-btn svg {
+    transform: rotate(180deg);
+  }
+
+  /* App Main Layout */
+  .app-main {
+    flex: 1;
+    margin-left: 220px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg);
+  }
+  .app-sidebar.collapsed ~ .app-main {
+    margin-left: 64px;
+  }
+
+  /* App Topbar Header */
+  .app-topbar, .admin-header {
+    height: 64px;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.015);
+    margin-bottom: 0;
+  }
+  .hamburger-btn {
+    display: none;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    color: #0f172a;
+    cursor: pointer;
+    padding: 0;
+  }
+  .hamburger-btn:hover {
+    background: #0f172a;
+    color: #ffffff;
+  }
+  .hamburger-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    fill: none;
+  }
+  .topbar-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: 0.2px;
+  }
+  .app-body {
+    padding: 24px 28px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    flex: 1;
+  }
+
+  /* Top Sub-nav Segmented Control */
+  .sub-nav-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #e2e8f0;
+    padding: 4px;
+    border-radius: 14px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sub-nav-bar::-webkit-scrollbar { display: none; }
+  .sub-nav-pill {
+    padding: 7px 16px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .sub-nav-pill:hover {
+    color: #0f172a;
+    background: rgba(255,255,255,0.6);
+  }
+  .sub-nav-pill.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+
 
   /* KPI Stats Grid */
   .stats-grid {
@@ -952,15 +1218,7 @@ PAGE = """<!DOCTYPE html>
   .form-switch-apple input:checked + .switch-slider { background-color: #111; }
   .form-switch-apple input:checked + .switch-slider:before { transform: translateX(20px); }
 
-  /* Mobile Responsive */
-  /* Mobile Responsive */
-  @media (max-width: 768px) {
-    .admin-header { padding: 12px 16px; }
-    .brand-text h1 { font-size: 15px; }
-    .island-nav-row { top: 62px; padding: 6px 0; }
-    .island-capsule { height: 46px; }
-    .panel-card { padding: 18px; border-radius: 20px; }
-  }
+
 
   /* Gemini-style Chat Arena Styles */
   .chat-arena-card {
@@ -1090,6 +1348,142 @@ PAGE = """<!DOCTYPE html>
     background: #f1f5f9; color: #64748b; border: 1px solid transparent; transition: all 0.2s;
   }
   .prompt-tab-pill.active { background: #111; color: #fff; }
+
+  /* ============================================================
+     Unified Mobile & Responsive Breakpoints (iPhone / Android)
+     ============================================================ */
+  @media (max-width: 991px) {
+    .hamburger-btn { display: flex !important; }
+    .sidebar-toggle-btn { display: none !important; }
+    
+    /* Left Sidebar: Drawer Mode */
+    .app-sidebar {
+      transform: translateX(-100%);
+      box-shadow: 12px 0 40px rgba(0,0,0,0.22);
+      width: 250px !important;
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      z-index: 1050;
+    }
+    .app-sidebar.show-mobile {
+      transform: translateX(0);
+    }
+    .app-main {
+      margin-left: 0 !important;
+    }
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 1040;
+    }
+    .sidebar-backdrop.show-mobile {
+      display: block;
+    }
+
+    /* Top Sticky Header */
+    .app-topbar, .admin-header {
+      padding: 0 16px;
+      height: 56px;
+    }
+    .topbar-title {
+      font-size: 14px;
+    }
+
+    /* Body & Panels */
+    .app-body {
+      padding: 12px 10px;
+    }
+    .panel-card {
+      padding: 16px 12px;
+      border-radius: 16px;
+    }
+
+    /* KPI Stats: Compact 2-column Grid */
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 8px !important;
+      margin-bottom: 12px !important;
+    }
+    .stat-card {
+      padding: 10px 12px !important;
+      border-radius: 14px !important;
+    }
+    .stats-grid .stat-card:last-child:nth-child(odd) {
+      grid-column: span 2;
+    }
+    .stat-card .val, .stat-card .stat-val {
+      font-size: 18px !important;
+      margin-top: 2px !important;
+    }
+    .stat-card .label, .stat-card .stat-label {
+      font-size: 11px !important;
+    }
+    .stat-card .hint, .stat-card .stat-hint {
+      font-size: 10px !important;
+      margin-top: 2px !important;
+    }
+    .quota-track {
+      margin-top: 4px;
+      height: 3px;
+    }
+
+    /* Top Sub-nav Bar */
+    .sub-nav-bar {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+    }
+    .sub-nav-pill {
+      font-size: 12px;
+      padding: 6px 12px;
+      flex-shrink: 0;
+    }
+
+    /* Gemini Chat Arena on Mobile */
+    .chat-arena-card {
+      height: 560px;
+      border-radius: 18px;
+    }
+    .chat-arena-header {
+      padding: 12px 14px;
+    }
+    .chat-flow-container {
+      padding: 14px 12px;
+      gap: 14px;
+    }
+    .chat-msg-row {
+      max-width: 95%;
+    }
+    .chat-bubble {
+      padding: 10px 14px;
+      font-size: 13px;
+      border-radius: 16px;
+    }
+    .chat-input-wrapper {
+      padding: 10px 12px;
+    }
+    .chat-input-box {
+      padding: 10px 12px;
+      border-radius: 16px;
+    }
+
+    /* Filter pills & search */
+    .filter-pills {
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+    }
+    .filter-pill {
+      white-space: nowrap;
+      padding: 5px 12px;
+      font-size: 11px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1111,136 +1505,196 @@ PAGE = """<!DOCTYPE html>
   </div>
 </div>
 
-<!-- Top Sticky Navbar -->
-<header class="admin-header">
-  <div class="d-flex align-items-center">
-    <div class="logo-squircle">⚡</div>
-    <div class="brand-text">
-      <h1>BOSS求职守护 · 审批台</h1>
-      <div class="status-line">
-        <span id="guardPill" class="soft-badge badge-pub"><span class="pulse-dot dot-green"></span> 守护运行中</span>
-        <span>·</span>
-        <span id="sub">正在同步…</span>
-      </div>
-    </div>
-  </div>
-  <div class="d-flex align-items-center gap-3">
-    <button class="btn-black" style="padding:9px 20px;font-size:13px" onclick="load(true)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-      刷新数据
-    </button>
-  </div>
-</header>
-
-<div class="wrap">
-  <!-- Dynamic Island Capsule Navigation -->
-  <div class="island-nav-row" id="adminTabsIsland">
-    <div class="island-capsule active" data-tab="pending" onclick="switchTab('pending')">
-      <svg class="island-svg" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"></path></svg>
-      <span class="capsule-text">待办审批</span>
-      <span id="pendingBadge" class="capsule-badge" style="display:none">0</span>
-    </div>
-    <div class="island-capsule" data-tab="ledger" onclick="switchTab('ledger')">
-      <svg class="island-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-      <span class="capsule-text">实时台账</span>
-    </div>
-    <div class="island-capsule" data-tab="settings" onclick="switchTab('settings')">
-      <svg class="island-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-      <span class="capsule-text">系统设置</span>
-    </div>
-    <div class="island-capsule" data-tab="playground" onclick="switchTab('playground')">
-      <svg class="island-svg" viewBox="0 0 24 24"><path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
-      <span class="capsule-text">回复演练场</span>
-      <span class="capsule-badge" style="background:#8b5cf6;color:#fff;display:inline-block">🧪</span>
-    </div>
-  </div>
-
-  <!-- KPI Statistics Grid -->
-  <section class="stats-grid" id="stats">
-    <div class="stat-card">
-      <div class="stat-label"><span>待处理会话</span><span>📋</span></div>
-      <div class="stat-val c-dan" id="statPending">0</div>
-      <div class="stat-hint">需人工审核干预</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label"><span>今日实发回复</span><span>💬</span></div>
-      <div class="stat-val c-ok" id="statTodayReplied">0</div>
-      <div class="quota-track"><div class="quota-fill" id="quotaFill"></div></div>
-      <div class="stat-hint" id="quotaHint">拟人高斯发出</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label"><span>今日巡检扫描</span><span>🔍</span></div>
-      <div class="stat-val c-acc" id="statTodayScanned">0</div>
-      <div class="stat-hint">消息中心雷达</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label"><span>高意向猎聘</span><span>🔥</span></div>
-      <div class="stat-val c-warn" id="statHighIntent">0</div>
-      <div class="stat-hint">面试/Offer信号</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label"><span>累计安全回复</span><span>🛡️</span></div>
-      <div class="stat-val" id="statRepliedTotal">0</div>
-      <div class="stat-hint">零封号留痕</div>
-    </div>
-  </section>
-
-  <!-- Tab 1: 待办审批 -->
-  <main id="tab-pending" class="tab-content active">
-    <div class="panel-card mb-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-bold mb-0 d-flex align-items-center">
-          <svg class="title-icon red" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-          待人工决策（needs_human）
-        </h5>
-        <span class="text-muted" style="font-size:12px;font-weight:500">优先处理触发安全门禁与高意向邀约的会话</span>
-      </div>
-      <div id="pending">加载中…</div>
-    </div>
-    <div class="panel-card">
-      <details style="cursor:pointer;color:var(--mut);font-size:13px" id="resolvedBox">
-        <summary style="padding:6px 0;font-weight:800;font-size:14px;color:var(--txt);display:flex;align-items:center;justify-content:space-between">
-          <span>📁 查看近期已处理会话记录 · 闭环评价打分与真人调优 (Recently Handled)</span>
-          <span style="font-size:12px;font-weight:600;color:var(--acc)">点击展开点评与自学习 ▼</span>
-        </summary>
-        <div id="resolvedList" style="margin-top:14px"></div>
-      </details>
-    </div>
-  </main>
-
-  <!-- Tab 2: 实时台账 -->
-  <main id="tab-ledger" class="tab-content">
-    <div class="panel-card">
-      <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-4">
-        <div class="filter-pills">
-          <span class="filter-pill active" data-filter="all" onclick="filterLedgerChip('all')">全部流水</span>
-          <span class="filter-pill" data-filter="reply" onclick="filterLedgerChip('reply')">智能回复</span>
-          <span class="filter-pill" data-filter="wechat" onclick="filterLedgerChip('wechat')">交换微信</span>
-          <span class="filter-pill" data-filter="resume" onclick="filterLedgerChip('resume')">发送简历</span>
-          <span class="filter-pill" data-filter="alert" onclick="filterLedgerChip('alert')">转人工告警</span>
-          <span class="filter-pill" data-filter="gate" onclick="filterLedgerChip('gate')">门禁拦截</span>
-        </div>
-        <div class="admin-search-group" style="max-width:340px">
-          <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="快速搜索公司、动作或状态…" oninput="renderLedger(); toggleSearchClear()">
-          <div class="admin-search-clear" id="ledgerFilterClear" onclick="clearLedgerSearch()" title="清空搜索">✕</div>
+<div class="app-layout" id="appLayout">
+  <!-- 1. Left Sidebar Navigation (Docked on Desktop, Drawer on Mobile) -->
+  <aside class="app-sidebar" id="appSidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-logo">⚡</div>
+        <div class="sidebar-brand-info">
+          <div class="sidebar-brand-title">BOSS求职守护</div>
+          <div class="sidebar-brand-sub">智能运营审批台</div>
         </div>
       </div>
-      <div class="table-responsive">
-        <table class="table table-custom align-middle" id="ledger">
-          <thead>
-            <tr>
-              <th style="width:160px">时间</th>
-              <th style="width:130px">动作</th>
-              <th style="width:220px">目标 / 会话</th>
-              <th>状态 / 归因 / 回复摘要</th>
-            </tr>
-          </thead>
-          <tbody id="ledgerBody"></tbody>
-        </table>
+      <button type="button" class="sidebar-toggle-btn d-none d-lg-flex" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()" title="折叠/展开侧边栏">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+
+    <!-- Navigation Items Container (Preserves id and island-capsule classes) -->
+    <div class="sidebar-nav island-nav-row" id="adminTabsIsland">
+      <div class="island-capsule active" data-tab="pending" onclick="switchTab('pending')">
+        <svg class="island-svg" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"></path></svg>
+        <span class="capsule-text">待办审批</span>
+        <span id="pendingBadge" class="capsule-badge" style="display:none">0</span>
+      </div>
+      <div class="island-capsule" data-tab="ledger" onclick="switchTab('ledger')">
+        <svg class="island-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        <span class="capsule-text">实时台账</span>
+      </div>
+      <div class="island-capsule" data-tab="settings" onclick="switchTab('settings')">
+        <svg class="island-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span class="capsule-text">系统设置</span>
+      </div>
+      <div class="island-capsule" data-tab="playground" onclick="switchTab('playground')">
+        <svg class="island-svg" viewBox="0 0 24 24"><path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
+        <span class="capsule-text">回复演练场</span>
+        <span class="capsule-badge" style="background:#8b5cf6;color:#fff;display:inline-block">🧪</span>
       </div>
     </div>
-  </main>
+
+    <!-- Sidebar Footer -->
+    <div class="sidebar-footer">
+      <div class="sidebar-status-pill">
+        <span class="pulse-dot dot-green"></span>
+        <span>守护监控中</span>
+      </div>
+      <div class="sidebar-sync-text" id="sidebarSync">就绪同步</div>
+    </div>
+  </aside>
+
+  <!-- Mobile Backdrop -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleMobileSidebar(false)"></div>
+
+  <!-- 2. Main Content Area -->
+  <div class="app-main">
+    <!-- Top Sticky Bar -->
+    <header class="app-topbar admin-header">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="hamburger-btn" onclick="toggleMobileSidebar()" title="展开/收起主导航">
+          <svg width="18" height="18" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <div>
+          <div class="topbar-title" id="topbarTitle">待办审批</div>
+          <div class="status-line" style="font-size:11px;color:var(--mut);display:flex;align-items:center;gap:6px">
+            <span id="guardPill" class="soft-badge badge-pub" style="padding:2px 8px;font-size:10px"><span class="pulse-dot dot-green" style="width:6px;height:6px"></span> 守护运行中</span>
+            <span>·</span>
+            <span id="sub">正在同步…</span>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn-black" style="padding:7px 16px;font-size:12px;border-radius:10px" onclick="load(true)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          <span class="d-none d-sm-inline ms-1">刷新数据</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- App Body Content -->
+    <div class="app-body">
+      <!-- KPI Statistics Grid -->
+      <section class="stats-grid" id="stats">
+        <div class="stat-card">
+          <div class="stat-label"><span>待处理会话</span><span>📋</span></div>
+          <div class="stat-val c-dan" id="statPending">0</div>
+          <div class="stat-hint">需人工审核干预</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span>今日实发回复</span><span>💬</span></div>
+          <div class="stat-val c-ok" id="statTodayReplied">0</div>
+          <div class="quota-track"><div class="quota-fill" id="quotaFill"></div></div>
+          <div class="stat-hint" id="quotaHint">拟人高斯发出</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span>今日巡检扫描</span><span>🔍</span></div>
+          <div class="stat-val c-acc" id="statTodayScanned">0</div>
+          <div class="stat-hint">消息中心雷达</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span>高意向猎聘</span><span>🔥</span></div>
+          <div class="stat-val c-warn" id="statHighIntent">0</div>
+          <div class="stat-hint">面试/Offer信号</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span>累计安全回复</span><span>🛡️</span></div>
+          <div class="stat-val" id="statRepliedTotal">0</div>
+          <div class="stat-hint">零封号留痕</div>
+        </div>
+      </section>
+
+      <!-- Tab 1: 待办审批 (聚焦待处理决策) -->
+      <main id="tab-pending" class="tab-content active">
+        <!-- Top Sub-nav -->
+        <div class="sub-nav-bar mb-3">
+          <div class="sub-nav-pill active">⚡ 待人工决策（needs_human）</div>
+        </div>
+        <div class="panel-card mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0 d-flex align-items-center">
+              <svg class="title-icon red" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              待人工决策（needs_human）
+            </h5>
+            <span class="text-muted" style="font-size:12px;font-weight:500">优先处理触发安全门禁与高意向邀约的会话</span>
+          </div>
+          <div id="pending">加载中…</div>
+        </div>
+      </main>
+
+      <!-- Tab 2: 实时台账 (实时运行流水 + 已处理会话与点评自学习) -->
+      <main id="tab-ledger" class="tab-content">
+        <!-- Top Sub-nav -->
+        <div class="sub-nav-bar mb-3">
+          <button type="button" class="sub-nav-pill active" id="subtab-ledger-events" onclick="switchLedgerSubTab('events')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            📊 实时运行流水 (Ledger Events)
+          </button>
+          <button type="button" class="sub-nav-pill" id="subtab-ledger-resolved" onclick="switchLedgerSubTab('resolved')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            💡 已处理会话与自学习点评 (Resolved & Learning)
+          </button>
+        </div>
+
+        <!-- View 1: 实时运行流水 -->
+        <div id="ledgerEventsView">
+          <div class="panel-card">
+            <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-4">
+              <div class="filter-pills">
+                <span class="filter-pill active" data-filter="all" onclick="filterLedgerChip('all')">全部流水</span>
+                <span class="filter-pill" data-filter="reply" onclick="filterLedgerChip('reply')">智能回复</span>
+                <span class="filter-pill" data-filter="wechat" onclick="filterLedgerChip('wechat')">交换微信</span>
+                <span class="filter-pill" data-filter="resume" onclick="filterLedgerChip('resume')">发送简历</span>
+                <span class="filter-pill" data-filter="alert" onclick="filterLedgerChip('alert')">转人工告警</span>
+                <span class="filter-pill" data-filter="gate" onclick="filterLedgerChip('gate')">门禁拦截</span>
+              </div>
+              <div class="admin-search-group" style="max-width:340px">
+                <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="快速搜索公司、动作或状态…" oninput="renderLedger(); toggleSearchClear()">
+                <div class="admin-search-clear" id="ledgerFilterClear" onclick="clearLedgerSearch()" title="清空搜索">✕</div>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-custom align-middle" id="ledger">
+                <thead>
+                  <tr>
+                    <th style="width:160px">时间</th>
+                    <th style="width:130px">动作</th>
+                    <th style="width:220px">目标 / 会话</th>
+                    <th>状态 / 归因 / 回复摘要</th>
+                  </tr>
+                </thead>
+                <tbody id="ledgerBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- View 2: 已处理会话与自学习点评 -->
+        <div id="ledgerResolvedView" style="display:none">
+          <div class="panel-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                  <svg class="title-icon green" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                  近期已处理会话记录 · 闭环评价打分与真人调优 (Recently Handled)
+                </h5>
+                <div class="text-muted" style="font-size:12px">对 AI 的每个回答进行 1-10 分点评打分或录入真人优化示范，自动沉淀至经验库实现自学习进化</div>
+              </div>
+            </div>
+            <div id="resolvedList" style="margin-top:14px"></div>
+          </div>
+        </div>
+      </main>
 
   <!-- Tab 3: 系统设置 -->
   <main id="tab-settings" class="tab-content">
@@ -1495,9 +1949,16 @@ PAGE = """<!DOCTYPE html>
 
   <!-- Tab 4: 回复演练场 (Playground) -->
   <main id="tab-playground" class="tab-content">
+    <!-- Mobile Sub-nav for Playground (尤其移动端快速切换) -->
+    <div class="sub-nav-bar mb-3 d-flex d-lg-none" id="pgMobileSubNav">
+      <button type="button" class="sub-nav-pill active" id="pgSubTabChat" onclick="switchPgSubTab('chat')">💬 聊天视窗</button>
+      <button type="button" class="sub-nav-pill" id="pgSubTabSettings" onclick="switchPgSubTab('settings')">🎯 岗位与JD设定</button>
+      <button type="button" class="sub-nav-pill" id="pgSubTabInspect" onclick="switchPgSubTab('inspect')">🔍 决策与门禁</button>
+    </div>
+
     <div class="row g-4">
       <!-- Left Col: Gemini-style Chat Arena (会话聊天流) -->
-      <div class="col-lg-7">
+      <div class="col-lg-7" id="pgChatCol">
         <div class="chat-arena-card">
           <!-- Chat Header -->
           <div class="chat-arena-header">
@@ -1516,6 +1977,16 @@ PAGE = """<!DOCTYPE html>
               </div>
             </div>
             <div class="d-flex align-items-center gap-2">
+              <div class="d-none d-sm-flex align-items-center gap-1 me-2 p-1" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;font-size:11px;font-weight:700">
+                <label class="d-inline-flex align-items-center gap-1 px-2 py-1" style="cursor:pointer;border-radius:8px;background:#fff;color:#0f172a;box-shadow:0 1px 3px rgba(0,0,0,0.05)" id="lblModeSingle">
+                  <input type="radio" name="pgMode" id="pgModeSingleTurn" value="single" checked onchange="onPgModeChange()" style="display:none">
+                  <span>✨ 首句沟通 (单轮)</span>
+                </label>
+                <label class="d-inline-flex align-items-center gap-1 px-2 py-1" style="cursor:pointer;border-radius:8px;color:#64748b" id="lblModeMulti">
+                  <input type="radio" name="pgMode" id="pgModeMultiTurn" value="multi" onchange="onPgModeChange()" style="display:none">
+                  <span>💬 连续推演 (多轮)</span>
+                </label>
+              </div>
               <button class="btn-action-light" style="padding:4px 12px;font-size:11px;border-radius:12px" onclick="clearPlaygroundChat()">
                 🗑️ 清空会话
               </button>
@@ -1555,77 +2026,82 @@ PAGE = """<!DOCTYPE html>
       </div>
 
       <!-- Right Col: 当前设定调整面板 + 推演透视与安全审查 -->
-      <div class="col-lg-5">
+      <div class="col-lg-5" id="pgRightCol">
         <!-- Panel 1: 当前沟通背景与岗位设定 (可查看与调整) -->
-        <div class="panel-card mb-3" style="padding:20px">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
-              <svg class="title-icon blue" style="width:16px;height:16px" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              目标岗位与背景设定
-            </h6>
-            <span style="font-size:11px;color:var(--mut);cursor:pointer" onclick="togglePlaygroundSettings()">
-              <span id="pgSettingsArrow">▼ 折叠/展开</span>
-            </span>
-          </div>
-          <div style="font-size:11px;color:var(--mut);margin-bottom:10px">
-            实时设定影响大模型对 JD 契合度与沟通语气的决策，修改后下一条推演立即生效：
-          </div>
-
-          <div id="pgSettingsBlock" class="settings-block" style="padding:14px;margin-bottom:0">
-            <!-- Industry Real Presets Dropdown -->
-            <div class="mb-2 pb-2" style="border-bottom:1px solid #e2e8f0">
-              <label style="margin:2px 0 4px;font-weight:700;color:var(--txt);font-size:12px;display:flex;align-items:center;gap:6px">
-                🏢 行业名企真实岗位预设（一键切换各行各业）：
-              </label>
-              <select id="pgIndustryPresetSelect" class="form-select form-select-sm" style="font-size:12px;border-radius:8px;padding:6px 10px;background:#fff;border:1.5px solid #cbd5e1" onchange="onSelectIndustryPreset(this.value)">
-                <option value="custom">✏️ 自定义岗位设定（手动填写）</option>
-                <option value="ai_product" selected>🤖 人工智能 · 收钱吧 · Ai产品经理 (20-35K·14薪)</option>
-                <option value="ev_auto">⚡ 新能源汽车 · 广志信息 · 智能座舱测试 (10-12K)</option>
-                <option value="java_dev">💻 软件研发 · 知名大厂 · Java后端架构 (15-30K·14薪)</option>
-                <option value="fin_quant">📈 金融科技 · 某基金公司 · 期权量化研究员 (15-30K)</option>
-                <option value="cross_border">🚢 跨境出海 · 睿联 · 跨境电商运营27届校招 (11-18K·14薪)</option>
-                <option value="robotics">🦾 智能制造 · 某大型科技 · 机器人运控算法 (100-200K)</option>
-                <option value="biomed">🧬 生物医药 · 吃货妞妞 · 生物信息工程师 (5-8K)</option>
-              </select>
+        <div id="pgSettingsCol">
+          <div class="panel-card mb-3" style="padding:20px">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
+                <svg class="title-icon blue" style="width:16px;height:16px" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                目标岗位与背景设定
+              </h6>
+              <span style="font-size:11px;color:var(--mut);cursor:pointer" onclick="togglePlaygroundSettings()">
+                <span id="pgSettingsArrow">▼ 折叠/展开</span>
+              </span>
             </div>
-
-            <div class="row g-2">
-              <div class="col-6">
-                <label style="margin:2px 0 3px">公司名称</label>
-                <input type="text" id="pgCompany" placeholder="如：收钱吧" value="收钱吧" oninput="syncChatHeader()">
+            <div style="font-size:11px;color:var(--mut);margin-bottom:10px">
+              实时设定影响大模型对 JD 契合度与沟通语气的决策，修改后下一条推演立即生效：
+            </div>
+            <div id="pgSettingsBlock" style="display:block">
+              <!-- Presets -->
+              <div class="mb-3">
+                <label style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:4px;display:block">
+                  🎯 行业名企真实岗位预设（一键切换各行业）：
+                </label>
+                <select id="pgIndustrySelect" class="form-select form-select-sm" style="font-size:12px;border-radius:10px" onchange="onSelectIndustryPreset(this.value)">
+                  <option value="ai_product" selected>🤖 人工智能 · 收钱吧 · Ai产品经理 (20-35K·14薪)</option>
+                  <option value="ev_auto">🚗 智能制造/新能源 · 广志信息 · 智能座舱稳定性测试-沃尔沃 (10-12K)</option>
+                  <option value="java_dev">💻 计算机软件/IT · 某大厂 · Java开发工程师 (15-30K·14薪)</option>
+                  <option value="fin_quant">📈 金融证券/量化 · 某基金公司 · 期权量化研究员 (15-30K)</option>
+                  <option value="cross_border">🌍 跨境电商/出海 · 睿联 · 跨境电商运营27届校招 (11-18K·14薪)</option>
+                  <option value="robotics">🦾 具身智能/硬件 · 某知名AI企业 · 机器人运控算法 (100-200K·14薪)</option>
+                  <option value="biomed">🧬 生物医药/医疗 · 吃货妞妞 · 生物信息工程师 (5-8K)</option>
+                  <option value="custom">✏️ 自定义岗位与JD (手动输入)</option>
+                </select>
               </div>
-              <div class="col-6">
-                <label style="margin:2px 0 3px">岗位名称</label>
-                <input type="text" id="pgJobTitle" placeholder="如：Ai产品经理" value="Ai产品经理（J11304）" oninput="syncChatHeader()">
+
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label style="margin:0 0 2px">公司名称</label>
+                  <input type="text" id="pgCompany" value="收钱吧" style="height:32px;font-size:12px" oninput="syncChatHeader()">
+                </div>
+                <div class="col-6">
+                  <label style="margin:0 0 2px">岗位名称</label>
+                  <input type="text" id="pgJobTitle" value="Ai产品经理（J11304）" style="height:32px;font-size:12px" oninput="syncChatHeader()">
+                </div>
               </div>
-            </div>
-
-            <div class="row g-2 mt-1">
-              <div class="col-6">
-                <label style="margin:2px 0 3px">薪资范围</label>
-                <input type="text" id="pgSalary" placeholder="如：20-35K·14薪" value="20-35K·14薪">
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label style="margin:0 0 2px">薪资范围</label>
+                  <input type="text" id="pgSalary" value="20-35K·14薪" style="height:32px;font-size:12px">
+                </div>
+                <div class="col-6">
+                  <label style="margin:0 0 2px">工作地点</label>
+                  <input type="text" id="pgCity" value="上海" style="height:32px;font-size:12px">
+                </div>
               </div>
-              <div class="col-6">
-                <label style="margin:2px 0 3px">工作地点</label>
-                <input type="text" id="pgCity" placeholder="如：上海" value="上海">
+              <div class="mb-2">
+                <label style="margin:0 0 2px">岗位 JD 详细描述（来自BOSS直聘真实抓取）</label>
+                <textarea id="pgJd" style="height:85px;font-size:11px" placeholder="在此粘贴目标岗位JD…">【岗位职责】
+1. AI 应用从 0 到 1 落地：围绕真实业务场景，负责 AI 应用的需求调研、方案设计、技术可行性判断、上线验证与持续迭代；可涉及上下文工程、RAG、Agent 等技术在产品中的应用。
+2. 快速验证与产品打磨：能够运用 AI Coding 等方式，亲自完成原型、工作流或 Demo 的快速搭建与调试，验证方案可行性，并与研发团队共同推进正式落地。
+3. 跨团队协同与流程建设：熟悉 AI 产品从需求评审、研发排期、测试验收至上线复盘的协作过程，协调产品、研发、算法、设计及业务等角色，高效推动项目交付。
+4. 持续探索：持续关注大模型及 AI 应用的新能力，将技术边界转化为可验证、可落地的业务产品方案。
+【任职资格】
+1. 统招本科及以上学历，具备真实 AI 项目落地能力；了解大模型、RAG、上下文工程、Agent 等常见应用方式。</textarea>
               </div>
-            </div>
+              <div class="mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                  <label style="margin:0 0 2px">前序对话历史（格式：我方:... 或 HR:...）</label>
+                  <button type="button" class="btn-action-light" style="font-size:10px;padding:1px 6px" onclick="document.getElementById('pgHistory').value='';pgConversationHistory=[];">清空历史</button>
+                </div>
+                <textarea id="pgHistory" style="height:60px;font-size:11px" placeholder="空 = 首轮沟通。多轮沟通示例：&#10;HR: 在吗？&#10;我方: 您好，在的！"></textarea>
+              </div>
 
-            <div class="mt-2">
-              <label style="margin:2px 0 3px">岗位 JD 详细描述 (来自BOSS直聘真实爬取)</label>
-              <textarea id="pgJd" style="height:70px;font-size:12px" placeholder="粘贴岗位职责与任职要求…">【岗位职责】&#10;1. AI 应用从 0 到 1 落地：围绕真实业务场景，负责 AI 应用的需求调研、方案设计、技术可行性判断、上线验证与持续迭代；可涉及上下文工程、RAG、Agent 等技术在产品中的应用。&#10;2. 快速验证与产品打磨：能够运用 AI Coding 等方式，亲自完成原型、工作流或 Demo 的快速搭建与调试，验证方案可行性，并与研发团队共同推进正式落地。&#10;3. 跨团队协同与流程建设：协调产品、研发、算法、设计及业务等角色，高效推动项目交付。&#10;【任职资格】&#10;1. 统招本科及以上学历，具备真实 AI 项目落地能力；了解大模型、RAG、上下文工程、Agent 等常见应用方式。</textarea>
-            </div>
-
-            <div class="mt-2">
-              <label style="margin:2px 0 3px">前序对话历史 (格式：我方: ... 或 HR: ...)</label>
-              <textarea id="pgHistory" style="height:55px;font-size:12px" placeholder="我方: 您好，这是我的经历简介&#10;HR: 同学你好"></textarea>
-            </div>
-
-            <!-- Advanced Prompt Settings Collapsible -->
-            <div class="mt-2 pt-2" style="border-top:1px dashed #e2e8f0">
-              <div class="d-flex align-items-center justify-content-between" style="cursor:pointer" onclick="togglePlaygroundAdv()">
-                <span style="font-size:11px;font-weight:700;color:var(--txt)">⚙️ 高级人设与 Prompt 自定义</span>
-                <span id="pgAdvArrow" style="font-size:11px;color:var(--mut)">▼ 展开</span>
+              <!-- Collapsible Advanced Settings (Prompt overrides) -->
+              <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px dashed #e2e8f0;cursor:pointer" onclick="togglePlaygroundAdv()">
+                <span style="font-size:11px;font-weight:700;color:var(--mut)">⚙️ 高级人设与 Prompt 自定义</span>
+                <span style="font-size:11px;color:var(--mut)" id="pgAdvArrow">▼ 展开</span>
               </div>
               <div id="pgAdvBlock" style="display:none;margin-top:8px">
                 <label style="margin:2px 0 3px">自定义 System Prompt（留空使用默认人设约束）</label>
@@ -1638,77 +2114,81 @@ PAGE = """<!DOCTYPE html>
         </div>
 
         <!-- Panel 2: 推演全景透视与安全审查 -->
-        <div class="panel-card mb-3" style="padding:20px">
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
-              <svg class="title-icon green" style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              决策透视与安全门禁
-            </h6>
-            <div id="pgHeaderBadges" class="d-flex gap-2">
-              <span class="soft-badge badge-pub">沙盒拦截锁死</span>
-            </div>
-          </div>
-
-          <div id="pgResultBox">
-            <!-- Action & Decision Block -->
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="d-flex align-items-center gap-2">
-                  <span style="font-size:12px;font-weight:800;color:var(--txt)">🎯 决策动作:</span>
-                  <span id="pgActionBadge" class="soft-badge badge-blue">待推演</span>
-                </div>
-                <div style="font-size:11px;color:var(--mut);font-weight:600" id="pgLatency">耗时: -</div>
-              </div>
-              <div style="font-size:12px;color:var(--mut);line-height:1.5">
-                <strong style="color:var(--txt)">决策归因：</strong><span id="pgReasonText">请在左侧发送消息进行推演</span>
+        <div id="pgInspectCol">
+          <div class="panel-card mb-3" style="padding:20px">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
+                <svg class="title-icon green" style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                决策透视与安全门禁
+              </h6>
+              <div id="pgHeaderBadges" class="d-flex gap-2">
+                <span class="soft-badge badge-pub">沙盒拦截锁死</span>
               </div>
             </div>
 
-            <!-- Safety Gate Checklist -->
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px">
-              <div style="font-size:12px;font-weight:800;color:var(--txt);margin-bottom:10px">🛡️ 4 重物理安全门禁审查清单</div>
-              <div class="d-flex flex-column gap-2" style="font-size:12px">
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                  <span>🔒 隐私防套话审查 (电话/微信号)</span>
-                  <span id="pgGatePrivacy" class="soft-badge badge-pub">✅ 安全通过</span>
+            <div id="pgResultBox">
+              <!-- Action & Decision Block -->
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="font-size:12px;font-weight:800;color:var(--txt)">🎯 决策动作:</span>
+                    <span id="pgActionBadge" class="soft-badge badge-blue">待推演</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--mut);font-weight:600" id="pgLatency">耗时: -</div>
                 </div>
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                  <span>🔥 意向识别与打标</span>
-                  <span id="pgGateIntent" class="soft-badge badge-blue">常规意向</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                  <span>⚙️ Web 隐私权限策略校验</span>
-                  <span id="pgGatePolicy" class="soft-badge badge-pub">允许执行</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                  <span>🛡️ 线上发送状态 (安全隔离)</span>
-                  <span id="pgGateOnline" class="soft-badge badge-rej">🛡️ 物理拦截 (零外发)</span>
+                <div style="font-size:12px;color:var(--mut);line-height:1.5">
+                  <strong style="color:var(--txt)">决策归因：</strong><span id="pgReasonText">请在左侧发送消息进行推演</span>
                 </div>
               </div>
-            </div>
 
-            <!-- Deep Prompt & Raw LLM Inspector -->
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <div style="font-size:12px;font-weight:800;color:var(--txt)">🔍 完整上下文穿透查看</div>
-                <div class="d-flex gap-1">
-                  <span class="prompt-tab-pill active" id="pillTabUser" onclick="switchPromptInspectorTab('user')">User Prompt</span>
-                  <span class="prompt-tab-pill" id="pillTabSys" onclick="switchPromptInspectorTab('sys')">System Prompt</span>
-                  <span class="prompt-tab-pill" id="pillTabRaw" onclick="switchPromptInspectorTab('raw')">LLM 原生 JSON</span>
-                  <span class="prompt-tab-pill" id="pillTabThink" onclick="switchPromptInspectorTab('think')" style="display:none">思考过程</span>
+              <!-- Safety Inspection Gates -->
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px;font-size:12px">
+                <div style="font-weight:800;color:var(--txt);margin-bottom:10px">🛡️ 4 重物理安全门禁审查清单</div>
+                <div class="d-flex flex-column gap-2">
+                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                    <span>1. 隐私泄露门禁 (防套手机/微信)</span>
+                    <span id="pgGatePrivacy" class="soft-badge badge-pub">安全通过</span>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                    <span>2. 时窗门禁 (00:00-09:30 夜间静默)</span>
+                    <span id="pgGateHours" class="soft-badge badge-pub">时窗开放</span>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                    <span>3. 动作授权策略 (policy_actions)</span>
+                    <span id="pgGatePolicy" class="soft-badge badge-pub">允许执行</span>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                    <span>4. 线上发送状态 (沙盒安全隔离)</span>
+                    <span id="pgGateOnline" class="soft-badge badge-rej">🛡️ 物理拦截 (零外发)</span>
+                  </div>
                 </div>
               </div>
-              <div class="d-flex justify-content-end mb-2">
-                <button class="btn-action-light" style="padding:2px 8px;font-size:11px" onclick="copyCurrentPromptInspector()">📋 复制当前代码</button>
+
+              <!-- Deep Prompt & Raw LLM Inspector -->
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div style="font-size:12px;font-weight:800;color:var(--txt)">🔍 完整上下文穿透查看</div>
+                  <div class="d-flex gap-1">
+                    <span class="prompt-tab-pill active" id="pillTabUser" onclick="switchPromptInspectorTab('user')">User Prompt</span>
+                    <span class="prompt-tab-pill" id="pillTabSys" onclick="switchPromptInspectorTab('sys')">System Prompt</span>
+                    <span class="prompt-tab-pill" id="pillTabRaw" onclick="switchPromptInspectorTab('raw')">LLM 原生 JSON</span>
+                    <span class="prompt-tab-pill" id="pillTabThink" onclick="switchPromptInspectorTab('think')" style="display:none">思考过程</span>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end mb-2">
+                  <button class="btn-action-light" style="padding:2px 8px;font-size:11px" onclick="copyCurrentPromptInspector()">📋 复制当前代码</button>
+                </div>
+                <pre id="pgPromptCode" class="prompt-view-code" style="max-height:260px">// 推演后在此穿透查看完整 Prompt 与大模型原生输出</pre>
               </div>
-              <pre id="pgPromptCode" class="prompt-view-code" style="max-height:260px">// 推演后在此穿透查看完整 Prompt 与大模型原生输出</pre>
             </div>
           </div>
         </div>
       </div>
     </div>
   </main>
-</div>
+    </div><!-- app-body -->
+  </div><!-- app-main -->
+</div><!-- app-layout -->
 
 <script>
 let TOKEN = new URLSearchParams(location.search).get('token') || '';
@@ -1755,6 +2235,24 @@ function showToast(msg, type = 'info') {
   }
 }
 
+function toggleMobileSidebar(force) {
+  const sidebar = document.getElementById('appSidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar) return;
+  const willShow = (typeof force === 'boolean') ? force : !sidebar.classList.contains('show-mobile');
+  sidebar.classList.toggle('show-mobile', willShow);
+  if (backdrop) backdrop.classList.toggle('show-mobile', willShow);
+}
+
+function toggleSidebarCollapse() {
+  const sidebar = document.getElementById('appSidebar');
+  if (sidebar) {
+    sidebar.classList.toggle('collapsed');
+    const isCol = sidebar.classList.contains('collapsed');
+    try { localStorage.setItem('sidebar_collapsed', isCol ? '1' : '0'); } catch(e) {}
+  }
+}
+
 function switchTab(name) {
   currentTab = name;
   document.querySelectorAll('.island-capsule').forEach(b => {
@@ -1763,6 +2261,107 @@ function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(c => {
     c.classList.toggle('active', c.id === 'tab-' + name);
   });
+  const titles = {
+    pending: '待办审批 · 决策处理',
+    ledger: '实时台账 · 运行流水与自学习',
+    settings: '系统设置 · 参数与风控',
+    playground: '回复演练场 · 真实沙盒推演'
+  };
+  const titleEl = document.getElementById('topbarTitle');
+  if (titleEl && titles[name]) titleEl.textContent = titles[name];
+  toggleMobileSidebar(false);
+  if (name === 'ledger') {
+    renderResolved();
+    renderLedger();
+  }
+  if (name === 'playground') {
+    switchPgSubTab(currentPgSubTab || 'chat');
+  }
+}
+
+function switchLedgerSubTab(sub) {
+  const isEvents = (sub === 'events');
+  const evView = document.getElementById('ledgerEventsView');
+  const resView = document.getElementById('ledgerResolvedView');
+  const btnEv = document.getElementById('subtab-ledger-events');
+  const btnRes = document.getElementById('subtab-ledger-resolved');
+  if (evView) evView.style.display = isEvents ? 'block' : 'none';
+  if (resView) resView.style.display = isEvents ? 'none' : 'block';
+  if (btnEv) btnEv.classList.toggle('active', isEvents);
+  if (btnRes) btnRes.classList.toggle('active', !isEvents);
+  if (!isEvents) {
+    renderResolved();
+  } else {
+    renderLedger();
+  }
+}
+
+let currentPgSubTab = 'chat';
+function switchPgSubTab(sub) {
+  currentPgSubTab = sub;
+  ['Chat', 'Settings', 'Inspect'].forEach(name => {
+    const btn = document.getElementById('pgSubTab' + name);
+    if (btn) btn.classList.toggle('active', name.toLowerCase() === sub);
+  });
+  const chatCol = document.getElementById('pgChatCol');
+  const rightCol = document.getElementById('pgRightCol');
+  const settingsCol = document.getElementById('pgSettingsCol');
+  const inspectCol = document.getElementById('pgInspectCol');
+
+  if (window.innerWidth < 992) {
+    if (sub === 'chat') {
+      if (chatCol) chatCol.style.display = 'block';
+      if (rightCol) rightCol.style.display = 'none';
+    } else if (sub === 'settings') {
+      if (chatCol) chatCol.style.display = 'none';
+      if (rightCol) rightCol.style.display = 'block';
+      if (settingsCol) settingsCol.style.display = 'block';
+      if (inspectCol) inspectCol.style.display = 'none';
+    } else if (sub === 'inspect') {
+      if (chatCol) chatCol.style.display = 'none';
+      if (rightCol) rightCol.style.display = 'block';
+      if (settingsCol) settingsCol.style.display = 'none';
+      if (inspectCol) inspectCol.style.display = 'block';
+    }
+  } else {
+    if (chatCol) chatCol.style.display = '';
+    if (rightCol) rightCol.style.display = '';
+    if (settingsCol) settingsCol.style.display = '';
+    if (inspectCol) inspectCol.style.display = '';
+  }
+}
+window.addEventListener('resize', () => {
+  if (currentTab === 'playground') switchPgSubTab(currentPgSubTab);
+});
+
+function onPgModeChange() {
+  const isSingle = document.getElementById('pgModeSingleTurn') && document.getElementById('pgModeSingleTurn').checked;
+  const lblSingle = document.getElementById('lblModeSingle');
+  const lblMulti = document.getElementById('lblModeMulti');
+  if (lblSingle && lblMulti) {
+    if (isSingle) {
+      lblSingle.style.background = '#fff';
+      lblSingle.style.color = '#0f172a';
+      lblSingle.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+      lblMulti.style.background = 'transparent';
+      lblMulti.style.color = '#64748b';
+      lblMulti.style.boxShadow = 'none';
+    } else {
+      lblMulti.style.background = '#fff';
+      lblMulti.style.color = '#0f172a';
+      lblMulti.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+      lblSingle.style.background = 'transparent';
+      lblSingle.style.color = '#64748b';
+      lblSingle.style.boxShadow = 'none';
+    }
+  }
+  if (isSingle) {
+    pgConversationHistory = [];
+    if (document.getElementById('pgHistory')) document.getElementById('pgHistory').value = '';
+    showToast('已切换至「首句沟通」模式：历史记录已重置清空，杜绝前序污染', 'info');
+  } else {
+    showToast('已切换至「连续推演」模式：多轮对话将累计上下文连续作答', 'info');
+  }
 }
 
 function addChip(i, text) {
@@ -2616,7 +3215,11 @@ function onSelectIndustryPreset(key) {
   document.getElementById('pgCity').value = p.city;
   document.getElementById('pgJd').value = p.jd.replace(/\\n/g, String.fromCharCode(10));
   syncChatHeader();
-  showToast(`已载入真实名企岗位：${p.company} · ${p.job}`, 'info');
+  // 切换不同岗位时重置历史，杜绝旧公司对话串味
+  pgConversationHistory = [];
+  const histEl = document.getElementById('pgHistory');
+  if (histEl) histEl.value = '';
+  showToast(`已载入真实名企岗位：${p.company} · ${p.job}（历史已重置）`, 'info');
 }
 
 function togglePlaygroundAdv() {
@@ -2640,22 +3243,31 @@ async function runPlaygroundSimulation() {
   // 清空输入框
   if (msgInput) msgInput.value = '';
   
-  // 若 pgConversationHistory 为空但右侧文本框有手动填入的内容，先行解析同步
-  if (pgConversationHistory.length === 0) {
-    const rawHist = (document.getElementById('pgHistory') ? document.getElementById('pgHistory').value : '').trim();
-    if (rawHist) {
-      pgConversationHistory = String(rawHist).split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean).map(line => {
-        if (line.startsWith('我方:') || line.startsWith('我方：')) {
-          return { role: 'me', text: line.replace(/^我方[:：]/, '').trim() };
-        } else {
-          return { role: 'hr', text: line.replace(/^HR[:：]/, '').trim() };
-        }
-      });
-    }
-  }
+  const isSingle = document.getElementById('pgModeSingleTurn') ? document.getElementById('pgModeSingleTurn').checked : true;
+  let histLines = [];
 
-  // 传给后端的历史：本轮之前的全部累计上下文（不含本条尚未作答的消息）
-  const histLines = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text);
+  if (isSingle) {
+    // 【首句沟通模式】：无条件清空前序对话历史，确保 0 上下文污染
+    pgConversationHistory = [];
+    if (document.getElementById('pgHistory')) document.getElementById('pgHistory').value = '';
+    histLines = [];
+  } else {
+    // 【多轮连续模式】：若 pgConversationHistory 为空但右侧文本框有手动填入的内容，先行解析同步
+    if (pgConversationHistory.length === 0) {
+      const rawHist = (document.getElementById('pgHistory') ? document.getElementById('pgHistory').value : '').trim();
+      if (rawHist) {
+        pgConversationHistory = String(rawHist).split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean).map(line => {
+          if (line.startsWith('我方:') || line.startsWith('我方：')) {
+            return { role: 'me', text: line.replace(/^我方[:：]/, '').trim() };
+          } else {
+            return { role: 'hr', text: line.replace(/^HR[:：]/, '').trim() };
+          }
+        });
+      }
+    }
+    // 传给后端的历史：本轮之前的全部累计上下文（不含本条尚未作答的消息）
+    histLines = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text);
+  }
 
   // 左侧渲染 HR 消息
   appendChatMessage('hr', msg);
@@ -2698,13 +3310,15 @@ async function runPlaygroundSimulation() {
     const replyText = d.cleaned_reply || dec.reply_text || dec.suggested_reply || `(执行动作：${act})`;
     appendChatMessage('agent', replyText, { action: act, latency_ms: d.latency_ms });
 
-    // 本轮问答闭环：把当前 HR 消息与 Agent 回复一并沉淀入连续历史池
-    pgConversationHistory.push({ role: 'hr', text: msg });
-    pgConversationHistory.push({ role: 'me', text: replyText });
+    if (!isSingle) {
+      // 仅在多轮推演模式下，把当前 HR 消息与 Agent 回复一并沉淀入连续历史池
+      pgConversationHistory.push({ role: 'hr', text: msg });
+      pgConversationHistory.push({ role: 'me', text: replyText });
 
-    // 实时同步回写到右侧历史输入框，保持多轮上下文完全透明与连贯
-    if (document.getElementById('pgHistory')) {
-      document.getElementById('pgHistory').value = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text).join(String.fromCharCode(10));
+      // 实时同步回写到右侧历史输入框，保持多轮上下文完全透明与连贯
+      if (document.getElementById('pgHistory')) {
+        document.getElementById('pgHistory').value = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text).join(String.fromCharCode(10));
+      }
     }
 
     // 右侧更新透视与门禁数据
