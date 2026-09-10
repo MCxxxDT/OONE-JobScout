@@ -188,6 +188,9 @@ def send_human_alert(cfg: dict, alert_data: dict, dry_run: bool = False, high_in
     ledger.append({
         "action": "human_alert_card",
         "company": company,
+        "last_msg": alert_data.get("last_msg") or alert_data.get("conv") or "",
+        "suggested_reply": alert_data.get("suggested_reply") or "",
+        "conv": alert_data.get("conv") or "",
         "feishu_sent": feishu_sent,
         "feishu_error": feishu_error,
         "dry_run": dry_run,

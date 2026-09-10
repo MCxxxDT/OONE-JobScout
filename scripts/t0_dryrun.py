@@ -1265,10 +1265,10 @@ dummy_rows = [
     {"action": "human_alert_card", "company": "快手", "ts": "2026-09-09 18:00:00"},
     {"action": "exchange_wechat", "company": "快手", "ts": "2026-09-09 18:06:00", "status": "already_sent"},
 ]
-res_tx, act_tx, _, _ = _aw._is_alert_resolved("2026-09-09 18:00:00", "腾讯", dummy_rows)
+res_tx, act_tx, *_ = _aw._is_alert_resolved("2026-09-09 18:00:00", "腾讯", dummy_rows)
 check("短公司名(2字符)子串正确消单", res_tx is True and act_tx == "mark_handled")
 
-res_ks, act_ks, _, _ = _aw._is_alert_resolved("2026-09-09 18:00:00", "快手", dummy_rows)
+res_ks, act_ks, *_ = _aw._is_alert_resolved("2026-09-09 18:00:00", "快手", dummy_rows)
 check("短公司名already_sent正确消单", res_ks is True and act_ks == "exchange_wechat")
 
 # 28.5 人工审批显式派发 force=True 放行门禁

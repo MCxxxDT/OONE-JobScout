@@ -858,26 +858,48 @@ PAGE = """<!DOCTYPE html>
   }
   .resolved-card:hover { border-color: rgba(0,0,0,0.09); box-shadow: 0 6px 18px rgba(0,0,0,0.04); }
 
-  /* Settings Blocks */
+  /* Title & System Icons */
+  .title-icon {
+    width: 18px;
+    height: 18px;
+    max-width: 18px;
+    max-height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    margin-right: 8px;
+    vertical-align: -3px;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+  .title-icon.blue { color: #2563eb; }
+  .title-icon.green { color: #10b981; }
+  .title-icon.red { color: #ef4444; }
+  .title-icon.purple { color: #8b5cf6; }
+  .title-icon.amber { color: #f59e0b; }
+
+  /* Settings Blocks & Desktop Calibration */
   .settings-block {
-    background: #fafafa; border: 1px solid rgba(0,0,0,0.04);
-    border-radius: 18px; padding: 24px; margin-bottom: 20px;
+    background: #f8fafc; border: 1px solid #edf2f7;
+    border-radius: 14px; padding: 18px 20px; margin-bottom: 0;
   }
   .settings-block h6 {
-    font-weight: 800; font-size: 14px; margin-bottom: 14px; color: #111;
-    border-left: 4px solid #111; padding-left: 10px; line-height: 1.3;
+    font-weight: 800; font-size: 13px; margin-bottom: 12px; color: #111;
+    border-left: 3.5px solid #111; padding-left: 8px; line-height: 1.3;
   }
   .settings-block label {
-    font-size: 12px; font-weight: 600; color: #64748b; margin: 10px 0 5px; display: block;
+    font-size: 12px; font-weight: 600; color: #475569; margin: 8px 0 4px; display: block;
   }
-  .settings-block input[type=text], .settings-block input[type=password], .settings-block select, .settings-block textarea {
-    width: 100%; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px;
-    padding: 10px 14px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s; color: #111;
+  .settings-block input[type=text], .settings-block input[type=password], .settings-block input[type=number], .settings-block select, .settings-block textarea {
+    width: 100%; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    padding: 7px 12px; font-size: 13px; font-family: inherit; outline: none; transition: all 0.2s ease; color: #1e293b;
   }
-  .settings-block input[type=text]:focus, .settings-block input[type=password]:focus, .settings-block select:focus, .settings-block textarea:focus {
-    border-color: #111; box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  .settings-block input[type=text]:focus, .settings-block input[type=password]:focus, .settings-block input[type=number]:focus, .settings-block select:focus, .settings-block textarea:focus {
+    border-color: #0f172a; box-shadow: 0 0 0 3px rgba(15,23,42,0.06);
   }
-  .settings-block textarea { min-height: 60px; resize: vertical; }
+  .settings-block textarea { min-height: 64px; resize: vertical; line-height: 1.45; }
 
   /* App Toast */
   .app-toast {
@@ -1941,16 +1963,22 @@ function renderResolved() {
     } else {
       rb.innerHTML = resolvedData.map((r, i) => {
         const curScore = r.score || 8;
-        const hrSection = r.last_msg ? `
-          <div class="quote-box py-2 px-3 mb-2" style="background:#f8fafc;border-left:3px solid #cbd5e1;border-radius:8px;font-size:12px">
-            <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:2px">💬 HR 发言内容</div>
-            <div style="color:#334155">${esc(r.last_msg)}</div>
-          </div>` : '';
-        const aiSection = r.suggested ? `
-          <div class="quote-box py-2 px-3 mb-3" style="background:#f0fdf4;border-left:3px solid #86efac;border-radius:8px;font-size:12px">
-            <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:2px">🤖 实际生成/送达回复</div>
-            <div style="color:#14532d;font-weight:500">${esc(r.suggested)}</div>
-          </div>` : '';
+        const hrText = r.last_msg || '（历史会话未记录到单句正文，记录已完成归档）';
+        const hrSection = `
+          <div class="quote-box py-2 px-3 mb-2" style="background:#f1f5f9;border-left:4px solid #64748b;border-radius:8px;font-size:12.5px">
+            <div style="font-size:11px;font-weight:800;color:#475569;margin-bottom:3px;display:flex;align-items:center;gap:4px">
+              💬 对方发送内容 (HR)
+            </div>
+            <div style="color:#1e293b;line-height:1.5;white-space:pre-wrap">${esc(hrText)}</div>
+          </div>`;
+        const aiText = r.suggested || ('【系统动作】已执行平台动作（' + (r.resolved_action || '完成') + '）');
+        const aiSection = `
+          <div class="quote-box py-2 px-3 mb-3" style="background:#ecfdf5;border-left:4px solid #10b981;border-radius:8px;font-size:12.5px">
+            <div style="font-size:11px;font-weight:800;color:#047857;margin-bottom:3px;display:flex;align-items:center;gap:4px">
+              🤖 Agent 实际回复内容
+            </div>
+            <div style="color:#064e3b;font-weight:500;line-height:1.5;white-space:pre-wrap">${esc(aiText)}</div>
+          </div>`;
         const pills = [1,2,3,4,5,6,7,8,9,10].map(num => `
           <button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectResolvedScore(${i}, ${num})">${num}</button>
         `).join('');
@@ -2842,8 +2870,83 @@ setInterval(() => load(false), 30000);
 </html>"""
 
 
+def _extract_dialog_texts(primary, resolver=None):
+    """从单条记录或解析行中提取完整的【HR发言】与【Agent回复/动作】。"""
+    hr_text = ""
+    for src in (resolver, primary):
+        if not src or not isinstance(src, dict):
+            continue
+        if src.get("last_msg"):
+            t = str(src.get("last_msg")).strip()
+            if t:
+                hr_text = t
+                break
+        conv = src.get("conv") or ""
+        if conv:
+            lines = [l.strip() for l in conv.split("\n") if l.strip()]
+            if len(lines) >= 3:
+                hr_text = "\n".join(lines[2:])
+            elif len(lines) >= 1:
+                hr_text = lines[-1]
+            if hr_text:
+                break
+        err = src.get("error") or ""
+        if "head='" in err:
+            try:
+                head_part = err.split("head='")[1].split("')")[0]
+                lines = [l.strip() for l in head_part.replace("\\n", "\n").split("\n") if l.strip()]
+                if len(lines) >= 3:
+                    hr_text = "\n".join(lines[2:])
+                elif len(lines) >= 1:
+                    hr_text = lines[-1]
+                if hr_text:
+                    break
+            except Exception:
+                pass
+
+    ai_text = ""
+    for src in (resolver, primary):
+        if not src or not isinstance(src, dict):
+            continue
+        if src.get("reply_text"):
+            t = str(src.get("reply_text")).strip()
+            if t:
+                ai_text = t
+                break
+        if src.get("text_head"):
+            t = str(src.get("text_head")).strip()
+            if t:
+                ai_text = t
+                break
+        if src.get("suggested_reply"):
+            t = str(src.get("suggested_reply")).strip()
+            if t:
+                ai_text = t
+                break
+
+    act = (resolver or primary or {}).get("action") or (primary or {}).get("resolved_action") or ""
+    if not ai_text:
+        if act == "exchange_wechat":
+            ai_text = "【系统动作】已在沟通界面向对方发起官方交换微信申请"
+        elif act == "send_resume":
+            ai_text = "【系统动作】已在沟通界面向对方发送正式在线简历"
+        elif act == "agree_wechat":
+            ai_text = "【系统动作】已同意对方发起的交换微信邀请"
+        elif act in ("card_ignore", "ignore", "daemon_skip"):
+            ai_text = "【人工操作】已忽略/跳过该会话"
+        elif act == "reply":
+            ai_text = "【系统动作】已回复对方消息"
+
+    if not hr_text:
+        hr_text = "（历史对话未抓取到单句正文，已记录会话节点）"
+
+    return hr_text, ai_text
+
+
 def _is_alert_resolved(alert_ts, company, rows):
-    """判断该告警是否已被后续动作处理过（回复、换微信、发简历、同意换微信、忽略或标记完成）。"""
+    """判断该告警是否已被后续动作处理过（回复、换微信、发简历、同意换微信、忽略或标记完成）。
+    返回 (is_resolved, act, ts, status, resolving_row)
+    """
     valid_actions = {
         "reply": {"ok"},
         "exchange_wechat": {"ok", "already_sent"},
@@ -2871,8 +2974,8 @@ def _is_alert_resolved(alert_ts, company, rows):
         if act in valid_actions:
             allowed_statuses = valid_actions[act]
             if allowed_statuses is None or r.get("status") in allowed_statuses:
-                return True, act, ts, r.get("status")
-    return False, None, None, None
+                return True, act, ts, r.get("status"), r
+    return False, None, None, None, None
 
 
 AUTH_PAGE = """<!DOCTYPE html>
@@ -2967,14 +3070,14 @@ def api_overview(token: str = ""):
     resolved = []
     seen_companies = set()
     for c, a in seen.items():
-        is_res, act, ts, st = _is_alert_resolved(a.get("ts") or "", c, rows)
-        last_m = (a.get("last_msg") or "")[:500]
-        fb = feedbacks.get(f"{c}_{last_m[:40]}") or feedbacks.get(c) or {}
+        is_res, act, ts, st, r_res = _is_alert_resolved(a.get("ts") or "", c, rows)
+        hr_text, ai_text = _extract_dialog_texts(a, r_res)
+        fb = feedbacks.get(f"{c}_{hr_text[:40]}") or feedbacks.get(c) or {}
         item = {
             "company": c,
-            "last_msg": last_m,
+            "last_msg": hr_text[:500],
             "reason": (a.get("reason") or "")[:200],
-            "suggested": a.get("suggested_reply") or "",
+            "suggested": ai_text,
             "time": a.get("ts") or "",
             "high_intent": bool(a.get("high_intent")),
             "resolved_action": act,
@@ -2991,27 +3094,20 @@ def api_overview(token: str = ""):
             pending.append(item)
 
     # 扩展已处理记录：纳入台账中实际成功的直接回复、换微信与发简历记录（扩大数据源，供点评与自学习）
-    for r in reversed(rows[-120:]):
+    for r in reversed(rows[-150:]):
         act = r.get("action")
         st = r.get("status")
         comp = r.get("company")
         if not comp or comp in seen_companies:
             continue
         if act in ("reply", "exchange_wechat", "send_resume", "agree_wechat") and st in ("ok", "already_sent", "already_agreed"):
-            conv_str = r.get("conv") or ""
-            hr_text = ""
-            if conv_str:
-                parts = conv_str.split("\n")
-                if len(parts) >= 3:
-                    hr_text = "\n".join(parts[2:]).strip()
-                else:
-                    hr_text = parts[-1].strip()
+            hr_text, ai_text = _extract_dialog_texts(r, None)
             fb = feedbacks.get(f"{comp}_{hr_text[:40]}") or feedbacks.get(comp) or {}
             resolved.append({
                 "company": comp,
                 "last_msg": hr_text[:500],
                 "reason": "常规会话交互",
-                "suggested": r.get("text_head") or r.get("reply_text") or "",
+                "suggested": ai_text,
                 "time": r.get("ts") or "",
                 "high_intent": False,
                 "resolved_action": act,
@@ -3024,6 +3120,27 @@ def api_overview(token: str = ""):
             seen_companies.add(comp)
             if len(resolved) >= 50:
                 break
+
+    # 补充历史点评沉淀（若未被上述记录覆盖，完整回显）
+    for fb in feedbacks.values():
+        comp = fb.get("company")
+        if not comp or comp in seen_companies:
+            continue
+        resolved.append({
+            "company": comp,
+            "last_msg": (fb.get("hr_msg") or "（历史真人点评会话）")[:500],
+            "reason": "历史点评沉淀",
+            "suggested": fb.get("ai_reply") or "（历史回复）",
+            "time": fb.get("ts") or "",
+            "high_intent": False,
+            "resolved_action": "feedback_sample",
+            "resolved_time": fb.get("ts") or "",
+            "resolved_status": "scored",
+            "score": fb.get("score", 8),
+            "optimized_text": fb.get("optimized_text", ""),
+            "has_feedback": True,
+        })
+        seen_companies.add(comp)
 
     pending.sort(key=lambda x: x["time"], reverse=True)
     resolved.sort(key=lambda x: x.get("resolved_time") or x["time"], reverse=True)

@@ -134,9 +134,9 @@ def _probe_js():
     return """
 (() => {
   const pick = () => {
-    let el = document.querySelector('.chat-input[contenteditable="true"], .chat-input');
+    let el = document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-im.chat-editor, .chat-editor');
     if (!el) {
-      const cands = document.querySelectorAll('textarea, [contenteditable="true"]');
+      const cands = document.querySelectorAll('textarea, [contenteditable="true"], div[contenteditable="true"]');
       for (const e of cands) {
         const cls = String(e.className || '');
         if (/search/i.test(cls)) continue;
@@ -169,59 +169,80 @@ def _probe_js():
 
 
 def _pick_conversation_js(company):
-    """消息中心会话定位：优先按公司名匹配；company 为空才取最新一条。
-    严格匹配（审计补丁#3）：指定公司未命中时直接返回 notfound，严禁退回 newest，
-    防止把回复发给最新会话的无关 HR。
-    支持去除空白符（\\s/\\xa0）匹配，容忍侧栏公司名与标题的空格排版差异。
-    增强：针对 BOSS 2026 Vue 3 组件，在 .friend-content 上同时派发完整的鼠标/指针合成事件
-    并返回其视口坐标，由调用方再走 CDP Input 派发受信任点击，双重保证右侧聊天窗瞬间激活。"""
+    """消息中心会话定位：优先按公司名/HR名多粒度匹配；company 为空才取最新一条。
+    支持去除标点符号与空白符（\\s/\\xa0）以及小写化双向子串/分词命中。
+    优先识别当前右侧是否已激活目标会话，免去重复点击造成的 SPA 状态震荡。
+    针对 BOSS 2026 Vue 3 组件，在 .friend-content / .friend-content-warp 上同时派发完整的
+    pointerdown/mousedown/pointerup/mouseup/click 事件并返回受信任视口坐标。"""
     return """
 (() => {
   const company = %s;
-  const lis = Array.from(document.querySelectorAll('li'));
-  const isConv = (li) => {
-    const t = li.innerText || '';
-    return t.length > 12 && /(?:\\d{1,2}:\\d{2}|\\d{1,2}月\\d{1,2}日|昨天|\\d{4}年)/.test(t);
-  };
-  const clean = (s) => (s || '').replace(/[\\s\\xa0\\u3000]/g, '');
-  let target = null, picked = 'none';
-  if (company) {
-    const targetClean = clean(company);
-    // 1. 无空白全匹配
-    for (const li of lis) {
-      if (isConv(li) && clean(li.innerText).indexOf(targetClean) >= 0) {
-        target = li; picked = 'company_exact'; break;
-      }
+  const clean = (s) => (s || '').toLowerCase().replace(/[\\s\\xa0\\u3000\\-_·•,，.()（）\\[\\]【】]/g, '');
+  const qClean = clean(company);
+
+  // 1. 检查右侧聊天视窗是否已激活该会话
+  const curHeader = document.querySelector('.chat-conversation .base-info, .chat-title, .user-name, .base-info');
+  if (curHeader && qClean) {
+    const curClean = clean(curHeader.innerText);
+    if (curClean.includes(qClean) || (qClean.length >= 4 && curClean.includes(qClean.slice(0, 4)))) {
+      return JSON.stringify({r: 'already_active', head: curHeader.innerText.replace(/\\n/g, ' ')});
     }
-    // 2. 双向子串与核心前缀匹配（防公司名或HR名中带空格、换行、顾问等前缀后缀差异）
-    if (!target) {
-      for (const li of lis) {
-        if (!isConv(li)) continue;
-        const textClean = clean(li.innerText);
-        const sub = targetClean.slice(0, Math.min(targetClean.length, 6));
-        if (sub.length >= 2 && textClean.indexOf(sub) >= 0) {
-          target = li; picked = 'company_sub'; break;
+  }
+
+  // 2. 遍历左侧会话列表
+  const lis = Array.from(document.querySelectorAll('.chat-user li, ul.user-list li, li'));
+  const validLis = lis.filter(li => {
+    const t = li.innerText || '';
+    return t.length > 8 && !['全部', '未读', '新招呼', '仅沟通', '更多', '有交换', '有面试', '不感兴趣'].includes(t.trim());
+  });
+
+  let target = null, picked = 'none', bestScore = 0;
+  if (qClean) {
+    const tokens = (company || '').toLowerCase().match(/[\\u4e00-\\u9fa5]{2,}|[a-z0-9]{3,}/g) || [];
+    for (const li of validLis) {
+      const textClean = clean(li.innerText);
+      if (textClean.length < 5) continue;
+      let score = 0, type = 'none';
+      if (textClean.indexOf(qClean) >= 0) {
+        score = 100; type = 'company_exact';
+      } else if (qClean.indexOf(textClean) >= 0) {
+        score = 90; type = 'company_reverse';
+      } else if (tokens.length > 0) {
+        let hits = 0;
+        for (const tk of tokens) {
+          const tkClean = clean(tk);
+          if (tkClean.length >= 2 && textClean.indexOf(tkClean) >= 0) hits++;
+        }
+        if (hits > 0) {
+          score = Math.round((hits / tokens.length) * 85);
+          type = 'company_token_' + hits;
         }
       }
+      if (score > bestScore) {
+        bestScore = score;
+        target = li;
+        picked = type;
+      }
     }
-    if (!target) return JSON.stringify({r: 'notfound', picked: 'company_missing', company: company});
-  }
-  if (!target) {
-    for (const li of lis) {
-      if (isConv(li)) { target = li; picked = 'newest'; break; }
+    if (!target || bestScore < 30) {
+      return JSON.stringify({r: 'notfound', picked: 'company_missing', company: company, bestScore: bestScore});
     }
+  } else {
+    target = validLis[0] || null;
+    picked = 'newest';
   }
+
   if (!target) return JSON.stringify({r: 'notfound'});
-  const head = (target.innerText || '').slice(0, 46);
+  const head = (target.innerText || '').slice(0, 50).replace(/\\n/g, ' ');
   target.scrollIntoView({behavior: 'instant', block: 'center'});
-  const innerClickable = target.querySelector('.friend-content') || target.querySelector('div') || target;
+  const innerClickable = target.querySelector('.friend-content, .friend-content-warp, div') || target;
   try {
     ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
       innerClickable.dispatchEvent(new MouseEvent(evt, {bubbles: true, cancelable: true, view: window}));
     });
   } catch(e) {}
-  const rect = (innerClickable || target).getBoundingClientRect();
-  return JSON.stringify({r: 'found', picked: picked, head: head,
+  const rect = innerClickable.getBoundingClientRect();
+  return JSON.stringify({r: 'found', picked: picked, head: head, score: bestScore,
     x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2)});
 })()
 """ % json.dumps(company or "", ensure_ascii=False)
@@ -297,23 +318,44 @@ _SURE_JS = """
 
 def _open_conversation_input(sess, company, poll_s=12):
     """消息中心点开会话并等输入框就绪。返回 (info, conv_head)；失败返回 (None, head或None)。"""
-    sess.nav(rawcdp.BASE + CHAT_URL)
-    sess.wait_ready(want_cards=False, timeout_s=12)
+    cur_href = _ev(sess, "location.href") or ""
+    if CHAT_URL not in str(cur_href):
+        sess.nav(rawcdp.BASE + CHAT_URL)
+        sess.wait_ready(want_cards=False, timeout_s=12)
+
+    company_clean = (company or "").strip()
     clicked = None
     for i in range(8):
+        clicked = _ev(sess, _pick_conversation_js(company_clean))
+        if isinstance(clicked, dict):
+            if clicked.get("r") == "already_active":
+                info = _ev(sess, _probe_js())
+                if isinstance(info, dict) and info.get("inputTag"):
+                    return info, clicked.get("head") or company_clean
+            elif clicked.get("r") == "found":
+                _trusted_click(sess, int(clicked["x"]), int(clicked["y"]))
+                clicked["r"] = "clicked"
+                break
+            elif clicked.get("r") == "notfound" and i < 7:
+                # 尝试滚动左侧会话列表容器加载更多或等待 SPA 渲染
+                _ev(sess, """
+                (() => {
+                  const container = document.querySelector('.chat-user, ul.user-list, .user-list');
+                  if (container) container.scrollTop += 300;
+                })()
+                """)
         time.sleep(1)
-        clicked = _ev(sess, _pick_conversation_js(company))
-        if isinstance(clicked, dict) and clicked.get("r") == "notfound":
-            return None, None  # 指定公司未命中：立即中止，不轮询不兜底，交由上层抛异常记台账
-        if isinstance(clicked, dict) and clicked.get("r") == "found":
-            _trusted_click(sess, int(clicked["x"]), int(clicked["y"]))
-            clicked["r"] = "clicked"
-            break
+
     if not (isinstance(clicked, dict) and clicked.get("r") == "clicked"):
+        # 兜底核实：检查当前右侧是否恰好已就绪
+        info = _ev(sess, _probe_js())
+        if isinstance(info, dict) and info.get("inputTag"):
+            return info, company_clean
         return None, None
+
     head = clicked.get("head")
     for i in range(int(poll_s)):
-        time.sleep(1)
+        time.sleep(0.8)
         info = _ev(sess, _probe_js())
         if isinstance(info, dict) and info.get("inputTag"):
             return info, head
