@@ -130,6 +130,7 @@ def api_settings_get(token: str = ""):
     daemon_cfg = cfg.get("daemon") or {}
     return {
         "job_mode": cfg.get("job_mode", "intern"),
+        "online_reply_enabled": bool(cfg.get("online_reply_enabled", False)),
         "auto_apply": {
             "enabled": daemon_cfg.get("auto_apply", True),
             "apply_window": daemon_cfg.get("apply_window", "10:00-14:00"),
@@ -196,6 +197,9 @@ async def api_settings_post(request: Request, token: str = ""):
     if "llm_match_enabled" in body:
         _write_local("llm_match", {"enabled": bool(body["llm_match_enabled"])})
         changed.append("智能匹配开关已更新")
+    if "online_reply_enabled" in body:
+        _write_local("online_reply_enabled", bool(body["online_reply_enabled"]))
+        changed.append("全局在线回复门禁已更新")
 
     # 隐私与自动化权限更新
     if "privacy_policy" in body and isinstance(body["privacy_policy"], dict):
@@ -836,6 +840,24 @@ PAGE = """<!DOCTYPE html>
   .btn-action-nuke:hover { background: #ef4444; color: #fff; box-shadow: 0 4px 12px rgba(239,68,68,0.25); }
   .btn-action-nuke:active { transform: scale(0.97); }
 
+  /* 评价与优化打分控件 */
+  .btn-score-pill {
+    width: 32px; height: 32px; border-radius: 9px; border: 1.5px solid #e2e8f0;
+    background: #fff; color: #475569; font-size: 13px; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-score-pill:hover { background: #f1f5f9; border-color: #cbd5e1; transform: translateY(-1px); }
+  .btn-score-pill.active {
+    background: #111; color: #fff; border-color: #111;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.18); transform: scale(1.08);
+  }
+  .resolved-card {
+    background: #fff; border-radius: 18px; border: 1px solid rgba(0,0,0,0.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02); transition: all 0.2s ease;
+  }
+  .resolved-card:hover { border-color: rgba(0,0,0,0.09); box-shadow: 0 6px 18px rgba(0,0,0,0.04); }
+
   /* Settings Blocks */
   .settings-block {
     background: #fafafa; border: 1px solid rgba(0,0,0,0.04);
@@ -1051,7 +1073,6 @@ PAGE = """<!DOCTYPE html>
 <body>
 <!-- Top Drop Floating Pill Toast -->
 <div id="appToast" class="app-toast"></div>
-<div id="toastBox" style="display:none"></div>
 
 <!-- Safe Confirmation Modal -->
 <div class="modal-overlay" id="confirmModal">
@@ -1156,8 +1177,11 @@ PAGE = """<!DOCTYPE html>
     </div>
     <div class="panel-card">
       <details style="cursor:pointer;color:var(--mut);font-size:13px" id="resolvedBox">
-        <summary style="padding:4px 0;font-weight:700;color:var(--txt)">📁 查看近期已处理会话记录 (Recently Handled)</summary>
-        <div id="resolvedList" style="margin-top:12px;background:#f8fafc;border:1px solid rgba(0,0,0,0.04);border-radius:14px;padding:14px 18px"></div>
+        <summary style="padding:6px 0;font-weight:800;font-size:14px;color:var(--txt);display:flex;align-items:center;justify-content:space-between">
+          <span>📁 查看近期已处理会话记录 · 闭环评价打分与真人调优 (Recently Handled)</span>
+          <span style="font-size:12px;font-weight:600;color:var(--acc)">点击展开点评与自学习 ▼</span>
+        </summary>
+        <div id="resolvedList" style="margin-top:14px"></div>
       </details>
     </div>
   </main>
@@ -1385,6 +1409,16 @@ PAGE = """<!DOCTYPE html>
                   <label>个人真实微信号（配置后防泄密物理锁死）</label>
                   <input type="text" id="inContactWechat" placeholder="例如：wxid_xxxx">
                 </div>
+              </div>
+              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
+                <div>
+                  <strong style="font-size:13px;color:#111;display:block">🛡️ 全局在线真实回复门禁 (Online Reply Safety Gate)</strong>
+                  <span style="font-size:11px;color:var(--mut)">关闭时处于安全沙箱模式（零真实外发，沙盒演练专用）；开启后后台允许真实发送消息</span>
+                </div>
+                <label class="form-switch-apple">
+                  <input type="checkbox" id="inOnlineReply">
+                  <span class="switch-slider"></span>
+                </label>
               </div>
               <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:12px;padding:12px 14px;font-size:12px;color:#dc2626;margin-top:14px;line-height:1.5">
                 🔒 <strong>防套话安全铁律</strong>：模型严禁在文本中吐出明文联系方式；若 HR 催促或诱导索要电话微信，系统仅允许引导官方交换。若模型被攻破输出明文信息，底层正则门禁将物理拦截并立即转人工告警。
@@ -1697,22 +1731,11 @@ function showToast(msg, type = 'info') {
       pill.classList.remove('show');
     }, 3200);
   }
-  const box = document.getElementById('toastBox');
-  if (box) {
-    const t = document.createElement('div');
-    t.className = 'toast ' + type;
-    t.innerHTML = `<span>${esc(msg)}</span>`;
-    box.appendChild(t);
-    setTimeout(() => t.remove(), 3200);
-  }
 }
 
 function switchTab(name) {
   currentTab = name;
   document.querySelectorAll('.island-capsule').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === name);
-  });
-  document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => {
@@ -1907,19 +1930,122 @@ function renderPending() {
     </div>
   `).join('');
 
-  // 渲染近期已处理会话
+  // 渲染近期已处理会话（点评打分 1-10 与真人优化示范自学习闭环）
   const rb = document.getElementById('resolvedList');
   if (rb) {
     if (!resolvedData.length) {
       rb.innerHTML = '<div style="color:var(--mut-dark);font-size:12px;padding:4px 0">暂无近期处理记录</div>';
     } else {
-      rb.innerHTML = resolvedData.map(r => `
-        <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid rgba(0,0,0,0.03);font-size:12px">
-          <div><strong style="color:var(--txt)">${esc(r.company)}</strong> <span style="color:var(--mut)">(${esc(r.resolved_action || 'handled')})</span></div>
-          <div style="color:var(--mut-dark)">${esc(r.resolved_time || '')}</div>
-        </div>
-      `).join('');
+      rb.innerHTML = resolvedData.map((r, i) => {
+        const curScore = r.score || 8;
+        const hrSection = r.last_msg ? `
+          <div class="quote-box py-2 px-3 mb-2" style="background:#f8fafc;border-left:3px solid #cbd5e1;border-radius:8px;font-size:12px">
+            <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:2px">💬 HR 发言内容</div>
+            <div style="color:#334155">${esc(r.last_msg)}</div>
+          </div>` : '';
+        const aiSection = r.suggested ? `
+          <div class="quote-box py-2 px-3 mb-3" style="background:#f0fdf4;border-left:3px solid #86efac;border-radius:8px;font-size:12px">
+            <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:2px">🤖 实际生成/送达回复</div>
+            <div style="color:#14532d;font-weight:500">${esc(r.suggested)}</div>
+          </div>` : '';
+        const pills = [1,2,3,4,5,6,7,8,9,10].map(num => `
+          <button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectResolvedScore(${i}, ${num})">${num}</button>
+        `).join('');
+
+        return `
+          <div class="resolved-card p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <strong style="font-size:14px;color:var(--txt)">${esc(r.company)}</strong>
+                <span class="soft-badge badge-pub ms-2" style="font-size:11px">${esc(r.resolved_action || 'handled')}</span>
+              </div>
+              <div style="font-size:12px;color:var(--mut-dark)">${esc(r.resolved_time || r.time || '')}</div>
+            </div>
+            ${hrSection}
+            ${aiSection}
+            <div class="pt-2" style="border-top:1px dashed rgba(0,0,0,0.06)">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div style="font-size:12px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:6px">
+                  ⭐ 回答点评打分（满分10分，未打分按默认8分计算）:
+                  <span id="scoreBadge_${i}" class="soft-badge badge-ai" style="font-size:11px;font-weight:800">${curScore}分</span>
+                </div>
+                <div style="font-size:11px;color:var(--mut)">点击数字切换评分</div>
+              </div>
+              <div class="d-flex flex-wrap gap-1 mb-3" id="scorePills_${i}">
+                ${pills}
+              </div>
+              <div class="mb-2">
+                <label style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px;display:block">
+                  ✍️ 人工输入优化内容（真人示范金句，自动沉淀至经验库实现自学习进化）：
+                </label>
+                <textarea id="optText_${i}" class="form-control" style="font-size:12px;border-radius:10px;resize:vertical;min-height:56px" placeholder="输入你认为更自然、更高情商的真人回复（例如：“真人在的，刚才回复太板正了哈哈…”），大模型在后续会话中将自动检索参考此黄金样本。">${esc(r.optimized_text || '')}</textarea>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-2">
+                <span id="fbStatus_${i}" style="font-size:12px;color:var(--mut)">${r.has_feedback ? '✅ 已有历史评价记录' : '未手动点评（默认8分）'}</span>
+                <button class="btn-black btn-sm" style="padding:6px 14px;border-radius:10px;font-size:12px" onclick="saveResolvedFeedback(${i})">
+                  💾 保存点评与优化
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
+  }
+}
+
+function selectResolvedScore(idx, score) {
+  if (!resolvedData || !resolvedData[idx]) return;
+  resolvedData[idx].score = score;
+  const badge = document.getElementById('scoreBadge_' + idx);
+  if (badge) badge.textContent = score + '分';
+  const container = document.getElementById('scorePills_' + idx);
+  if (container) {
+    container.querySelectorAll('.btn-score-pill').forEach((btn, i) => {
+      btn.classList.toggle('active', (i + 1) === score);
+    });
+  }
+}
+
+async function saveResolvedFeedback(idx) {
+  if (!resolvedData || !resolvedData[idx]) return;
+  const item = resolvedData[idx];
+  const optBox = document.getElementById('optText_' + idx);
+  const optText = optBox ? optBox.value.trim() : '';
+  const score = item.score || 8;
+  const statusEl = document.getElementById('fbStatus_' + idx);
+
+  if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>保存中…';
+
+  const payload = {
+    company: item.company,
+    job: item.job || '',
+    hr_msg: item.last_msg || '',
+    ai_reply: item.suggested || '',
+    score: score,
+    optimized_text: optText,
+    source: 'web_console'
+  };
+
+  try {
+    const res = await fetch('/api/feedback?token=' + encodeURIComponent(TOKEN), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('点评与优化已存入经验库！大模型后续会话将自学习参考', 'success');
+      item.has_feedback = true;
+      item.optimized_text = optText;
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--ok)">✅ 点评已入库（' + score + '分）</span>';
+    } else {
+      showToast('保存失败: ' + (data.error || '未知错误'), 'error');
+      if (statusEl) statusEl.textContent = '❌ 保存失败';
+    }
+  } catch (e) {
+    showToast('网络错误: ' + e.message, 'error');
+    if (statusEl) statusEl.textContent = '❌ 网络异常';
   }
 }
 
@@ -2095,6 +2221,7 @@ async function loadSettings() {
   if (document.getElementById('inPolicyPhone')) document.getElementById('inPolicyPhone').value = priv.exchange_phone || 'manual';
   if (document.getElementById('inContactPhone')) document.getElementById('inContactPhone').value = priv.contact_phone || '';
   if (document.getElementById('inContactWechat')) document.getElementById('inContactWechat').value = priv.contact_wechat || '';
+  if (document.getElementById('inOnlineReply')) document.getElementById('inOnlineReply').checked = Boolean(s.online_reply_enabled);
 
   const br = s.browser || {};
   if (document.getElementById('inBrowserSilent')) document.getElementById('inBrowserSilent').checked = br.silent_mode !== false;
@@ -2210,7 +2337,8 @@ async function savePrivacyPolicy() {
       exchange_phone: document.getElementById('inPolicyPhone').value,
       contact_phone: document.getElementById('inContactPhone').value.trim(),
       contact_wechat: document.getElementById('inContactWechat').value.trim(),
-    }
+    },
+    online_reply_enabled: document.getElementById('inOnlineReply') ? document.getElementById('inOnlineReply').checked : false
   };
   const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (el) {
@@ -2402,6 +2530,7 @@ function appendChatMessage(role, text, meta) {
           ${actBadge}
           ${latency}
           <span>· ${esc(timeStr)}</span>
+          <button type="button" class="btn-action-light ms-2" style="font-size:10px;padding:2px 8px;border-radius:6px;height:22px;display:inline-flex;align-items:center" onclick="copyCleanedReply()" title="复制清洗后的回复文本">📋 复制</button>
         </div>
       </div>
     `;
@@ -2703,16 +2832,6 @@ function copyCleanedReply() {
   });
 }
 
-function copyCurrentPromptInspector() {
-  const pre = document.getElementById('pgPromptCode');
-  if (!pre || !pre.textContent) return;
-  navigator.clipboard.writeText(pre.textContent).then(() => {
-    showToast('Prompt 内容已复制！', 'success');
-  }).catch(() => {
-    showToast('复制失败，请手动选取', 'error');
-  });
-}
-
 load(false);
 setInterval(() => load(false), 30000);
 </script>
@@ -2830,13 +2949,27 @@ def api_overview(token: str = ""):
             continue
         seen[c] = r  # 覆盖为最近一次告警
 
+    # 加载现有点评与优化记录 (经验记忆库)
+    feedbacks = {}
+    try:
+        from boss_apply import experience
+        for fb in experience.load_all():
+            k1 = f"{fb.get('company')}_{fb.get('hr_msg', '')[:40]}"
+            feedbacks[k1] = fb
+            feedbacks[str(fb.get("company", ""))] = fb
+    except Exception:
+        pass
+
     pending = []
     resolved = []
+    seen_companies = set()
     for c, a in seen.items():
         is_res, act, ts, st = _is_alert_resolved(a.get("ts") or "", c, rows)
+        last_m = (a.get("last_msg") or "")[:500]
+        fb = feedbacks.get(f"{c}_{last_m[:40]}") or feedbacks.get(c) or {}
         item = {
             "company": c,
-            "last_msg": (a.get("last_msg") or "")[:500],
+            "last_msg": last_m,
             "reason": (a.get("reason") or "")[:200],
             "suggested": a.get("suggested_reply") or "",
             "time": a.get("ts") or "",
@@ -2844,11 +2977,50 @@ def api_overview(token: str = ""):
             "resolved_action": act,
             "resolved_time": ts,
             "resolved_status": st,
+            "score": fb.get("score", 8),
+            "optimized_text": fb.get("optimized_text", ""),
+            "has_feedback": bool(fb),
         }
         if is_res:
             resolved.append(item)
+            seen_companies.add(c)
         else:
             pending.append(item)
+
+    # 扩展已处理记录：纳入台账中实际成功的直接回复、换微信与发简历记录（扩大数据源，供点评与自学习）
+    for r in reversed(rows[-120:]):
+        act = r.get("action")
+        st = r.get("status")
+        comp = r.get("company")
+        if not comp or comp in seen_companies:
+            continue
+        if act in ("reply", "exchange_wechat", "send_resume", "agree_wechat") and st in ("ok", "already_sent", "already_agreed"):
+            conv_str = r.get("conv") or ""
+            hr_text = ""
+            if conv_str:
+                parts = conv_str.split("\n")
+                if len(parts) >= 3:
+                    hr_text = "\n".join(parts[2:]).strip()
+                else:
+                    hr_text = parts[-1].strip()
+            fb = feedbacks.get(f"{comp}_{hr_text[:40]}") or feedbacks.get(comp) or {}
+            resolved.append({
+                "company": comp,
+                "last_msg": hr_text[:500],
+                "reason": "常规会话交互",
+                "suggested": r.get("text_head") or r.get("reply_text") or "",
+                "time": r.get("ts") or "",
+                "high_intent": False,
+                "resolved_action": act,
+                "resolved_time": r.get("ts") or "",
+                "resolved_status": st,
+                "score": fb.get("score", 8),
+                "optimized_text": fb.get("optimized_text", ""),
+                "has_feedback": bool(fb),
+            })
+            seen_companies.add(comp)
+            if len(resolved) >= 50:
+                break
 
     pending.sort(key=lambda x: x["time"], reverse=True)
     resolved.sort(key=lambda x: x.get("resolved_time") or x["time"], reverse=True)
@@ -2895,6 +3067,40 @@ async def api_action(request: Request, token: str = ""):
     # 复用飞书卡片设计的同一条操作路由（隐私红线+台账留痕都在里面）
     res = feishu_bot.handle_card_action(cfg, body)
     return res
+
+
+@app.post("/api/feedback")
+async def api_feedback(request: Request, token: str = ""):
+    """接收用户在工作台对已处理回复的逐一点评（1-10分）与人工优化内容，沉淀入经验记忆库。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    company = (body.get("company") or "").strip()
+    job = (body.get("job") or "").strip()
+    hr_msg = (body.get("hr_msg") or "").strip()
+    ai_reply = (body.get("ai_reply") or "").strip()
+    score = body.get("score", 8)
+    optimized_text = (body.get("optimized_text") or "").strip()
+    source = (body.get("source") or "web_console").strip()
+
+    if not company and not hr_msg:
+        return JSONResponse({"ok": False, "error": "company or hr_msg required"}, status_code=400)
+
+    try:
+        from boss_apply import experience
+        record = experience.record_feedback(
+            company=company,
+            job=job,
+            hr_msg=hr_msg,
+            ai_reply=ai_reply,
+            score=score,
+            optimized_text=optimized_text,
+            source=source,
+        )
+        return {"ok": True, "record": record}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
 def main():

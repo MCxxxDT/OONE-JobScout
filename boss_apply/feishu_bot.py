@@ -348,7 +348,10 @@ def handle_card_action(cfg: dict, action_payload: dict) -> dict:
         text = action_payload.get("text") or ""
         if not text:
             return {"ok": False, "error": "reply text is empty"}
-        res = flows.chat_reply(cfg, company, text)
+        try:
+            res = flows.chat_reply(cfg, company, text, force=True)
+        except TypeError:
+            res = flows.chat_reply(cfg, company, text)
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
     text = (action_payload.get("text") or "").strip()
@@ -361,7 +364,10 @@ def handle_card_action(cfg: dict, action_payload: dict) -> dict:
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
     if act == "agree_wechat":
-        res = flows.chat_agree_wechat(cfg, company, reply_text=text) if text else flows.chat_agree_wechat(cfg, company)
+        try:
+            res = flows.chat_agree_wechat(cfg, company, reply_text=text, force=True) if text else flows.chat_agree_wechat(cfg, company, force=True)
+        except TypeError:
+            res = flows.chat_agree_wechat(cfg, company, text) if text else flows.chat_agree_wechat(cfg, company)
         return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
 
     if act in ("ignore", "mark_handled"):

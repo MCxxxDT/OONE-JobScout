@@ -17,3 +17,4 @@ state/secrets.json
 __pycache__/
 *.pyc
 .venv/
+state_dryrun/

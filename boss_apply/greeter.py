@@ -61,6 +61,16 @@ def self_openers(cfg, head_len=14):
 
 
 def greeting_text(cfg, job):
+    # 1. 优先调用 AI 动态开场白引擎（看岗位下菜碟，结合岗位与画像生成定制化第一句）
+    try:
+        from . import ai_reply
+        dyn = ai_reply.generate_dynamic_greeting(cfg, job)
+        if dyn and not privacy_blocked(dyn):
+            return dyn
+    except Exception:
+        pass
+
+    # 2. 保底降级：使用静态模板
     profile = cfg.get("profile", "test")
     templates = (cfg.get("greeting", {}) or {}).get(profile) or cfg["greeting"]["test"]
     t = random.choice(templates)

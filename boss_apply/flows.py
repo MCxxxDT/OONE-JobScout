@@ -379,12 +379,12 @@ def chat_inbox(cfg):
         sess.close()
 
 
-def chat_reply(cfg, company, text):
+def chat_reply(cfg, company, text, force=False):
     """按公司名回复 HR 一条消息（经 greeter.send_message_via_chat），写台账 action=reply。
     隐私红线：文案含联系方式意图 → 拒绝发送（blocked_privacy），转人工。
-    安全门禁：online_reply_enabled 为 False 时物理拦截，零消息发往线上真实 HR。
+    安全门禁：online_reply_enabled 为 False 时（非人工审批 force）物理拦截，零消息发往线上真实 HR。
     公司未在会话列表命中时 greeter 层直接抛异常中止，绝不退回最新会话（审计补丁#3）。"""
-    if not cfg.get("online_reply_enabled", True):
+    if not force and not cfg.get("online_reply_enabled", True):
         ledger.append({"action": "reply", "status": "intercepted_safety_gate", "company": company,
                        "text_head": (text or "")[:120],
                        "note": "online_reply_enabled 为 false，线上发送已被全局安全门禁拦截"})

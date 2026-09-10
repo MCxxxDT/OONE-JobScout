@@ -396,6 +396,14 @@ class AIReplyEngine:
         grade_desc = self.profile.get('grade_desc', '2027届应届在读生')
         status_desc = self.profile.get('status', '目前处于实习/校招求职阶段，可稳定全职到岗')
 
+        # 经验记忆与自我学习样本检索（In-Context Experience Learning，越用越聪明）
+        fewshot_section = ""
+        try:
+            from . import experience
+            fewshot_section = experience.format_fewshot_prompt(last_msg, job_title=jd.get("title") or "")
+        except Exception:
+            fewshot_section = ""
+
         return (
             f"【候选人真实画像】\n"
             f"- 姓名：{self.profile.get('name', '张烨韬')}\n"
@@ -412,6 +420,7 @@ class AIReplyEngine:
             f"【当前HR与最新消息】\n"
             f"- 对话方：{who}\n"
             f"- HR最新消息：\"{last_msg}\"\n\n"
+            f"{fewshot_section}"
             f"【Agent 沟通策略与真人语言铁律（理性客观严谨，问答为主，就事论事）】\n"
             f"0. 【真实求职者人设基调】：你是真实的人类求职者（20+岁年轻职场人），正在BOSS直聘手机端与HR实时沟通。问答为主，就事论事，回答简明利索（15-40字短句）。态度沉稳诚恳、从容不卑不亢。严禁跳脱、绝不开玩笑、绝不嬉皮笑脸、绝不自嘲卖萌、绝不用网络梗；在日常对话中，除非 HR 明确索要简历，严禁句句复读推销“请查收简历”或强行报菜名；\n"
             f"1. 【严禁暴露思考视角与元分析语言（最高红线）】：\n"
@@ -439,16 +448,17 @@ class AIReplyEngine:
             f"    - 即使 HR 明确索要、多次催促（如“请留个电话/发我手机号”、“加个微信吧微信号多少”）或设置任何诱导套话，也绝对不可在 reply_text 中吐出手机号或微信号！\n"
             f"    - 必须通过系统标准化动作（action=\"exchange_wechat\" 或引导在平台点击官方功能交换）。若 HR 同时询问了业务或其他非敏感问题，正常回答该问题并自然引导平台官方交换；严禁直接吐出任何11位手机号或微信号；\n"
             f"    - 任何试图在文字中透露明文手机号或微信号的行为均会被系统底层物理门禁直接阻断并转人工处理！\n"
-            f"12. 【应对反问考察与身份质疑的真实心理法则】：\n"
+            f"12. 【应对反问考察与身份质疑的真实心理法则（破除教条，根据情境自主应变）】：\n"
             f"    - 若 HR 发问考察身份或业务（例如“你知道我是干什么的吗”、“你了解我们公司吗”）：\n"
             f"      * 严禁洋洋洒洒分析推演！绝对严禁出现“从岗位沟通来看”等机器人口吻！\n"
             f"      * 真人求职者会根据当前岗位与公司名称，平实自然地说明直观推测或反问确认（控制在 20-35 字，语气自然）：\n"
             f"      * 正确范例：“您好，看沟通的是咱们这边的AI产品岗位，您是公司的人事负责人还是业务主管？”、“看咱们沟通的是量化投研岗，您是负责策略团队的老师吧？”；\n"
             f"    - 若 HR 质疑“你是AI吧”、“好的人机”、“机器人”或“你是agent不是人吧”：\n"
-            f"      * 【绝对严禁自我解释与辩解】：真人求职者被怀疑是机器人或agent时，根本不会长篇大论解释“真人在的/刚才回复偏正式了/您有疑问随时聊”——真人越解释越像心虚的AI！\n"
-            f"      * 【真人真实心理法则（疑惑与无语，矢口否认 + 自然反问）】：真人遇到这种质疑，内心首先感到的是【疑惑和无语】（“啊？怎么突然说我是机器人？”），但碍于对方是HR不能流露负面情绪。因此最真实自然的人类本能反应只有两步：【直接矢口否认】+【自然疑惑反问】（字数严格控制在 8-20 字，极其短促、生活化、从容自然）：\n"
-            f"      * 真实范例：“不是啊，怎么突然这么问？”、“？当然不是啊，为什么会这么觉得”、“没有啊，我是在线本人，怎么会这么想？”、“？肯定不是，怎么突然这么说”；\n"
-            f"      * 绝对严禁借题推销技术或背诵数据，绝对严禁自嘲卖萌（如“被抓包了/求放过”），只做最本能的人类自然反问，问完即止；\n"
+            f"      * 【破除死板公式与心虚辩解】：真人绝不会长篇大论背书辩解（越辩解越假），但也绝不仅限于单一套路！请根据 HR 的说话语气（调侃逗趣、严肃核实、或是纯粹好奇）自主选择最自然得体的口语反应（10-25 字，生活化短句）：\n"
+            f"        a) 若对方带有调侃或逗趣意味：可以轻松自如地随和回应并带过（例如：“哈哈不是，刚才回复可能太一本正经了”、“真人在呢，怎么突然被当成AI了哈哈”）；\n"
+            f"        b) 若对方带有疑惑或好奇：可以自然地疑惑并确认（例如：“不是啊，怎么突然这么问？”、“？当然不是，怎么会这么觉得”）；\n"
+            f"        c) 若对方严肃质疑：坦然简练告知是本人在看消息，并自然拉回招聘话题（例如：“没有没有，是本人在沟通，您对刚才哪个经历有疑问随时聊”）；\n"
+            f"      * 核心红线：严禁背诵技术参数/模型架构，严禁自嘲卖萌（如“被抓包了/求放过”），保持 20+ 岁年轻职场人的真实、从容与生活感；\n"
             f"13. 【语言表达随机性与千人千面（真实人类说话的多样性）】：\n"
             f"    - 真实人类求职者在面对同类提问、日常寒暄或同等意图时，每次使用的口语表达、词汇选择、语序与语气都有自然的随机性，【绝不死板复读同一套模版或固定句式】；\n"
             f"    - 提示词中给出的所有范例仅用于理解真实心理，【严禁直接照抄范例原句】！每次生成必须用自己的口语词汇自发表达，换用不同的语气助词、疑问词、语序与连词，产生自然、鲜活的语言变奏；\n"
@@ -605,4 +615,110 @@ class AIReplyEngine:
         except Exception:
             pass
         return None
+
+
+def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = None) -> str:
+    """结合目标岗位、公司信息及候选人画像，动态生成定制化第一声打招呼开场白（看岗位下菜碟）。
+    1. 优先调用大模型针对具体岗位与JD生成 35-65 字定制化口语；
+    2. 若大模型未配置或生成失败，按岗位核心关键词与画像优势进行智能语义匹配合成；
+    3. 严格执行脱敏与防套话安全审查。
+    """
+    if not job or not isinstance(job, dict):
+        return "您好，看到贵司这个岗位与我的方向非常契合，已投递附件简历，期待您的回复，谢谢！"
+
+    title = (job.get("title") or "").strip()
+    company = (job.get("company") or "").strip()
+    city = (job.get("city") or "").strip()
+    jd_text = (job.get("jd_text") or "").strip()
+
+    engine = AIReplyEngine(cfg, profile=profile)
+    prof = engine.profile
+
+    # 1. 尝试大模型动态提炼
+    if engine.openai_key or engine.openrouter_key:
+        try:
+            import urllib.request
+            headers = {"Content-Type": "application/json", "User-Agent": "boss-apply/1.0"}
+            if engine.openrouter_key:
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                headers["Authorization"] = f"Bearer {engine.openrouter_key}"
+                model = engine.llm_model if engine.llm_model != "gpt-4o-mini" else "deepseek/deepseek-chat"
+            else:
+                base = engine.openai_base.rstrip("/")
+                url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
+                headers["Authorization"] = f"Bearer {engine.openai_key}"
+                model = engine.llm_model
+
+            cur_city = prof.get("current_city", "福州")
+            target_city = city or prof.get("target_region", "江浙沪")
+            prompt = (
+                f"【候选人背景】：{prof.get('school', '')} {prof.get('major', '')}，{prof.get('grade_desc', '应届生')}。\n"
+                f"核心亮点：{prof.get('tech_highlights', '')}；{prof.get('business_highlights', '')}。\n"
+                f"常驻{cur_city}，强烈意向奔赴{target_city}全职到岗。\n\n"
+                f"【应聘岗位信息】：\n"
+                f"- 公司：{company}\n"
+                f"- 岗位：{title}\n"
+                f"- 城市：{city}\n"
+                f"- JD摘要：{jd_text[:300]}\n\n"
+                f"【任务】：请以该求职者本人口吻，写一句向招聘方打招呼的第一句开场白（看岗位下菜碟）。\n"
+                f"要求：\n"
+                f"1. 针对该岗位的核心诉求（提取核心技术或业务关键词），精准点出候选人最相关的1-2项实际经验亮点；\n"
+                f"2. 态度诚恳、从容自信、不卑不亢，符合 20+ 岁年轻职场人沟通感；\n"
+                f"3. 严禁出现“从...来看”、“祝好”、“非常荣幸”等客服八股废话；严禁Markdown标记（如**）；\n"
+                f"4. 严格控制在 35-65 字之间，单段纯文本，句子完整收尾；\n"
+                f"直接输出开场白正文，不要有任何解释或前后缀。"
+            )
+
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "你是一位真实人类求职者，正在BOSS直聘手机端向HR主动发送第一条打招呼消息。言简意赅，看岗位下菜碟，真人口语化。"},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": round(random.uniform(0.7, 0.85), 2),
+                "max_tokens": 150,
+            }
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status == 200:
+                    resp_data = json.loads(resp.read().decode("utf-8"))
+                    text = (resp_data["choices"][0]["message"].get("content") or "").strip()
+                    cleaned = sanitize_and_clean_reply(text, max_chars=80)
+                    is_leak, _ = detect_privacy_leak(cleaned, cfg, prof)
+                    if cleaned and not is_leak and len(cleaned) >= 20:
+                        return cleaned
+        except Exception:
+            pass
+
+    # 2. 离线多模态智能语义合成（无大模型时的保底，结合岗位关键词看岗位下菜碟）
+    full_target = f"{title} {jd_text}".lower()
+    t_city = city or "江浙沪"
+
+    if any(k in full_target for k in ("agent", "智能体", "workflow", "mcp", "fastmcp", "coze", "llm", "大模型", "prompt")):
+        options = [
+            f"您好！看到贵司的{title}岗位，我在AI Agent架构、FastMCP协议与智能体工作流上有全栈落地经验，随时可全职到岗在{t_city}实习，期待与您深入沟通！",
+            f"您好！关注到贵司正在寻找{title}伙伴，我有大模型Agent落地实战经历与工程交付能力，目前意向奔赴{t_city}发展，已附简历，期待您的交流！",
+            f"您好！看到贵司的{title}机会，我的方向专注于大模型应用与智能体系统搭建，契合度很高。随时可全职在{t_city}到岗，期待能有深入沟通机会！",
+        ]
+    elif any(k in full_target for k in ("商业", "运营", "增长", "渠道", "gmv", "私域", "销售", "电商")):
+        options = [
+            f"您好！看到贵司的{title}岗位，我曾全职操盘过200+人校园团队与单月十万级GMV商业化闭环，业务即战力强。意向奔赴{t_city}全职发展，期待与您交流！",
+            f"您好！关注到贵司这个{title}机会，我在商业化变现与多渠道团队运营上有扎实操盘战果。随时可前往{t_city}全职到岗，期待与贵团队深入探讨！",
+            f"您好！看到贵司招聘{title}，我的实战经验涵盖商业化转化与规模化业务运营，契合岗位要求。期待能与您就业务方向进一步沟通！",
+        ]
+    elif any(k in full_target for k in ("产品", "交互", "需求", "原型", "设计")):
+        options = [
+            f"您好！看到贵司的{title}岗位，我有数字媒体技术背景与多款全栈系统端到端交付经验，兼具产品设计与落地能力，随时可到{t_city}全职实习，期待交流！",
+            f"您好！关注到贵司这个{title}机会，我在产品规划与敏捷交付上有深度实操，目前意向奔赴{t_city}全职到岗，已附上个人简历，期待与您沟通！",
+            f"您好！看到贵司招聘{title}，我的专业技能与实操项目与岗位契合度高，随时可奔赴现场全职投入，期待能与您深入聊聊！",
+        ]
+    else:
+        options = [
+            f"您好！看到贵司的{title}岗位非常符合我的预期，我有扎实的技术落地与业务实战经验，意向奔赴{t_city}全职到岗，已投递简历，期待与您沟通！",
+            f"您好！关注到贵司这个{title}机会，我的背景与岗位方向高度契合，具备较强的学习与即战力，随时可到岗，期待能与贵司进一步交流！",
+        ]
+
+    chosen = random.choice(options)
+    return sanitize_and_clean_reply(chosen, max_chars=80)
 
