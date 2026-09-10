@@ -584,8 +584,10 @@ def run_cycle(cfg, engine, args, st=None):
             if reply_text:
                 print(f"  [伴随回复文案] {reply_text}")
 
-            if args.dry_run:
-                print(f"  [DRY-RUN 仿真] 本次处于仿真模式，不向 CDP 发送实际物理动作({action})与输入。")
+            is_dry = args.dry_run or (not cfg.get("online_reply_enabled", True))
+            if is_dry:
+                safe_note = "（online_reply_enabled 为 false，全局安全门禁生效，零真实外发）" if not args.dry_run else ""
+                print(f"  [DRY-RUN 仿真] 本次处于仿真模式{safe_note}，不向 CDP 发送实际物理动作({action})与输入。")
                 ledger.append({
                     "action": f"dryrun_{action}",
                     "company": who,
@@ -595,6 +597,7 @@ def run_cycle(cfg, engine, args, st=None):
                     "reason": reason,
                     "job_title": (conv.get("job") or {}).get("title") or "",
                     "high_intent": hi_flag,
+                    "intercepted_safety_gate": not args.dry_run,
                 })
                 replied_count += 1
             else:

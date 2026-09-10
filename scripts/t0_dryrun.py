@@ -1565,6 +1565,74 @@ try:
     check("Settings 回读 auto_apply.apply_top_n 为 20", aa_saved.get("apply_top_n") == 20)
     check("Settings 回读 auto_apply.apply_window 正确保存", aa_saved.get("apply_window") == "09:30-12:00")
     check("Settings 回读 auto_apply.apply_fetch_detail 为 False", aa_saved.get("apply_fetch_detail") is False)
+
+    print("== 32. 在线回复安全门禁与 Web 演练场 (Playground) ==")
+    # 32.1 物理级安全门禁：online_reply_enabled 为 false 时 100% 拦截线上发送
+    cfg_safe_gate = dict(cfg, online_reply_enabled=False)
+
+    # 32.1.1 chat_reply 拦截断言
+    reply_res = flows.chat_reply(cfg_safe_gate, "安全测试企业A", "您好，随时可以到岗")
+    check("chat_reply 安全拦截生效", reply_res.get("ok") is False and reply_res.get("intercepted") is True)
+    check("chat_reply 归因正确", reply_res.get("reason") == "online_reply_enabled_false")
+
+    # 32.1.2 chat_exchange_wechat / chat_send_resume / chat_agree_wechat 拦截断言（跳过 job_fit_gate）
+    orig_fit_gate = flows._job_fit_gate
+    flows._job_fit_gate = lambda cfg, company: {"allow": True, "attribution": "test_pass", "detail": "test"}
+    try:
+        wx_res = flows.chat_exchange_wechat(cfg_safe_gate, "安全测试企业B")
+        check("chat_exchange_wechat 安全拦截生效", wx_res.get("ok") is False and wx_res.get("intercepted") is True)
+        check("chat_exchange_wechat 归因正确", wx_res.get("reason") == "online_reply_enabled_false")
+
+        resume_res = flows.chat_send_resume(cfg_safe_gate, "安全测试企业C")
+        check("chat_send_resume 安全拦截生效", resume_res.get("ok") is False and resume_res.get("intercepted") is True)
+        check("chat_send_resume 归因正确", resume_res.get("reason") == "online_reply_enabled_false")
+
+        agree_res = flows.chat_agree_wechat(cfg_safe_gate, "安全测试企业D")
+        check("chat_agree_wechat 安全拦截生效", agree_res.get("ok") is False and agree_res.get("intercepted") is True)
+        check("chat_agree_wechat 归因正确", agree_res.get("reason") == "online_reply_enabled_false")
+    finally:
+        flows._job_fit_gate = orig_fit_gate
+
+    # 32.1.3 greeter._pick_conversation_js Vue 3 激活与即时滚动断言
+    js_code = flows.greeter._pick_conversation_js("测试企业")
+    check("greeter JS 支持 .friend-content 容器", ".friend-content" in js_code)
+    check("greeter JS 使用 instant 滚动防坐标漂移", "instant" in js_code)
+    check("greeter JS 派发 pointerdown 与 mousedown 事件", "pointerdown" in js_code and "mousedown" in js_code)
+
+    # 32.2 Web 端 /api/playground/simulate 接口验证
+    # 32.2.1 未授权拦截
+    resp_unauth = client.post("/api/playground/simulate")
+    check("Playground API 无 token 返回 401", resp_unauth.status_code == 401)
+
+    # 32.2.2 正常推演（Mock 兜底决策流）
+    payload_pg = {
+        "message": "你好，请问多久可以到岗？",
+        "company": "字节跳动",
+        "job_title": "AI产品经理实习生",
+        "salary": "400-500/天",
+        "city": "上海",
+        "jd": "负责AI Agent产品的迭代与落地",
+        "history": ["HR: 请问多久能来实习？"]
+    }
+    resp_pg = client.post("/api/playground/simulate?token=boss-apply", json=payload_pg)
+    check("Playground API POST 成功返回 200", resp_pg.status_code == 200)
+    data_pg = resp_pg.json()
+    check("Playground API 返回 parsed_decision", "parsed_decision" in data_pg and "action" in data_pg["parsed_decision"])
+    check("Playground API 返回 safety_audit", "safety_audit" in data_pg)
+    check("Playground API safety_audit 包含安全模式说明", "safety_mode" in data_pg["safety_audit"])
+    check("Playground API 安全通过无联系方式泄露", data_pg["safety_audit"].get("privacy_blocked") is False)
+
+    # 32.2.3 防套话泄露拦截与放行验证
+    from boss_apply import greeter as _grt
+    check("greeter.privacy_blocked 拦截明文手机号", _grt.privacy_blocked("我的电话是 138-1234-5678"))
+    check("greeter.privacy_blocked 放行普通业务对话", not _grt.privacy_blocked("好的，我随时可以到岗实习"))
+
+    # 32.2.4 Web 前端 HTML 包含演练场选项卡与沙盒容器
+    resp_page = client.get("/?token=boss-apply")
+    html_text = resp_page.text
+    check("Web 页面包含 playground 选项卡", 'data-tab="playground"' in html_text)
+    check("Web 页面包含 tab-playground 容器", 'id="tab-playground"' in html_text)
+    check("Web 页面包含 btnSimulate 推演按钮", 'id="btnSimulate"' in html_text)
 finally:
     cfgmod.LOCAL_CFG_PATH = _orig_local_path29
 

@@ -163,8 +163,8 @@ def _pick_conversation_js(company):
     严格匹配（审计补丁#3）：指定公司未命中时直接返回 notfound，严禁退回 newest，
     防止把回复发给最新会话的无关 HR。
     支持去除空白符（\\s/\\xa0）匹配，容忍侧栏公司名与标题的空格排版差异。
-    不直接 el.click()（BOSS 列表项对合成 click 无响应，2026-08-31 实测），
-    返回元素视口坐标，由调用方走 CDP Input.dispatchMouseEvent 派发受信任点击。"""
+    增强：针对 BOSS 2026 Vue 3 组件，在 .friend-content 上同时派发完整的鼠标/指针合成事件
+    并返回其视口坐标，由调用方再走 CDP Input 派发受信任点击，双重保证右侧聊天窗瞬间激活。"""
     return """
 (() => {
   const company = %s;
@@ -203,8 +203,14 @@ def _pick_conversation_js(company):
   }
   if (!target) return JSON.stringify({r: 'notfound'});
   const head = (target.innerText || '').slice(0, 46);
-  target.scrollIntoView({block: 'center'});
-  const rect = target.getBoundingClientRect();
+  target.scrollIntoView({behavior: 'instant', block: 'center'});
+  const innerClickable = target.querySelector('.friend-content') || target.querySelector('div') || target;
+  try {
+    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
+      innerClickable.dispatchEvent(new MouseEvent(evt, {bubbles: true, cancelable: true, view: window}));
+    });
+  } catch(e) {}
+  const rect = (innerClickable || target).getBoundingClientRect();
   return JSON.stringify({r: 'found', picked: picked, head: head,
     x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2)});
 })()

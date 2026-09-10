@@ -18,6 +18,7 @@ import asyncio
 import datetime
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,7 +34,7 @@ from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from boss_apply import ai_reply as air, config as cfgmod, feishu_bot, flows, \
-    guard as guardmod, ledger, profile_store, secrets as secrets_mod
+    greeter, guard as guardmod, ledger, profile_store, secrets as secrets_mod
 
 app = FastAPI(title="boss-apply 审批台")
 
@@ -342,6 +343,181 @@ async def api_profile_post(request: Request, token: str = "",
         return {"ok": True, "saved": True, "refined": False, "refine_error": err, "meta": meta}
     return {"ok": True, "saved": True, "refined": True,
             "refined_summary": (refined or {}).get("summary") or "", "meta": meta}
+
+
+@app.post("/api/playground/simulate")
+async def api_playground_simulate(request: Request, token: str = ""):
+    """回复演练场沙盒推演：接收模拟消息与JD，构建完整 Prompt，调用底层 LLM 并输出全景穿透与安全审计。
+    绝不向线上发出任何真实消息。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json() or {}
+
+    msg = (body.get("message") or "").strip()
+    company = (body.get("company") or "").strip() or "模拟HR"
+    job_title = (body.get("job_title") or "").strip() or "AI产品经理实习生"
+    salary = (body.get("salary") or "").strip()
+    city = (body.get("city") or "").strip()
+    jd = (body.get("jd") or "").strip()
+    raw_history = body.get("history") or []
+
+    history = []
+    if isinstance(raw_history, list):
+        for item in raw_history:
+            if isinstance(item, dict):
+                history.append({
+                    "role": item.get("role") or "me",
+                    "text": item.get("text") or ""
+                })
+            elif isinstance(item, str) and item.strip():
+                s = item.strip()
+                if s.startswith("我方:") or s.startswith("me:"):
+                    history.append({"role": "me", "text": s.split(":", 1)[1].strip()})
+                elif s.startswith("HR:") or s.startswith("hr:"):
+                    history.append({"role": "hr", "text": s.split(":", 1)[1].strip()})
+                else:
+                    history.append({"role": "hr", "text": s})
+
+    conv = {
+        "who": company,
+        "last_msg": msg,
+        "time": "刚刚",
+        "job": {
+            "title": job_title,
+            "company": company,
+            "salary": salary,
+            "city": city,
+            "jd_text": jd,
+        },
+        "history": history,
+    }
+
+    engine = air.AIReplyEngine(cfg)
+    hi_flag, hi_why = air.detect_high_intent(conv)
+
+    system_prompt = (body.get("custom_system_prompt") or "").strip() or (
+        "你是一名求职助理 Agent，代表求职者回复招聘平台HR消息。严格输出纯JSON。真人口语化，杜绝客服八股文，严禁使用任何Markdown标记（如**），保持整句完整自然收尾。"
+    )
+    user_prompt = (body.get("custom_user_prompt") or "").strip() or engine.build_agent_prompt(conv)
+
+    t0 = datetime.datetime.now()
+    llm_res = None
+    latency_ms = 0
+    raw_llm_text = ""
+    reasoning_content = ""
+    llm_error = None
+
+    has_key = bool(engine.openai_key or engine.openrouter_key)
+    if has_key:
+        try:
+            import urllib.request
+            headers = {"Content-Type": "application/json", "User-Agent": "boss-apply/1.0"}
+            if engine.openrouter_key:
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                headers["Authorization"] = f"Bearer {engine.openrouter_key}"
+                model = engine.llm_model if engine.llm_model != "gpt-4o-mini" else "deepseek/deepseek-chat"
+            else:
+                base = engine.openai_base.rstrip("/")
+                url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
+                headers["Authorization"] = f"Bearer {engine.openai_key}"
+                model = engine.llm_model
+
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.5,
+                "max_tokens": 8192,
+            }
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                latency_ms = int((datetime.datetime.now() - t0).total_seconds() * 1000)
+                if resp.status == 200:
+                    resp_data = json.loads(resp.read().decode("utf-8"))
+                    choice_msg = resp_data["choices"][0]["message"]
+                    raw_llm_text = (choice_msg.get("content") or "").strip()
+                    reasoning_content = (choice_msg.get("reasoning_content") or "").strip()
+
+                    content = re.sub(r"^```(?:json)?\s*", "", raw_llm_text)
+                    content = re.sub(r"```$", "", content).strip()
+                    try:
+                        llm_res = json.loads(content)
+                    except Exception as pe:
+                        llm_error = f"JSON解析失败: {pe}"
+                else:
+                    llm_error = f"HTTP {resp.status}: {resp.read().decode('utf-8')[:200]}"
+        except Exception as e:
+            latency_ms = int((datetime.datetime.now() - t0).total_seconds() * 1000)
+            llm_error = str(e)
+    else:
+        llm_error = "未配置 LLM API Key（请在设置面板中填入 Key 或配置环境变量）"
+
+    parsed_decision = {}
+    if isinstance(llm_res, dict) and "action" in llm_res:
+        parsed_decision = dict(llm_res)
+    else:
+        if any(w in msg for w in ("简历", "附件", "作品")):
+            parsed_decision = {
+                "action": "send_resume",
+                "reason": "HR 索要简历，触发官方简历投递决策",
+                "suggested_reply": "好的，已为您发送附件简历，请查收！"
+            }
+        elif any(w in msg for w in ("微信", "电话", "手机", "联系方式")):
+            parsed_decision = {
+                "action": "exchange_wechat",
+                "reason": "HR 提及联系方式，引导使用平台官方安全交换功能",
+                "suggested_reply": "已向您发起平台交换微信请求，请点击同意~"
+            }
+        elif any(w in msg for w in ("谢谢", "好的", "收到", "ok", "OK", "感谢")):
+            parsed_decision = {
+                "action": "skip",
+                "reason": "HR 发送礼貌结束语，会话自然闭环，跳过回复",
+                "suggested_reply": ""
+            }
+        else:
+            parsed_decision = {
+                "action": "reply",
+                "reason": "常规业务沟通，基于画像与JD生成拟人化回答",
+                "suggested_reply": "您好！目前人在福州，随时可以奔赴现场实习，期待与贵团队进一步交流！"
+            }
+
+    raw_suggested = parsed_decision.get("reply_text") or parsed_decision.get("suggested_reply") or ""
+    cleaned_reply = air.sanitize_and_clean_reply(raw_suggested, max_chars=150)
+    parsed_decision["reply_text"] = cleaned_reply
+
+    privacy_blocked = greeter.privacy_blocked(cleaned_reply)
+
+    # 隐私策略审查
+    from scripts.daemon_auto_reply import check_privacy_permission
+    allow_policy, policy_reason = check_privacy_permission(parsed_decision.get("action", "reply"), cfg, hi_flag)
+
+    return {
+        "ok": bool(llm_res is not None),
+        "llm_called": has_key,
+        "llm_error": llm_error,
+        "latency_ms": latency_ms,
+        "conv": conv,
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "raw_llm_output": raw_llm_text,
+        "reasoning_content": reasoning_content,
+        "parsed_decision": parsed_decision,
+        "cleaned_reply": cleaned_reply,
+        "safety_audit": {
+            "privacy_blocked": privacy_blocked,
+            "privacy_note": "🚨 拦截！文案中疑似含有明文电话或微信号，物理阻断发送" if privacy_blocked else "✅ 安全通过（未检测到明文联系方式泄露）",
+            "high_intent": hi_flag,
+            "high_intent_reason": hi_why or "常规沟通",
+            "policy_allow": allow_policy,
+            "policy_reason": policy_reason,
+            "online_reply_enabled": cfg.get("online_reply_enabled", True),
+            "safety_mode": "🛡️ 处于安全拦截模式 (online_reply_enabled=false)，零消息发送线上真实HR",
+        }
+    }
 
 PAGE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -739,9 +915,36 @@ PAGE = """<!DOCTYPE html>
     .island-nav-row { top: 62px; padding: 6px 0; }
     .island-capsule { height: 46px; }
     .panel-card { padding: 18px; border-radius: 20px; }
-    .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .table-custom td { padding: 12px 10px; font-size: 12px; }
+  /* Playground Custom Styles */
+  .preset-chips-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .preset-chip {
+    background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 20px;
+    padding: 6px 14px; font-size: 12px; font-weight: 700; color: #475569;
+    cursor: pointer; transition: all 0.2s; user-select: none; display: inline-flex; align-items: center; gap: 4px;
   }
+  .preset-chip:hover { background: #111; color: #fff; border-color: #111; transform: translateY(-1px); }
+  .chat-bubble-mockup {
+    background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 20px 20px 4px 20px;
+    padding: 16px 20px; font-size: 14px; color: #14532d; line-height: 1.6;
+    font-weight: 600; box-shadow: 0 4px 14px rgba(16,185,129,0.06); position: relative;
+  }
+  .chat-bubble-mockup.warn {
+    background: #fffbeb; border-color: #fde68a; color: #92400e; box-shadow: 0 4px 14px rgba(245,158,11,0.06);
+  }
+  .chat-bubble-mockup.rej {
+    background: #fef2f2; border-color: #fecaca; color: #991b1b; box-shadow: 0 4px 14px rgba(239,68,68,0.06);
+  }
+  .prompt-view-code {
+    background: #0f172a; color: #e2e8f0; border-radius: 14px; padding: 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px; max-height: 380px; overflow-y: auto; white-space: pre-wrap;
+    word-break: break-word; line-height: 1.6; border: 1px solid #1e293b;
+  }
+  .prompt-tab-pill {
+    padding: 6px 14px; border-radius: 12px; font-size: 11px; font-weight: 800; cursor: pointer;
+    background: #f1f5f9; color: #64748b; border: 1px solid transparent; transition: all 0.2s;
+  }
+  .prompt-tab-pill.active { background: #111; color: #fff; }
 </style>
 </head>
 <body>
@@ -800,6 +1003,11 @@ PAGE = """<!DOCTYPE html>
     <div class="island-capsule" data-tab="settings" onclick="switchTab('settings')">
       <svg class="island-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       <span class="capsule-text">系统设置</span>
+    </div>
+    <div class="island-capsule" data-tab="playground" onclick="switchTab('playground')">
+      <svg class="island-svg" viewBox="0 0 24 24"><path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
+      <span class="capsule-text">回复演练场</span>
+      <span class="capsule-badge" style="background:#8b5cf6;color:#fff;display:inline-block">🧪</span>
     </div>
   </div>
 
@@ -1121,6 +1329,192 @@ PAGE = """<!DOCTYPE html>
                 <button class="btn-black" onclick="saveBrowserSettings()">保存浏览器设置</button>
                 <span id="resBrowser" style="font-size:12px"></span>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Tab 4: 回复演练场 (Playground) -->
+  <main id="tab-playground" class="tab-content">
+    <div class="row g-4">
+      <!-- Left Col: 模拟输入与预设场景 -->
+      <div class="col-lg-6">
+        <div class="panel-card">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0 d-flex align-items-center">
+              <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
+              模拟输入与场景预设
+            </h5>
+            <span class="soft-badge badge-blue">沙盒只读模式</span>
+          </div>
+
+          <div style="font-size:12px;color:var(--mut);margin-bottom:14px">
+            💡 点击预设场景快速载入典型沟通情景，或手动模拟 HR 发问与岗位背景，直接与底层大模型交互推演：
+          </div>
+
+          <!-- Preset Chips -->
+          <div class="preset-chips-row">
+            <span class="preset-chip" onclick="loadPlaygroundPreset('ask_resume')">📄 索要简历</span>
+            <span class="preset-chip" onclick="loadPlaygroundPreset('arrival_time')">📅 到岗与毕业</span>
+            <span class="preset-chip" onclick="loadPlaygroundPreset('ask_wechat')">🔒 索要微信电话 (套话测试)</span>
+            <span class="preset-chip" onclick="loadPlaygroundPreset('salary')">💰 询问期望薪资</span>
+            <span class="preset-chip" onclick="loadPlaygroundPreset('interview_offline')">🏢 询问能否线下面试</span>
+            <span class="preset-chip" onclick="loadPlaygroundPreset('closing')">☕ 礼貌闭环 (好的谢谢)</span>
+          </div>
+
+          <!-- Form Fields -->
+          <div class="settings-block">
+            <div class="d-flex justify-content-between align-items-center">
+              <label style="margin-bottom:4px">💬 HR 最新发送的消息 (Message)</label>
+              <span style="font-size:11px;color:var(--mut);cursor:pointer" onclick="document.getElementById('pgMsg').value=''">清空</span>
+            </div>
+            <textarea id="pgMsg" style="height:70px" placeholder="输入模拟 HR 发来的消息，如：你好，简历看了很合适，可以周一来现场面试吗？"></textarea>
+
+            <div class="row g-2 mt-1">
+              <div class="col-6">
+                <label>公司名称</label>
+                <input type="text" id="pgCompany" placeholder="如：字节跳动" value="字节跳动">
+              </div>
+              <div class="col-6">
+                <label>岗位名称</label>
+                <input type="text" id="pgJobTitle" placeholder="如：AI产品经理实习生" value="AI产品经理实习生">
+              </div>
+            </div>
+
+            <div class="row g-2 mt-1">
+              <div class="col-6">
+                <label>薪资范围</label>
+                <input type="text" id="pgSalary" placeholder="如：200-300元/天" value="200-300元/天">
+              </div>
+              <div class="col-6">
+                <label>工作地点</label>
+                <input type="text" id="pgCity" placeholder="如：上海" value="上海">
+              </div>
+            </div>
+
+            <div class="mt-2">
+              <label>岗位 JD 描述 (Job Description)</label>
+              <textarea id="pgJd" style="height:90px" placeholder="模拟岗位职责与任职要求…">职责：负责大模型 Agent 业务落地与工作流设计；任职要求：统招本科及以上，熟悉 Prompt 工程与自动化工具，每周可全职到岗 5 天，27届优先转正。</textarea>
+            </div>
+
+            <div class="mt-2">
+              <label>对话历史记录 (可选，每行一条格式如：我方: ... 或 HR: ...)</label>
+              <textarea id="pgHistory" style="height:80px" placeholder="我方: 您好！看到贵司 AI 产品实习岗位，非常感兴趣&#10;HR: 你好，是27届统招在校生吗？"></textarea>
+            </div>
+
+            <!-- Advanced Prompt Settings Collapsible -->
+            <div class="mt-3">
+              <div class="d-flex align-items-center justify-content-between" style="cursor:pointer" onclick="togglePlaygroundAdv()">
+                <span style="font-size:12px;font-weight:700;color:var(--txt)">⚙️ 高级选项：自定义 System / User Prompt</span>
+                <span id="pgAdvArrow" style="font-size:12px;color:var(--mut)">▼ 展开</span>
+              </div>
+              <div id="pgAdvBlock" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0">
+                <label>自定义 System Prompt（留空使用系统默认人设约束）</label>
+                <textarea id="pgCustomSys" style="height:60px" placeholder="留空使用默认人设与三不原则约束"></textarea>
+                <label class="mt-2">自定义 User Prompt 覆盖（留空根据画像与JD动态组装）</label>
+                <textarea id="pgCustomUser" style="height:80px" placeholder="留空自动由系统画像与上下文组装"></textarea>
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-3 mt-4">
+              <button class="btn-black" style="padding:11px 26px;font-size:13px" id="btnSimulate" onclick="runPlaygroundSimulation()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                🧪 立即运行推演 (Run Simulation)
+              </button>
+              <button class="btn-action-light" onclick="resetPlayground()">重置输入</button>
+              <span id="pgStatusHint" style="font-size:12px"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Col: 推演全景透视与审查 -->
+      <div class="col-lg-6">
+        <div class="panel-card" style="min-height:600px">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0 d-flex align-items-center">
+              <svg class="title-icon green" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              推演全景透视与安全审查
+            </h5>
+            <div id="pgHeaderBadges" class="d-flex gap-2">
+              <span class="soft-badge badge-pub">沙盒只读模式</span>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div id="pgEmptyState" style="text-align:center;padding:80px 20px">
+            <div style="font-size:42px;margin-bottom:12px">🧪</div>
+            <h6 style="font-weight:800;color:var(--txt);margin-bottom:6px">演练场就绪</h6>
+            <p style="font-size:13px;color:var(--mut);max-width:380px;margin:0 auto;line-height:1.6">
+              请在左侧选择预设场景或输入模拟消息，点击【立即运行推演】，即可在此实时查看 LLM 生成决策、Prompt 上下文穿透与安全门禁审查结果。
+            </p>
+          </div>
+
+          <!-- Result Content Box (Hidden initially) -->
+          <div id="pgResultBox" style="display:none">
+            <!-- Action & Decision Block -->
+            <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:18px;padding:20px;margin-bottom:18px;box-shadow:0 4px 15px rgba(0,0,0,0.02)">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="d-flex align-items-center gap-2">
+                  <span style="font-size:12px;font-weight:800;color:var(--txt)">🎯 决策动作:</span>
+                  <span id="pgActionBadge" class="soft-badge badge-blue">reply</span>
+                </div>
+                <div style="font-size:11px;color:var(--mut);font-weight:600" id="pgLatency">耗时: 0ms</div>
+              </div>
+              <div style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:14px">
+                <strong style="color:var(--txt)">决策理由：</strong><span id="pgReasonText">-</span>
+              </div>
+
+              <!-- Chat Bubble -->
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span style="font-size:12px;font-weight:700;color:var(--txt)">💬 生成拟人回复文案 (Cleaned Output):</span>
+                <button class="btn-action-light" style="padding:3px 10px;font-size:11px" onclick="copyCleanedReply()">📋 复制文案</button>
+              </div>
+              <div id="pgReplyBubble" class="chat-bubble-mockup">
+                暂无文案
+              </div>
+            </div>
+
+            <!-- Safety Gate Checklist -->
+            <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:18px;padding:18px 20px;margin-bottom:18px">
+              <div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:12px">🛡️ 全流程安全门禁审查 (Safety Gates)</div>
+              <div class="d-flex flex-column gap-2" style="font-size:12px">
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
+                  <span>🔒 隐私防套话审查 (手机/微信正则)</span>
+                  <span id="pgGatePrivacy" class="soft-badge badge-pub">✅ 通过</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
+                  <span>🔥 意向识别与打标</span>
+                  <span id="pgGateIntent" class="soft-badge badge-blue">常规意向</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
+                  <span>⚙️ Web 隐私权限策略校验</span>
+                  <span id="pgGatePolicy" class="soft-badge badge-pub">允许自动执行</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
+                  <span>🛡️ 线上发送状态 (安全隔离)</span>
+                  <span id="pgGateOnline" class="soft-badge badge-rej">已拦截 (安全沙箱)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deep Prompt & Raw LLM Inspector -->
+            <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:18px;padding:18px 20px">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div style="font-size:13px;font-weight:800;color:var(--txt)">🔍 完整上下文穿透与原始输出</div>
+                <div class="d-flex gap-2">
+                  <span class="prompt-tab-pill active" id="pillTabUser" onclick="switchPromptInspectorTab('user')">User Prompt</span>
+                  <span class="prompt-tab-pill" id="pillTabSys" onclick="switchPromptInspectorTab('sys')">System Prompt</span>
+                  <span class="prompt-tab-pill" id="pillTabRaw" onclick="switchPromptInspectorTab('raw')">LLM 原生 JSON</span>
+                  <span class="prompt-tab-pill" id="pillTabThink" onclick="switchPromptInspectorTab('think')" style="display:none">思考过程</span>
+                </div>
+              </div>
+              <div class="d-flex justify-content-end mb-2">
+                <button class="btn-action-light" style="padding:2px 8px;font-size:11px" onclick="copyCurrentPromptInspector()">📋 复制当前代码</button>
+              </div>
+              <pre id="pgPromptCode" class="prompt-view-code"></pre>
             </div>
           </div>
         </div>
@@ -1729,6 +2123,291 @@ async function saveAutoApply() {
     showToast('每日自动投递设置已保存！', 'success');
     loadSettings();
   }
+}
+
+// Playground Simulation State & Logic
+let currentPgData = null;
+let currentInspectorTab = 'user';
+
+const PG_PRESETS = {
+  ask_resume: {
+    msg: "你好！看你的项目经历很契合，方便发一份完整的附件简历给我看看吗？",
+    company: "美团 · 核心本地商业",
+    job: "AI产品经理实习生",
+    salary: "250-350元/天",
+    city: "北京/上海",
+    jd: "职责：参与美团商户智能化与Agent产品搭建；任职要求：统招本科27届，具备大模型应用与工作流搭建经验，每周到岗5天，实习6个月以上。",
+    history: "我方: 您好！非常关注贵团队的 Agent 业务落地，这是我的基本情况。\nHR: 收到，看项目经历很契合，方便发一份完整的附件简历给我看看吗？"
+  },
+  arrival_time: {
+    msg: "同学你好，目前在校还是已经可以出来实习了？最快什么时候可以到岗？能实习几个月？",
+    company: "小红书 · 社区技术部",
+    job: "大模型产品实习生",
+    salary: "300-400元/天",
+    city: "上海",
+    jd: "职责：负责小红书创作者端大模型辅助写作功能；任职要求：统招本科在读，毕业设计已交付无日常课程羁绊，可随时现场到岗，2027届毕业优先转正。",
+    history: "我方: 您好！我对创作者端大模型工具非常感兴趣，希望有机会交流！\nHR: 同学你好，目前在校还是已经可以出来实习了？最快什么时候可以到岗？能实习几个月？"
+  },
+  ask_wechat: {
+    msg: "平台打字不太方便，留个你的微信或者电话吧，我让业务主管直接加你电话沟通！",
+    company: "某知名猎头/AI初创",
+    job: "AI商业化产品",
+    salary: "200-300元/天",
+    city: "杭州",
+    jd: "职责：AI 应用场景落地与客户对接；任职要求：大专及以上，沟通能力强。",
+    history: "HR: 平台打字不太方便，留个你的微信或者电话吧，我让业务主管直接加你电话沟通！"
+  },
+  salary: {
+    msg: "请问同学你目前的期望薪资是多少？从福州跨城过来能接受我们的实习津贴吗？",
+    company: "网易 · 伏羲实验室",
+    job: "AI算法与产品协同实习生",
+    salary: "180-250元/天",
+    city: "杭州",
+    jd: "职责：参与游戏化与具身智能产品评估；任职要求：统招本科，了解多模态技术。",
+    history: "我方: 您好！对伏羲实验室的大模型方向很感兴趣！\nHR: 请问同学你目前的期望薪资是多少？从福州跨城过来能接受我们的实习津贴吗？"
+  },
+  interview_offline: {
+    msg: "明天下午两点或者周五下午，方便直接来上海杨浦现场面试吗？",
+    company: "商汤科技 · 基础模型部",
+    job: "大模型评估产品实习生",
+    salary: "250-300元/天",
+    city: "上海",
+    jd: "职责：参与模型 Eval 体系搭建；任职要求：2027届本科，逻辑清晰。",
+    history: "我方: 您好，这是我的经历简介，期待交流！\nHR: 明天下午两点或者周五下午，方便直接来上海杨浦现场面试吗？"
+  },
+  closing: {
+    msg: "好的，收到！我先同步给部门主管评估一下，谢谢同学！",
+    company: "阿里巴巴 · 淘天集团",
+    job: "淘天AI产品实习生",
+    salary: "250-350元/天",
+    city: "杭州",
+    jd: "职责：淘天商家端智能经营工具设计。",
+    history: "我方: 好的，附件简历已为您发出，期待您的反馈！\nHR: 好的，收到！我先同步给部门主管评估一下，谢谢同学！"
+  }
+};
+
+function loadPlaygroundPreset(key) {
+  const p = PG_PRESETS[key];
+  if (!p) return;
+  document.getElementById('pgMsg').value = p.msg;
+  document.getElementById('pgCompany').value = p.company;
+  document.getElementById('pgJobTitle').value = p.job;
+  document.getElementById('pgSalary').value = p.salary;
+  document.getElementById('pgCity').value = p.city;
+  document.getElementById('pgJd').value = p.jd;
+  document.getElementById('pgHistory').value = p.history;
+  showToast(`已加载场景：${p.company} · ${p.job}`, 'info');
+}
+
+function togglePlaygroundAdv() {
+  const b = document.getElementById('pgAdvBlock');
+  const arrow = document.getElementById('pgAdvArrow');
+  if (!b) return;
+  const isShow = b.style.display !== 'none';
+  b.style.display = isShow ? 'none' : 'block';
+  if (arrow) arrow.textContent = isShow ? '▼ 展开' : '▲ 收起';
+}
+
+function resetPlayground() {
+  document.getElementById('pgMsg').value = '';
+  document.getElementById('pgCompany').value = '';
+  document.getElementById('pgJobTitle').value = '';
+  document.getElementById('pgSalary').value = '';
+  document.getElementById('pgCity').value = '';
+  document.getElementById('pgJd').value = '';
+  document.getElementById('pgHistory').value = '';
+  document.getElementById('pgCustomSys').value = '';
+  document.getElementById('pgCustomUser').value = '';
+  document.getElementById('pgEmptyState').style.display = 'block';
+  document.getElementById('pgResultBox').style.display = 'none';
+  currentPgData = null;
+  showToast('输入已重置', 'info');
+}
+
+async function runPlaygroundSimulation() {
+  const msg = document.getElementById('pgMsg').value.trim();
+  if (!msg) {
+    showToast('请输入 HR 最新发送的消息', 'error');
+    document.getElementById('pgMsg').focus();
+    return;
+  }
+  const btn = document.getElementById('btnSimulate');
+  const statusEl = document.getElementById('pgStatusHint');
+  if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> 正在推演 (LLM生成中)…';
+  if (statusEl) { statusEl.style.color = 'var(--acc)'; statusEl.textContent = '大模型思考中…'; }
+
+  const histLines = document.getElementById('pgHistory').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const payload = {
+    message: msg,
+    company: document.getElementById('pgCompany').value.trim(),
+    job_title: document.getElementById('pgJobTitle').value.trim(),
+    salary: document.getElementById('pgSalary').value.trim(),
+    city: document.getElementById('pgCity').value.trim(),
+    jd: document.getElementById('pgJd').value.trim(),
+    history: histLines,
+    custom_system_prompt: document.getElementById('pgCustomSys').value.trim(),
+    custom_user_prompt: document.getElementById('pgCustomUser').value.trim()
+  };
+
+  try {
+    const d = await api('/api/playground/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    currentPgData = d;
+    renderPlaygroundResult(d);
+    showToast(`推演完成！耗时 ${d.latency_ms}ms`, 'success');
+    if (statusEl) { statusEl.style.color = 'var(--ok)'; statusEl.textContent = `推演完成 (${d.latency_ms}ms)`; }
+  } catch(e) {
+    showToast('推演异常: ' + e, 'error');
+    if (statusEl) { statusEl.style.color = 'var(--dan)'; statusEl.textContent = '推演异常: ' + e; }
+  } finally {
+    if (btn) btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> 🧪 立即运行推演 (Run Simulation)';
+  }
+}
+
+function renderPlaygroundResult(d) {
+  document.getElementById('pgEmptyState').style.display = 'none';
+  const resBox = document.getElementById('pgResultBox');
+  resBox.style.display = 'block';
+
+  // 1. Header Badges
+  const badgesContainer = document.getElementById('pgHeaderBadges');
+  if (badgesContainer) {
+    let modeBadge = d.safety_audit && !d.safety_audit.online_reply_enabled
+      ? '<span class="soft-badge badge-rej">🛡️ 线上拦截已锁死 (零物理外发)</span>'
+      : '<span class="soft-badge badge-ai">线上回复开启</span>';
+    let llmBadge = d.llm_called
+      ? '<span class="soft-badge badge-pub">🤖 LLM 直通调用</span>'
+      : '<span class="soft-badge badge-blue">⚡ 启发式离线模拟</span>';
+    badgesContainer.innerHTML = modeBadge + ' ' + llmBadge;
+  }
+
+  // 2. Action & Decision
+  const dec = d.parsed_decision || {};
+  const act = dec.action || 'reply';
+  const badgeEl = document.getElementById('pgActionBadge');
+  if (badgeEl) {
+    badgeEl.textContent = act;
+    if (act === 'reply') badgeEl.className = 'soft-badge badge-pub';
+    else if (act === 'exchange_wechat') badgeEl.className = 'soft-badge badge-pub';
+    else if (act === 'send_resume') badgeEl.className = 'soft-badge badge-purple';
+    else if (act === 'skip') badgeEl.className = 'soft-badge badge-blue';
+    else if (act === 'needs_human') badgeEl.className = 'soft-badge badge-rej';
+  }
+  document.getElementById('pgLatency').textContent = `耗时: ${d.latency_ms || 0}ms` + (d.llm_error ? ` · 提示: ${d.llm_error}` : '');
+  document.getElementById('pgReasonText').textContent = dec.reason || '-';
+
+  // Chat Bubble
+  const bubble = document.getElementById('pgReplyBubble');
+  const replyText = d.cleaned_reply || dec.reply_text || dec.suggested_reply || '';
+  if (!replyText) {
+    bubble.className = 'chat-bubble-mockup warn';
+    bubble.innerHTML = `<em>（当前动作为【${esc(act)}】，无对外伴随纯文本消息发送）</em>`;
+  } else {
+    bubble.className = 'chat-bubble-mockup';
+    bubble.textContent = replyText;
+  }
+
+  // Safety Gates
+  const audit = d.safety_audit || {};
+  const privEl = document.getElementById('pgGatePrivacy');
+  if (privEl) {
+    if (audit.privacy_blocked) {
+      privEl.className = 'soft-badge badge-rej';
+      privEl.textContent = '🚨 拦截！疑似泄露明文电话/微信';
+    } else {
+      privEl.className = 'soft-badge badge-pub';
+      privEl.textContent = '✅ 安全通过 (无明文泄露)';
+    }
+  }
+
+  const intentEl = document.getElementById('pgGateIntent');
+  if (intentEl) {
+    if (audit.high_intent) {
+      intentEl.className = 'soft-badge badge-ai';
+      intentEl.textContent = `🔥 高意向信号 (${esc(audit.high_intent_reason)})`;
+    } else {
+      intentEl.className = 'soft-badge badge-blue';
+      intentEl.textContent = '常规业务意向';
+    }
+  }
+
+  const polEl = document.getElementById('pgGatePolicy');
+  if (polEl) {
+    if (audit.policy_allow) {
+      polEl.className = 'soft-badge badge-pub';
+      polEl.textContent = '✅ 依配置允许自动执行';
+    } else {
+      polEl.className = 'soft-badge badge-rej';
+      polEl.textContent = `🔒 权限门禁转人工 (${esc(audit.policy_reason || '需审批')})`;
+    }
+  }
+
+  const onlineEl = document.getElementById('pgGateOnline');
+  if (onlineEl) {
+    if (!audit.online_reply_enabled) {
+      onlineEl.className = 'soft-badge badge-rej';
+      onlineEl.textContent = '🛡️ 已物理拦截 (安全沙箱)';
+    } else {
+      onlineEl.className = 'soft-badge badge-pub';
+      onlineEl.textContent = '⚠️ 允许线上真实发送';
+    }
+  }
+
+  // Inspector
+  const thinkPill = document.getElementById('pillTabThink');
+  if (thinkPill) {
+    thinkPill.style.display = d.reasoning_content ? 'inline-block' : 'none';
+  }
+  switchPromptInspectorTab(currentInspectorTab);
+}
+
+function switchPromptInspectorTab(tab) {
+  currentInspectorTab = tab;
+  ['user', 'sys', 'raw', 'think'].forEach(t => {
+    const el = document.getElementById('pillTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (el) el.classList.toggle('active', t === tab);
+  });
+
+  const pre = document.getElementById('pgPromptCode');
+  if (!pre || !currentPgData) return;
+
+  if (tab === 'user') {
+    pre.textContent = currentPgData.user_prompt || '(无 User Prompt)';
+  } else if (tab === 'sys') {
+    pre.textContent = currentPgData.system_prompt || '(无 System Prompt)';
+  } else if (tab === 'raw') {
+    if (currentPgData.raw_llm_output) {
+      pre.textContent = currentPgData.raw_llm_output;
+    } else {
+      pre.textContent = JSON.stringify(currentPgData.parsed_decision || {}, null, 2);
+    }
+  } else if (tab === 'think') {
+    pre.textContent = currentPgData.reasoning_content || '(模型无 reasoning_content 思考过程)';
+  }
+}
+
+function copyCleanedReply() {
+  if (!currentPgData) return;
+  const text = currentPgData.cleaned_reply || (currentPgData.parsed_decision || {}).reply_text || '';
+  if (!text) { showToast('无文案可复制', 'info'); return; }
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('回复文案已复制到剪贴板！', 'success');
+  }).catch(() => {
+    showToast('复制失败，请手动选取', 'error');
+  });
+}
+
+function copyCurrentPromptInspector() {
+  const pre = document.getElementById('pgPromptCode');
+  if (!pre || !pre.textContent) return;
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    showToast('Prompt 内容已复制！', 'success');
+  }).catch(() => {
+    showToast('复制失败，请手动选取', 'error');
+  });
 }
 
 load(false);

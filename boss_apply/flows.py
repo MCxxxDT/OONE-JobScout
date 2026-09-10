@@ -382,7 +382,13 @@ def chat_inbox(cfg):
 def chat_reply(cfg, company, text):
     """按公司名回复 HR 一条消息（经 greeter.send_message_via_chat），写台账 action=reply。
     隐私红线：文案含联系方式意图 → 拒绝发送（blocked_privacy），转人工。
+    安全门禁：online_reply_enabled 为 False 时物理拦截，零消息发往线上真实 HR。
     公司未在会话列表命中时 greeter 层直接抛异常中止，绝不退回最新会话（审计补丁#3）。"""
+    if not cfg.get("online_reply_enabled", True):
+        ledger.append({"action": "reply", "status": "intercepted_safety_gate", "company": company,
+                       "text_head": (text or "")[:120],
+                       "note": "online_reply_enabled 为 false，线上发送已被全局安全门禁拦截"})
+        return {"ok": False, "intercepted": True, "reason": "online_reply_enabled_false", "company": company}
     if greeter.privacy_blocked(text):
         ledger.append({"action": "reply", "status": "blocked_privacy", "company": company,
                        "text_head": (text or "")[:120],
@@ -410,6 +416,7 @@ def chat_exchange_wechat(cfg, company, reply_text="", force=False):
     状态如实返回 ok=False（不再谎报成功）。
     2026-09-09：岗位适配门禁——执行前 judge_job_fit 判定（prefs 规则优先/LLM 语义兜底/
     零硬编码），拒绝时归因留痕（job_fit_gate + status=blocked_job_fit），防销售地推岗误发。
+    安全门禁：online_reply_enabled 为 False 时（非人工强制 force）物理拦截。
     若 force=True（人工审批台显式派发），放行跳过门禁。
     若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
     if not force:
@@ -420,6 +427,10 @@ def chat_exchange_wechat(cfg, company, reply_text="", force=False):
                            "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
             return {"ok": False, "blocked": "job_fit", "company": company,
                     "attribution": gate["attribution"], "detail": gate["detail"]}
+    if not force and not cfg.get("online_reply_enabled", True):
+        ledger.append({"action": "exchange_wechat", "status": "intercepted_safety_gate", "company": company,
+                       "note": "online_reply_enabled 为 false，线上换微信已被全局安全门禁拦截"})
+        return {"ok": False, "intercepted": True, "reason": "online_reply_enabled_false", "company": company}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()
@@ -450,6 +461,7 @@ def chat_send_resume(cfg, company, reply_text="", force=False):
     """按公司名点开会话并点击【发简历】官方按钮。写台账 action=send_resume。
     2026-09-08：greeter 层已加固，no_verify 状态如实返回 ok=False。
     2026-09-09：岗位适配门禁——与换微信同链路（judge_job_fit），拒绝归因留痕。
+    安全门禁：online_reply_enabled 为 False 时（非人工强制 force）物理拦截。
     若 force=True（人工审批台显式派发），放行跳过门禁。
     若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
     if not force:
@@ -460,6 +472,10 @@ def chat_send_resume(cfg, company, reply_text="", force=False):
                            "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
             return {"ok": False, "blocked": "job_fit", "company": company,
                     "attribution": gate["attribution"], "detail": gate["detail"]}
+    if not force and not cfg.get("online_reply_enabled", True):
+        ledger.append({"action": "send_resume", "status": "intercepted_safety_gate", "company": company,
+                       "note": "online_reply_enabled 为 false，线上发简历已被全局安全门禁拦截"})
+        return {"ok": False, "intercepted": True, "reason": "online_reply_enabled_false", "company": company}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()
@@ -486,16 +502,21 @@ def chat_send_resume(cfg, company, reply_text="", force=False):
         sess.close()
 
 
-def chat_agree_wechat(cfg, company, reply_text=""):
+def chat_agree_wechat(cfg, company, reply_text="", force=False):
     """按公司名点开会话并点击【同意交换微信】官方按钮。写台账 action=agree_wechat。
-    受岗位适配门禁（_job_fit_gate）保护。若传入 reply_text，在同会话中伴随发送短文本。"""
-    gate = _job_fit_gate(cfg, company)
-    if not gate["allow"]:
-        ledger.append({"action": "agree_wechat", "status": "blocked_job_fit",
-                       "company": company,
-                       "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
-        return {"ok": False, "blocked": "job_fit", "company": company,
-                "attribution": gate["attribution"], "detail": gate["detail"]}
+    受岗位适配门禁（_job_fit_gate）与在线回复安全门禁保护。若传入 reply_text，在同会话中伴随发送短文本。"""
+    if not force:
+        gate = _job_fit_gate(cfg, company)
+        if not gate["allow"]:
+            ledger.append({"action": "agree_wechat", "status": "blocked_job_fit",
+                           "company": company,
+                           "reason": "%s: %s" % (gate["attribution"], gate["detail"])})
+            return {"ok": False, "blocked": "job_fit", "company": company,
+                    "attribution": gate["attribution"], "detail": gate["detail"]}
+    if not force and not cfg.get("online_reply_enabled", True):
+        ledger.append({"action": "agree_wechat", "status": "intercepted_safety_gate", "company": company,
+                       "note": "online_reply_enabled 为 false，线上同意换微信已被全局安全门禁拦截"})
+        return {"ok": False, "intercepted": True, "reason": "online_reply_enabled_false", "company": company}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
         sess.open_tab()

@@ -82,6 +82,7 @@
   "job_fit_gate": {
     "min_verdict": "medium"
   },
+  "online_reply_enabled": false,
   "privacy_policy": {
     "exchange_wechat": "auto",
     "send_resume": "auto",
