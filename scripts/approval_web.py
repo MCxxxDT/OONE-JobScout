@@ -1449,9 +1449,9 @@ PAGE = """<!DOCTYPE html>
               <div class="chat-avatar hr" id="chatTargetAvatar">HR</div>
               <div>
                 <div style="font-size:15px;font-weight:800;color:var(--txt)">
-                  <span id="chatTargetCompany">米哈游 · 人力资源部</span>
+                  <span id="chatTargetCompany">收钱吧</span>
                   <span style="color:var(--mut-dark);margin:0 4px">·</span>
-                  <span id="chatTargetJob" style="color:var(--mut);font-weight:600;font-size:13px">AI产品经理实习生</span>
+                  <span id="chatTargetJob" style="color:var(--mut);font-weight:600;font-size:13px">Ai产品经理（J11304）</span>
                 </div>
                 <div style="font-size:11px;color:var(--ok);font-weight:600;display:flex;align-items:center;gap:4px">
                   <span class="pulse-dot dot-green" style="width:6px;height:6px"></span>
@@ -1475,26 +1475,15 @@ PAGE = """<!DOCTYPE html>
               <div class="chat-welcome-desc">
                 在此模拟 HR 与候选人的真实对话。大模型将根据您设定的候选人画像、目标岗位 JD 与防套话铁律，实时推演并生成真人口语化回复。
               </div>
-              <div style="font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">
-                👇 点击下方场景胶囊，一键载入并推演：
+              <div style="font-size:12px;color:var(--txt);font-weight:600;margin-top:14px;background:#f1f5f9;padding:8px 14px;border-radius:10px;display:inline-block">
+                💡 右侧已预设各行各业名企真实岗位与真实JD（支持自由切换与自定义）。在下方输入模拟 HR 消息即可开始推演！
               </div>
             </div>
           </div>
 
           <!-- Chat Input Bottom Area -->
           <div class="chat-input-wrapper">
-            <!-- Preset Chips Horizontal Scroll -->
-            <div class="preset-chips-scroll">
-              <span class="preset-chip" onclick="loadPlaygroundPreset('birthday_wechat')">🎂 生日蛋糕+要微信 (复合意图)</span>
-              <span class="preset-chip" onclick="loadPlaygroundPreset('ask_resume')">📄 索要简历</span>
-              <span class="preset-chip" onclick="loadPlaygroundPreset('arrival_time')">📅 到岗与毕业</span>
-              <span class="preset-chip" onclick="loadPlaygroundPreset('ask_wechat')">🔒 索要微信电话 (套话测试)</span>
-              <span class="preset-chip" onclick="loadPlaygroundPreset('salary')">💰 询问期望薪资</span>
-              <span class="preset-chip" onclick="loadPlaygroundPreset('interview_offline')">🏢 询问能否线下面试</span>
-              <span class="preset-chip" onclick="loadPlaygroundPreset('closing')">☕ 礼貌闭环 (好的谢谢)</span>
-            </div>
-
-            <!-- Gemini-style Input Box -->
+            <!-- Gemini-style Clean Input Box -->
             <div class="chat-input-box">
               <textarea id="pgMsg" class="chat-input-textarea" rows="2" placeholder="输入模拟 HR 发来的消息…（按 Enter 运行推演，Shift+Enter 换行）"></textarea>
               <div class="chat-input-actions">
@@ -1527,21 +1516,38 @@ PAGE = """<!DOCTYPE html>
           </div>
 
           <div id="pgSettingsBlock" class="settings-block" style="padding:14px;margin-bottom:0">
+            <!-- Industry Real Presets Dropdown -->
+            <div class="mb-2 pb-2" style="border-bottom:1px solid #e2e8f0">
+              <label style="margin:2px 0 4px;font-weight:700;color:var(--txt);font-size:12px;display:flex;align-items:center;gap:6px">
+                🏢 行业名企真实岗位预设（一键切换各行各业）：
+              </label>
+              <select id="pgIndustryPresetSelect" class="form-select form-select-sm" style="font-size:12px;border-radius:8px;padding:6px 10px;background:#fff;border:1.5px solid #cbd5e1" onchange="onSelectIndustryPreset(this.value)">
+                <option value="custom">✏️ 自定义岗位设定（手动填写）</option>
+                <option value="ai_product" selected>🤖 人工智能 · 收钱吧 · Ai产品经理 (20-35K·14薪)</option>
+                <option value="ev_auto">⚡ 新能源汽车 · 广志信息 · 智能座舱测试 (10-12K)</option>
+                <option value="java_dev">💻 软件研发 · 知名大厂 · Java后端架构 (15-30K·14薪)</option>
+                <option value="fin_quant">📈 金融科技 · 某基金公司 · 期权量化研究员 (15-30K)</option>
+                <option value="cross_border">🚢 跨境出海 · 睿联 · 跨境电商运营27届校招 (11-18K·14薪)</option>
+                <option value="robotics">🦾 智能制造 · 某大型科技 · 机器人运控算法 (100-200K)</option>
+                <option value="biomed">🧬 生物医药 · 吃货妞妞 · 生物信息工程师 (5-8K)</option>
+              </select>
+            </div>
+
             <div class="row g-2">
               <div class="col-6">
                 <label style="margin:2px 0 3px">公司名称</label>
-                <input type="text" id="pgCompany" placeholder="如：米哈游" value="米哈游 · 人力资源部" oninput="syncChatHeader()">
+                <input type="text" id="pgCompany" placeholder="如：收钱吧" value="收钱吧" oninput="syncChatHeader()">
               </div>
               <div class="col-6">
                 <label style="margin:2px 0 3px">岗位名称</label>
-                <input type="text" id="pgJobTitle" placeholder="如：AI产品经理实习生" value="AI产品经理实习生" oninput="syncChatHeader()">
+                <input type="text" id="pgJobTitle" placeholder="如：Ai产品经理" value="Ai产品经理（J11304）" oninput="syncChatHeader()">
               </div>
             </div>
 
             <div class="row g-2 mt-1">
               <div class="col-6">
                 <label style="margin:2px 0 3px">薪资范围</label>
-                <input type="text" id="pgSalary" placeholder="如：350-450元/天" value="350-450元/天">
+                <input type="text" id="pgSalary" placeholder="如：20-35K·14薪" value="20-35K·14薪">
               </div>
               <div class="col-6">
                 <label style="margin:2px 0 3px">工作地点</label>
@@ -1550,8 +1556,8 @@ PAGE = """<!DOCTYPE html>
             </div>
 
             <div class="mt-2">
-              <label style="margin:2px 0 3px">岗位 JD 详细描述 (可直接粘贴企业JD)</label>
-              <textarea id="pgJd" style="height:70px;font-size:12px" placeholder="粘贴岗位职责与任职要求…">职责：参与米哈游大模型工具链设计与Agent工作流搭建；任职要求：统招本科2027届，具备优秀的逻辑与沟通表达能力，每周到岗5天，实习6个月以上。</textarea>
+              <label style="margin:2px 0 3px">岗位 JD 详细描述 (来自BOSS直聘真实爬取)</label>
+              <textarea id="pgJd" style="height:70px;font-size:12px" placeholder="粘贴岗位职责与任职要求…">【岗位职责】&#10;1. AI 应用从 0 到 1 落地：围绕真实业务场景，负责 AI 应用的需求调研、方案设计、技术可行性判断、上线验证与持续迭代；可涉及上下文工程、RAG、Agent 等技术在产品中的应用。&#10;2. 快速验证与产品打磨：能够运用 AI Coding 等方式，亲自完成原型、工作流或 Demo 的快速搭建与调试，验证方案可行性，并与研发团队共同推进正式落地。&#10;3. 跨团队协同与流程建设：协调产品、研发、算法、设计及业务等角色，高效推动项目交付。&#10;【任职资格】&#10;1. 统招本科及以上学历，具备真实 AI 项目落地能力；了解大模型、RAG、上下文工程、Agent 等常见应用方式。</textarea>
             </div>
 
             <div class="mt-2">
@@ -2263,69 +2269,55 @@ let currentPgData = null;
 let currentInspectorTab = 'user';
 let pgChatMessages = [];
 
-const PG_PRESETS = {
-  birthday_wechat: {
-    msg: "目前岗位还开放，你方便告诉我一下你的生日吗，我们会给每个新入职的人准备生日蛋糕，然后你顺便可以发一下微信给我",
-    company: "米哈游 · 人力资源部",
-    job: "AI产品经理实习生",
-    salary: "350-450元/天",
+const REAL_INDUSTRY_PRESETS = {
+  ai_product: {
+    company: "收钱吧",
+    job: "Ai产品经理（J11304）",
+    salary: "20-35K·14薪",
     city: "上海",
-    jd: "职责：参与米哈游大模型工具链设计与Agent工作流搭建；任职要求：统招本科2027届，具备优秀的逻辑与沟通表达能力，每周到岗5天，实习6个月以上。",
-    history: "我方: 您好！非常关注米哈游在AI与内容生产方向的探索，这是我的基本情况，希望有机会交流！\\nHR: 目前岗位还开放，你方便告诉我一下你的生日吗，我们会给每个新入职的人准备生日蛋糕，然后你顺便可以发一下微信给我"
+    jd: "【岗位职责】\\n1. AI 应用从 0 到 1 落地：围绕真实业务场景，负责 AI 应用的需求调研、方案设计、技术可行性判断、上线验证与持续迭代；可涉及上下文工程、RAG、Agent 等技术在产品中的应用。\\n2. 快速验证与产品打磨：能够运用 AI Coding 等方式，亲自完成原型、工作流或 Demo 的快速搭建与调试，验证方案可行性，并与研发团队共同推进正式落地。\\n3. 跨团队协同与流程建设：熟悉 AI 产品从需求评审、研发排期、测试验收至上线复盘的协作过程，协调产品、研发、算法、设计及业务等角色，高效推动项目交付。\\n4. 持续探索：持续关注大模型及 AI 应用的新能力，将技术边界转化为可验证、可落地的业务产品方案。\\n【任职资格】\\n1. 计算机、软件工程、数据科学等技术相关专业本科及以上学历；2 年及以上产品经理经验。\\n2. 有真实 AI 应用从 0 到 1 的项目经验，具备较强的 AI 动手能力：了解大模型、RAG、上下文工程、Agent 等常见应用方式。"
   },
-  ask_resume: {
-    msg: "你好！看你的项目经历很契合，方便发一份完整的附件简历给我看看吗？",
-    company: "美团 · 核心本地商业",
-    job: "AI产品经理实习生",
-    salary: "250-350元/天",
-    city: "北京/上海",
-    jd: "职责：参与美团商户智能化与Agent产品搭建；任职要求：统招本科27届，具备大模型应用与工作流搭建经验，每周到岗5天，实习6个月以上。",
-    history: "我方: 您好！非常关注贵团队的 Agent 业务落地，这是我的基本情况。\\nHR: 收到，看项目经历很契合，方便发一份完整的附件简历给我看看吗？"
-  },
-  arrival_time: {
-    msg: "同学你好，目前在校还是已经可以出来实习了？最快什么时候可以到岗？能实习几个月？",
-    company: "小红书 · 社区技术部",
-    job: "大模型产品实习生",
-    salary: "300-400元/天",
+  ev_auto: {
+    company: "广志信息",
+    job: "智能座舱性能稳定性测试工程师-沃尔沃",
+    salary: "10-12K",
     city: "上海",
-    jd: "职责：负责小红书创作者端大模型辅助写作功能；任职要求：统招本科在读，毕业设计已交付无日常课程羁绊，可随时现场到岗，2027届毕业优先转正。",
-    history: "我方: 您好！我对创作者端大模型工具非常感兴趣，希望有机会交流！\\nHR: 同学你好，目前在校还是已经可以出来实习了？最快什么时候可以到岗？能实习几个月？"
+    jd: "岗位职责：\\n1. 作为各模块接口，对接智能座舱测试接口需求；\\n2. 负责智能座舱性能、功耗&STR、系统&稳定性测试，含测试用例编写、测试执行、测试验收、基线版本测试、编写测试报告及缺陷跟踪回归；\\n3. 独立完成项目测试并输出报告；\\n4. 把控交付质量，识别并推动解决测试风险；\\n任职要求：\\n1. 具备智能座舱或车载IVI系统测试经验；\\n2. 具备良好的跨团队协同与质量推动意识。"
   },
-  ask_wechat: {
-    msg: "平台打字不太方便，留个你的微信或者电话吧，我让业务主管直接加你电话沟通！",
-    company: "某知名猎头/AI初创",
-    job: "AI商业化产品",
-    salary: "200-300元/天",
+  java_dev: {
+    company: "某大型知名计算机软件公司",
+    job: "Java开发  线上面试 大厂高薪",
+    salary: "15-30K·14薪",
     city: "杭州",
-    jd: "职责：AI 应用场景落地与客户对接；任职要求：大专及以上，沟通能力强。",
-    history: "HR: 平台打字不太方便，留个你的微信或者电话吧，我让业务主管直接加你电话沟通！"
+    jd: "1、统招本科以上学历；\\n2、JAVA基础扎实，充分理解面向对象，熟悉io、nio、多线程、设计模式、通信协议等基础技术；熟悉JVM工作原理并掌握常见性能调优方法；\\n3、熟悉Spring、Springmvc、Mybatis等常用开发框架及特征，熟悉常用中间件Tomcat、Mq、Kafka、Redis等；\\n4、具备大型分布式系统高并发架构设计经验优先。"
   },
-  salary: {
-    msg: "请问同学你目前的期望薪资是多少？从福州跨城过来能接受我们的实习津贴吗？",
-    company: "网易 · 伏羲实验室",
-    job: "AI算法与产品协同实习生",
-    salary: "180-250元/天",
-    city: "杭州",
-    jd: "职责：参与游戏化与具身智能产品评估；任职要求：统招本科，了解多模态技术。",
-    history: "我方: 您好！对伏羲实验室的大模型方向很感兴趣！\\nHR: 请问同学你目前的期望薪资是多少？从福州跨城过来能接受我们的实习津贴吗？"
-  },
-  interview_offline: {
-    msg: "明天下午两点或者周五下午，方便直接来上海杨浦现场面试吗？",
-    company: "商汤科技 · 基础模型部",
-    job: "大模型评估产品实习生",
-    salary: "250-300元/天",
+  fin_quant: {
+    company: "某基金公司",
+    job: "期权量化研究员",
+    salary: "15-30K",
     city: "上海",
-    jd: "职责：参与模型 Eval 体系搭建；任职要求：2027届本科，逻辑清晰。",
-    history: "我方: 您好，这是我的经历简介，期待交流！\\nHR: 明天下午两点或者周五下午，方便直接来上海杨浦现场面试吗？"
+    jd: "工作职责：\\n1. 利用日内期权数据构建因子并回测因子有效性；\\n2. 开发波动率交易策略；\\n3. 协助构建机器学习波动率交易策略；\\n岗位要求：\\n1. 985/211 或海外名校，计算机、工程、统计、数学、物理和金融工程专业优先；\\n2. 硕士以上学历；\\n3. 熟悉Python机器学习建模实战，对衍生品与量化策略有扎实理解。"
   },
-  closing: {
-    msg: "好的，收到！我先同步给部门主管评估一下，谢谢同学！",
-    company: "阿里巴巴 · 淘天集团",
-    job: "淘天AI产品实习生",
-    salary: "250-350元/天",
-    city: "杭州",
-    jd: "职责：淘天商家端智能经营工具设计。",
-    history: "我方: 好的，附件简历已为您发出，期待您的反馈！\\nHR: 好的，收到！我先同步给部门主管评估一下，谢谢同学！"
+  cross_border: {
+    company: "睿联",
+    job: "跨境电商运营（27届校招）",
+    salary: "11-18K·14薪",
+    city: "深圳",
+    jd: "工作职责：\\n1. 负责公司在跨境电商平台上的销售、运营和推广工作，制定并执行有效的运营策略，提高产品在目标市场的知名度和市场份额；\\n2. 深入学习产品知识，配合编辑团队制作高质量页面；\\n3. 监控和分析运营数据，根据数据反馈调整运营策略；\\n任职要求：\\n1. 统招本科2027届毕业生，英语六级以上，读写流利；具备良好的商业嗅觉与数据分析力。"
+  },
+  robotics: {
+    company: "某大型人工智能公司",
+    job: "机器人运功控制算法",
+    salary: "100-200K·14薪",
+    city: "苏州",
+    jd: "核心职责：\\n1. 全栈运控框架搭建：主导构建包含业务主控流程、路径/轨迹规划、避障优化及底层执行的全栈控制框架；\\n2. 解决复杂工况下的高精度力控、全栈运动规划及全身协同控制（WBC）等核心技术难题；\\n3. 推动轮式双臂/人形机器人从样机到量产的落地。\\n任职要求：\\n1. 自动化、机器人、控制理论等相关专业硕士及以上学历；精通C++/Python与经典控制理论。"
+  },
+  biomed: {
+    company: "吃货妞妞",
+    job: "生物信息工程师",
+    salary: "5-8K",
+    city: "上海",
+    jd: "岗位职责：\\n1、负责生物信息数据的分析与处理，支持相关科研及技术开发工作；\\n2、参与数据分析流程的设计与优化，提升分析效率与准确性；\\n3、协助完成多组学数据的整合分析，挖掘生物学意义；\\n4、配合团队完成项目所需的个性化生物信息分析任务；\\n任职要求：\\n1、具备生物信息学或相关领域的专业背景，熟悉Linux环境与Python/R数据处理。"
   }
 };
 
@@ -2364,8 +2356,8 @@ function clearPlaygroundChat() {
         <div class="chat-welcome-desc">
           在此模拟 HR 与候选人的真实对话。大模型将根据您设定的候选人画像、目标岗位 JD 与防套话铁律，实时推演并生成真人口语化回复。
         </div>
-        <div style="font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">
-          👇 点击下方场景胶囊，一键载入并推演：
+        <div style="font-size:12px;color:var(--txt);font-weight:600;margin-top:14px;background:#f1f5f9;padding:8px 14px;border-radius:10px;display:inline-block">
+          💡 右侧已预设各行各业名企真实岗位与真实JD（支持自由切换与自定义）。在下方输入模拟 HR 消息即可开始推演！
         </div>
       </div>
     `;
@@ -2451,29 +2443,20 @@ function removeChatThinking() {
   if (row) row.remove();
 }
 
-function loadPlaygroundPreset(key) {
-  const p = PG_PRESETS[key];
+function onSelectIndustryPreset(key) {
+  if (key === 'custom') {
+    showToast('已切换至自定义模式，您可以自由编辑右侧岗位设定与JD', 'info');
+    return;
+  }
+  const p = REAL_INDUSTRY_PRESETS[key];
   if (!p) return;
   document.getElementById('pgCompany').value = p.company;
   document.getElementById('pgJobTitle').value = p.job;
   document.getElementById('pgSalary').value = p.salary;
   document.getElementById('pgCity').value = p.city;
-  document.getElementById('pgJd').value = p.jd;
-  document.getElementById('pgHistory').value = p.history;
-  
-  // 从预设初始化连续历史
-  pgConversationHistory = String(p.history || '').split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean).map(line => {
-    if (line.startsWith('我方:') || line.startsWith('我方：')) {
-      return { role: 'me', text: line.replace(/^我方[:：]/, '').trim() };
-    } else {
-      return { role: 'hr', text: line.replace(/^HR[:：]/, '').trim() };
-    }
-  });
-
+  document.getElementById('pgJd').value = p.jd.replace(/\\n/g, String.fromCharCode(10));
   syncChatHeader();
-  document.getElementById('pgMsg').value = p.msg;
-  showToast(`已载入场景：${p.company} · ${p.job}`, 'info');
-  runPlaygroundSimulation();
+  showToast(`已载入真实名企岗位：${p.company} · ${p.job}`, 'info');
 }
 
 function togglePlaygroundAdv() {
