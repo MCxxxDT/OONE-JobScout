@@ -1048,6 +1048,55 @@ PAGE = """<!DOCTYPE html>
     margin-bottom: 14px; line-height: 1.5; font-weight: 500;
   }
 
+  /* Unified Ledger Event Cards */
+  .ledger-event-card {
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.02);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ledger-event-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+    transform: translateY(-1px);
+  }
+  .ledger-cycle-card {
+    transition: all 0.2s ease;
+  }
+  .ledger-cycle-card:hover {
+    border-color: #cbd5e1;
+    background: #f1f5f9 !important;
+  }
+  .btn-score-pill {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-score-pill:hover {
+    border-color: #0f172a;
+    color: #0f172a;
+    background: #f8fafc;
+  }
+  .btn-score-pill.active {
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.2);
+  }
+
   /* Quick Chip Buttons */
   .chips-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
   .chip-btn {
@@ -1519,6 +1568,9 @@ PAGE = """<!DOCTYPE html>
       <button type="button" class="sidebar-toggle-btn d-none d-lg-flex" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()" title="折叠/展开侧边栏">
         <svg width="18" height="18" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
+      <button type="button" class="btn-action-light d-flex d-lg-none" onclick="toggleMobileSidebar(false)" style="padding:4px 8px;border-radius:10px;font-size:12px;cursor:pointer" title="关闭主导航">
+        ✕
+      </button>
     </div>
 
     <!-- Navigation Items Container (Preserves id and island-capsule classes) -->
@@ -1583,38 +1635,38 @@ PAGE = """<!DOCTYPE html>
 
     <!-- App Body Content -->
     <div class="app-body">
-      <!-- KPI Statistics Grid -->
-      <section class="stats-grid" id="stats">
-        <div class="stat-card">
-          <div class="stat-label"><span>待处理会话</span><span>📋</span></div>
-          <div class="stat-val c-dan" id="statPending">0</div>
-          <div class="stat-hint">需人工审核干预</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label"><span>今日实发回复</span><span>💬</span></div>
-          <div class="stat-val c-ok" id="statTodayReplied">0</div>
-          <div class="quota-track"><div class="quota-fill" id="quotaFill"></div></div>
-          <div class="stat-hint" id="quotaHint">拟人高斯发出</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label"><span>今日巡检扫描</span><span>🔍</span></div>
-          <div class="stat-val c-acc" id="statTodayScanned">0</div>
-          <div class="stat-hint">消息中心雷达</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label"><span>高意向猎聘</span><span>🔥</span></div>
-          <div class="stat-val c-warn" id="statHighIntent">0</div>
-          <div class="stat-hint">面试/Offer信号</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label"><span>累计安全回复</span><span>🛡️</span></div>
-          <div class="stat-val" id="statRepliedTotal">0</div>
-          <div class="stat-hint">零封号留痕</div>
-        </div>
-      </section>
-
-      <!-- Tab 1: 待办审批 (聚焦待处理决策) -->
+      <!-- Tab 1: 待办审批 (聚焦待处理决策与运营大盘，独占 KPI 卡片) -->
       <main id="tab-pending" class="tab-content active">
+        <!-- KPI Statistics Grid (Only shown in Tab 1) -->
+        <section class="stats-grid" id="stats">
+          <div class="stat-card">
+            <div class="stat-label"><span>待处理会话</span><span>📋</span></div>
+            <div class="stat-val c-dan" id="statPending">0</div>
+            <div class="stat-hint">需人工审核干预</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><span>今日实发回复</span><span>💬</span></div>
+            <div class="stat-val c-ok" id="statTodayReplied">0</div>
+            <div class="quota-track"><div class="quota-fill" id="quotaFill"></div></div>
+            <div class="stat-hint" id="quotaHint">拟人高斯发出</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><span>今日巡检扫描</span><span>🔍</span></div>
+            <div class="stat-val c-acc" id="statTodayScanned">0</div>
+            <div class="stat-hint">消息中心雷达</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><span>高意向猎聘</span><span>🔥</span></div>
+            <div class="stat-val c-warn" id="statHighIntent">0</div>
+            <div class="stat-hint">面试/Offer信号</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><span>累计安全回复</span><span>🛡️</span></div>
+            <div class="stat-val" id="statRepliedTotal">0</div>
+            <div class="stat-hint">零封号留痕</div>
+          </div>
+        </section>
+
         <!-- Top Sub-nav -->
         <div class="sub-nav-bar mb-3">
           <div class="sub-nav-pill active">⚡ 待人工决策（needs_human）</div>
@@ -1631,73 +1683,71 @@ PAGE = """<!DOCTYPE html>
         </div>
       </main>
 
-      <!-- Tab 2: 实时台账 (实时运行流水 + 已处理会话与点评自学习) -->
+      <!-- Tab 2: 实时台账 (合二为一 · 运行流水与已处理会话功能叠加) -->
       <main id="tab-ledger" class="tab-content">
-        <!-- Top Sub-nav -->
-        <div class="sub-nav-bar mb-3">
-          <button type="button" class="sub-nav-pill active" id="subtab-ledger-events" onclick="switchLedgerSubTab('events')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            📊 实时运行流水 (Ledger Events)
+        <!-- Top Sub-nav: Filter Pills (每个板块的子导航键放在顶端) -->
+        <div class="sub-nav-bar mb-3" id="ledgerSubNav">
+          <button type="button" class="sub-nav-pill active" data-filter="all" onclick="filterLedgerChip('all')">
+            ✨ 全部动态
           </button>
-          <button type="button" class="sub-nav-pill" id="subtab-ledger-resolved" onclick="switchLedgerSubTab('resolved')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-            💡 已处理会话与自学习点评 (Resolved & Learning)
+          <button type="button" class="sub-nav-pill" data-filter="reply" onclick="filterLedgerChip('reply')">
+            💬 智能回复
+          </button>
+          <button type="button" class="sub-nav-pill" data-filter="wechat" onclick="filterLedgerChip('wechat')">
+            🟢 交换微信
+          </button>
+          <button type="button" class="sub-nav-pill" data-filter="resume" onclick="filterLedgerChip('resume')">
+            📄 发送简历
+          </button>
+          <button type="button" class="sub-nav-pill" data-filter="alert" onclick="filterLedgerChip('alert')">
+            ⚠️ 人工介入/告警
+          </button>
+          <button type="button" class="sub-nav-pill" data-filter="scan" onclick="filterLedgerChip('scan')">
+            🔍 系统巡检
           </button>
         </div>
 
-        <!-- View 1: 实时运行流水 -->
-        <div id="ledgerEventsView">
-          <div class="panel-card">
-            <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-4">
-              <div class="filter-pills">
-                <span class="filter-pill active" data-filter="all" onclick="filterLedgerChip('all')">全部流水</span>
-                <span class="filter-pill" data-filter="reply" onclick="filterLedgerChip('reply')">智能回复</span>
-                <span class="filter-pill" data-filter="wechat" onclick="filterLedgerChip('wechat')">交换微信</span>
-                <span class="filter-pill" data-filter="resume" onclick="filterLedgerChip('resume')">发送简历</span>
-                <span class="filter-pill" data-filter="alert" onclick="filterLedgerChip('alert')">转人工告警</span>
-                <span class="filter-pill" data-filter="gate" onclick="filterLedgerChip('gate')">门禁拦截</span>
-              </div>
-              <div class="admin-search-group" style="max-width:340px">
-                <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="快速搜索公司、动作或状态…" oninput="renderLedger(); toggleSearchClear()">
-                <div class="admin-search-clear" id="ledgerFilterClear" onclick="clearLedgerSearch()" title="清空搜索">✕</div>
-              </div>
+        <div class="panel-card">
+          <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+            <div>
+              <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                实时智能台账 · 运行流水与自学习闭环
+              </h5>
+              <div class="text-muted" style="font-size:12px">流水与对话完整合一：直观查看每条业务流水的双向对话与动作成效，直接打分与输入真人金句实现自学习</div>
             </div>
-            <div class="table-responsive">
-              <table class="table table-custom align-middle" id="ledger">
-                <thead>
-                  <tr>
-                    <th style="width:160px">时间</th>
-                    <th style="width:130px">动作</th>
-                    <th style="width:220px">目标 / 会话</th>
-                    <th>状态 / 归因 / 回复摘要</th>
-                  </tr>
-                </thead>
-                <tbody id="ledgerBody"></tbody>
-              </table>
+            <div class="admin-search-group" style="max-width:320px;width:100%">
+              <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="搜索公司、动作或关键词…" oninput="renderLedger(); toggleSearchClear()">
+              <div class="admin-search-clear" id="ledgerFilterClear" onclick="clearLedgerSearch()" title="清空搜索">✕</div>
             </div>
           </div>
-        </div>
 
-        <!-- View 2: 已处理会话与自学习点评 -->
-        <div id="ledgerResolvedView" style="display:none">
-          <div class="panel-card">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <div>
-                <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
-                  <svg class="title-icon green" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  近期已处理会话记录 · 闭环评价打分与真人调优 (Recently Handled)
-                </h5>
-                <div class="text-muted" style="font-size:12px">对 AI 的每个回答进行 1-10 分点评打分或录入真人优化示范，自动沉淀至经验库实现自学习进化</div>
-              </div>
-            </div>
-            <div id="resolvedList" style="margin-top:14px"></div>
+          <!-- Unified Event Feed Container -->
+          <div id="ledgerFeedContainer">
+            <div id="ledgerCardsList"></div>
           </div>
+
+          <!-- Hidden compatibility elements for existing automation tests and handlers -->
+          <table class="d-none" id="ledger"><tbody id="ledgerBody"></tbody></table>
+          <div class="d-none" id="resolvedList"></div>
+          <div class="d-none" id="ledgerEventsView"></div>
+          <div class="d-none" id="ledgerResolvedView"></div>
         </div>
       </main>
 
   <!-- Tab 3: 系统设置 -->
   <main id="tab-settings" class="tab-content">
+    <!-- Top Sub-nav Bar (每个板块的子导航键放在顶端) -->
+    <div class="sub-nav-bar mb-3" id="settingsSubNav">
+      <button type="button" class="sub-nav-pill active" data-sec="all" onclick="scrollSettingsSection('all')">⚙️ 全部设置</button>
+      <button type="button" class="sub-nav-pill" data-sec="llm" onclick="scrollSettingsSection('llm')">🤖 大模型LLM</button>
+      <button type="button" class="sub-nav-pill" data-sec="prefs" onclick="scrollSettingsSection('prefs')">🎯 求职偏好</button>
+      <button type="button" class="sub-nav-pill" data-sec="privacy" onclick="scrollSettingsSection('privacy')">🛡️ 隐私与权限</button>
+      <button type="button" class="sub-nav-pill" data-sec="auto" onclick="scrollSettingsSection('auto')">🚀 每日自动投递</button>
+      <button type="button" class="sub-nav-pill" data-sec="browser" onclick="scrollSettingsSection('browser')">🌐 浏览器模式</button>
+      <button type="button" class="sub-nav-pill" data-sec="resume" onclick="scrollSettingsSection('resume')">📄 简历画像</button>
+    </div>
     <div id="settingsBox">
       <div class="row g-4">
         <!-- Col 1 -->
@@ -2776,15 +2826,94 @@ async function act(i, action) {
 
 function filterLedgerChip(filterVal) {
   ledgerFilter = filterVal;
-  document.querySelectorAll('.filter-pill').forEach(p => {
-    p.classList.toggle('active', p.dataset.filter === filterVal);
+  document.querySelectorAll('#ledgerSubNav .sub-nav-pill, .filter-pill').forEach(p => {
+    p.classList.toggle('active', (p.dataset.filter === filterVal || p.getAttribute('data-filter') === filterVal));
   });
   renderLedger();
 }
 
+function selectLedgerScore(idx, score) {
+  if (!fullLedger || !fullLedger[idx]) return;
+  fullLedger[idx].score = score;
+  const badge = document.getElementById('ledgerScoreBadge_' + idx);
+  if (badge) badge.textContent = score + '分';
+  const container = document.getElementById('ledgerScorePills_' + idx);
+  if (container) {
+    container.querySelectorAll('.btn-score-pill').forEach((btn, i) => {
+      btn.classList.toggle('active', (i + 1) === score);
+    });
+  }
+}
+
+async function saveLedgerFeedback(idx) {
+  if (!fullLedger || !fullLedger[idx]) return;
+  const item = fullLedger[idx];
+  const optBox = document.getElementById('ledgerOptText_' + idx);
+  const optText = optBox ? optBox.value.trim() : '';
+  const score = item.score || 8;
+  const statusEl = document.getElementById('ledgerFbStatus_' + idx);
+
+  if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>保存中…';
+
+  const payload = {
+    company: item.company,
+    job: item.job || '',
+    hr_msg: item.last_msg || '',
+    ai_reply: item.suggested || ('【系统动作】' + (item.action || '完成')),
+    score: score,
+    optimized_text: optText,
+    source: 'web_console_unified_ledger'
+  };
+
+  try {
+    const res = await fetch('/api/feedback?token=' + encodeURIComponent(TOKEN), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('点评与优化已存入经验库！大模型后续会话将自学习参考', 'success');
+      item.has_feedback = true;
+      item.optimized_text = optText;
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--ok);font-weight:700">✅ 点评已入库（' + score + '分）</span>';
+    } else {
+      showToast('保存失败: ' + (data.error || '未知错误'), 'error');
+      if (statusEl) statusEl.textContent = '❌ 保存失败';
+    }
+  } catch (e) {
+    showToast('网络错误: ' + e.message, 'error');
+    if (statusEl) statusEl.textContent = '❌ 网络异常';
+  }
+}
+
+function scrollSettingsSection(sec) {
+  document.querySelectorAll('#settingsSubNav .sub-nav-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-sec') === sec);
+  });
+  if (sec === 'all') {
+    const box = document.getElementById('settingsBox');
+    if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  const elMap = {
+    llm: document.getElementById('inKey'),
+    prefs: document.getElementById('inJobMode'),
+    privacy: document.getElementById('inPolicyWechat'),
+    auto: document.getElementById('inAutoApplyEnabled'),
+    browser: document.getElementById('inBrowserSilent'),
+    resume: document.getElementById('profMeta')
+  };
+  const target = elMap[sec];
+  if (target) {
+    const card = target.closest('.panel-card') || target;
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 function renderLedger() {
+  const cardsList = document.getElementById('ledgerCardsList');
   const tbody = document.getElementById('ledgerBody');
-  if (!tbody) return;
   const kw = (document.getElementById('ledgerFilter') ? document.getElementById('ledgerFilter').value : '').trim().toLowerCase();
   
   const filtered = fullLedger.filter(r => {
@@ -2792,43 +2921,157 @@ function renderLedger() {
       if (ledgerFilter === 'wechat' && !r.action.includes('wechat')) return false;
       else if (ledgerFilter === 'resume' && !r.action.includes('resume')) return false;
       else if (ledgerFilter === 'reply' && r.action !== 'reply') return false;
-      else if (ledgerFilter === 'alert' && !r.action.includes('alert')) return false;
+      else if (ledgerFilter === 'alert' && !r.action.includes('alert') && r.action !== 'human_alert_card') return false;
       else if (ledgerFilter === 'gate' && !r.action.includes('gate')) return false;
+      else if (ledgerFilter === 'scan' && r.action !== 'daemon_cycle_summary' && r.action !== 'scan') return false;
     }
     if (kw) {
-      const line = (r.ts + ' ' + r.action + ' ' + r.company + ' ' + r.status).toLowerCase();
+      const line = (r.ts + ' ' + r.action + ' ' + (r.company || '') + ' ' + (r.status || '') + ' ' + (r.last_msg || '') + ' ' + (r.suggested || '')).toLowerCase();
       if (!line.includes(kw)) return false;
     }
     return true;
   });
 
+  // 1. 同步填充隐藏表格 (保留对旧测试/选择器的完全向下兼容)
+  if (tbody) {
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-muted" style="font-size:13px">无匹配台账流水</td></tr>';
+    } else {
+      tbody.innerHTML = filtered.slice(0, 50).map(r => {
+        let badgeCls = 'badge-blue';
+        let actName = r.action;
+        if (r.action === 'reply') { badgeCls = 'badge-pub'; actName = '智能回复'; }
+        else if (r.action.includes('wechat')) { badgeCls = 'badge-pub'; actName = '交换微信'; }
+        else if (r.action.includes('resume')) { badgeCls = 'badge-purple'; actName = '发送简历'; }
+        else if (r.action.includes('alert') || r.action === 'human_alert_card') { badgeCls = 'badge-rej'; actName = '转人工告警'; }
+        else if (r.action.includes('gate')) { badgeCls = 'badge-ai'; actName = '时间/门禁拦截'; }
+        else if (r.action === 'daemon_cycle_summary') { badgeCls = 'badge-blue'; actName = '系统巡检'; }
+        let stColor = 'var(--mut)';
+        let st = r.status || '';
+        if (st === 'ok') stColor = 'var(--ok)';
+        else if (st === 'already_sent' || st === 'already_agreed') { stColor = 'var(--acc)'; st = '已发起(无需重发)'; }
+        else if (st.includes('blocked') || st.includes('fail')) stColor = 'var(--dan)';
+        return `
+          <tr>
+            <td style="white-space:nowrap;font-size:12px;color:var(--mut);font-weight:600">${esc(r.ts)}</td>
+            <td><span class="soft-badge ${badgeCls}">${esc(actName)}</span></td>
+            <td style="font-weight:700;color:var(--txt)">${esc(r.company || '-')}</td>
+            <td style="color:${stColor};font-weight:500">${esc(st.slice(0, 60))}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // 2. 渲染合二为一的现代卡片时间线 (Unified Smart Timeline Cards)
+  if (!cardsList) return;
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-muted" style="font-size:13px">无匹配台账流水</td></tr>';
+    cardsList.innerHTML = '<div class="text-center py-5 text-muted" style="font-size:13px">暂无匹配的台账流水记录</div>';
     return;
   }
 
-  tbody.innerHTML = filtered.slice(0, 50).map(r => {
+  cardsList.innerHTML = filtered.slice(0, 60).map((r, i) => {
+    // 2.1 系统巡检事件轻量化呈现
+    if (r.action === 'daemon_cycle_summary') {
+      const scanned = r.scanned ?? (r.raw && r.raw.scanned) ?? '-';
+      const candidates = r.candidates ?? (r.raw && r.raw.candidates) ?? '-';
+      const replied = r.replied ?? (r.raw && r.raw.replied) ?? '-';
+      const isDry = r.dry_run ?? (r.raw && r.raw.dry_run);
+      return `
+        <div class="ledger-cycle-card p-2 px-3 mb-2" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px">
+          <div class="d-flex align-items-center gap-2">
+            <span class="soft-badge badge-blue" style="font-size:10px;font-weight:800">🔍 雷达巡检</span>
+            <span style="color:#334155;font-weight:600;font-size:12px">
+              扫描会话 <strong>${scanned}</strong> 个 · 意向匹配 <strong>${candidates}</strong> 个 · 实际回复 <strong>${replied}</strong> 个
+            </span>
+            ${isDry ? '<span class="soft-badge badge-warn" style="font-size:9.5px;padding:2px 6px">演练模式</span>' : '<span class="soft-badge badge-pub" style="font-size:9.5px;padding:2px 6px">线上实弹</span>'}
+          </div>
+          <span style="color:var(--mut-dark);font-size:11px;font-weight:500">${esc(r.ts)}</span>
+        </div>
+      `;
+    }
+
+    // 2.2 业务会话与动作流水：富卡片呈现（HR原文 + Agent回复 + 1-10分打分 + 真人金句输入）
     let badgeCls = 'badge-blue';
     let actName = r.action;
-    if (r.action === 'reply') { badgeCls = 'badge-pub'; actName = '智能回复'; }
-    else if (r.action.includes('wechat')) { badgeCls = 'badge-pub'; actName = '交换微信'; }
-    else if (r.action.includes('resume')) { badgeCls = 'badge-purple'; actName = '发送简历'; }
-    else if (r.action.includes('alert')) { badgeCls = 'badge-rej'; actName = '转人工告警'; }
-    else if (r.action.includes('gate')) { badgeCls = 'badge-ai'; actName = '时间/门禁拦截'; }
+    if (r.action === 'reply') { badgeCls = 'badge-pub'; actName = '💬 智能回复'; }
+    else if (r.action.includes('wechat')) { badgeCls = 'badge-pub'; actName = '🟢 交换微信'; }
+    else if (r.action.includes('resume')) { badgeCls = 'badge-purple'; actName = '📄 发送简历'; }
+    else if (r.action.includes('alert') || r.action === 'human_alert_card') { badgeCls = 'badge-rej'; actName = '⚠️ 转人工待办'; }
+    else if (r.action.includes('gate')) { badgeCls = 'badge-ai'; actName = '🛡️ 门禁拦截'; }
+    else if (r.action === 'daemon_skip') { badgeCls = 'badge-blue'; actName = '⏭️ 规则跳过'; }
 
-    let stColor = 'var(--mut)';
+    let stBadgeCls = 'badge-blue';
     let st = r.status || '';
-    if (st === 'ok') stColor = 'var(--ok)';
-    else if (st === 'already_sent' || st === 'already_agreed') { stColor = 'var(--acc)'; st = '已发起(无需重发)'; }
-    else if (st.includes('blocked') || st.includes('fail')) stColor = 'var(--dan)';
+    if (st === 'ok') { stBadgeCls = 'badge-pub'; st = '✅ 执行成功'; }
+    else if (st === 'already_sent' || st === 'already_agreed') { stBadgeCls = 'badge-blue'; st = 'ℹ️ 已发起过(无需重发)'; }
+    else if (st.includes('blocked') || st.includes('fail')) { stBadgeCls = 'badge-rej'; }
+
+    const curScore = r.score || 8;
+    const hrText = r.last_msg || '';
+    const aiText = r.suggested || ('【系统动作】已执行平台动作（' + actName + ' · ' + (r.status || '完成') + '）');
+
+    const hrSection = hrText ? `
+      <div class="quote-box py-2 px-3 mb-2" style="background:#f1f5f9;border-left:4px solid #64748b;border-radius:8px;font-size:12.5px">
+        <div style="font-size:11px;font-weight:800;color:#475569;margin-bottom:3px;display:flex;align-items:center;gap:4px">
+          💬 对方发送内容 (HR)
+        </div>
+        <div style="color:#1e293b;line-height:1.5;white-space:pre-wrap">${esc(hrText)}</div>
+      </div>` : '';
+
+    const aiSection = `
+      <div class="quote-box py-2 px-3 mb-2" style="background:#ecfdf5;border-left:4px solid #10b981;border-radius:8px;font-size:12.5px">
+        <div style="font-size:11px;font-weight:800;color:#047857;margin-bottom:3px;display:flex;align-items:center;gap:4px">
+          🤖 Agent 实际回复 / 执行动作
+        </div>
+        <div style="color:#064e3b;font-weight:500;line-height:1.5;white-space:pre-wrap">${esc(aiText)}</div>
+      </div>`;
+
+    const pills = [1,2,3,4,5,6,7,8,9,10].map(num => `
+      <button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectLedgerScore(${i}, ${num})">${num}</button>
+    `).join('');
+
+    const interactiveLayer = `
+      <div class="pt-2" style="border-top:1px dashed rgba(0,0,0,0.06)">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div style="font-size:12px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:6px">
+            ⭐ 回答点评打分（1-10分）:
+            <span id="ledgerScoreBadge_${i}" class="soft-badge badge-ai" style="font-size:11px;font-weight:800">${curScore}分</span>
+          </div>
+          <div style="font-size:11px;color:var(--mut)">点击数字评分</div>
+        </div>
+        <div class="d-flex flex-wrap gap-1 mb-2" id="ledgerScorePills_${i}">
+          ${pills}
+        </div>
+        <div class="mb-2">
+          <label style="font-size:11.5px;font-weight:700;color:var(--txt);margin-bottom:3px;display:block">
+            ✍️ 真人示范优化输入（输入更高情商金句，大模型自动存入经验库自学习进化）：
+          </label>
+          <textarea id="ledgerOptText_${i}" class="form-control" style="font-size:12px;border-radius:10px;resize:vertical;min-height:50px" placeholder="输入你认为更自然、更高情商的真人回复（例如：“真人在的，刚才回复太正式了哈哈…”）。">${esc(r.optimized_text || '')}</textarea>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span id="ledgerFbStatus_${i}" style="font-size:11.5px;color:var(--mut)">${r.has_feedback ? '✅ 已有历史评价记录' : '未手动点评（默认8分）'}</span>
+          <button class="btn-black btn-sm" style="padding:5px 14px;border-radius:10px;font-size:12px" onclick="saveLedgerFeedback(${i})">
+            💾 保存点评与优化
+          </button>
+        </div>
+      </div>
+    `;
 
     return `
-      <tr>
-        <td style="white-space:nowrap;font-size:12px;color:var(--mut);font-weight:600">${esc(r.ts)}</td>
-        <td><span class="soft-badge ${badgeCls}">${esc(actName)}</span></td>
-        <td style="font-weight:700;color:var(--txt)">${esc(r.company || '-')}</td>
-        <td style="color:${stColor};font-weight:500">${esc(st.slice(0, 60))}</td>
-      </tr>
+      <div class="ledger-event-card p-3 mb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+          <div class="d-flex align-items-center gap-2">
+            <span class="soft-badge ${badgeCls}" style="font-size:11.5px;font-weight:700">${esc(actName)}</span>
+            <strong style="font-size:14px;color:var(--txt)">${esc(r.company || '-')}</strong>
+            <span class="soft-badge ${stBadgeCls}" style="font-size:10.5px">${esc(st.slice(0, 40))}</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--mut);font-weight:500">${esc(r.ts)}</div>
+        </div>
+        ${hrSection}
+        ${aiSection}
+        ${interactiveLayer}
+      </div>
     `;
   }).join('');
 }
@@ -3759,6 +4002,36 @@ def api_overview(token: str = ""):
     pending.sort(key=lambda x: x["time"], reverse=True)
     resolved.sort(key=lambda x: x.get("resolved_time") or x["time"], reverse=True)
 
+    enriched_ledger = []
+    for r in reversed(rows[-120:]):
+        act = r.get("action") or ""
+        comp = r.get("company") or r.get("title") or ""
+        st = r.get("status") or r.get("reason") or r.get("text_head") or ""
+        hr_text, ai_text = _extract_dialog_texts(r, None)
+        if hr_text == "（历史对话未抓取到单句正文，已记录会话节点）" and not r.get("last_msg") and not r.get("conv") and not r.get("error"):
+            hr_clean = ""
+        else:
+            hr_clean = hr_text
+        fb = feedbacks.get(f"{comp}_{hr_clean[:40]}") or feedbacks.get(comp) or {}
+        item = {
+            "ts": r.get("ts") or r.get("timestamp") or "",
+            "action": act,
+            "company": comp,
+            "status": st,
+            "reason": r.get("reason") or "",
+            "last_msg": hr_clean[:500],
+            "suggested": ai_text,
+            "score": fb.get("score", 8),
+            "optimized_text": fb.get("optimized_text", ""),
+            "has_feedback": bool(fb),
+        }
+        if act == "daemon_cycle_summary":
+            item["scanned"] = r.get("scanned", 0)
+            item["candidates"] = r.get("candidates", 0)
+            item["replied"] = r.get("replied", 0)
+            item["dry_run"] = r.get("dry_run", False)
+        enriched_ledger.append(item)
+
     return {
         "counts": {
             "pending": len(pending),
@@ -3777,12 +4050,7 @@ def api_overview(token: str = ""):
         },
         "pending": pending[:100],
         "resolved": resolved[:100],
-        "ledger": [
-            {"ts": r.get("ts") or "", "action": r.get("action") or "",
-             "company": r.get("company") or r.get("title") or "",
-             "status": r.get("status") or r.get("reason") or r.get("text_head") or ""}
-            for r in rows[-50:]
-        ][::-1],
+        "ledger": enriched_ledger,
     }
 
 
