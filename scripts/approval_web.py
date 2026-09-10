@@ -2462,11 +2462,11 @@ function loadPlaygroundPreset(key) {
   document.getElementById('pgHistory').value = p.history;
   
   // 从预设初始化连续历史
-  pgConversationHistory = (p.history || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(line => {
+  pgConversationHistory = String(p.history || '').split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean).map(line => {
     if (line.startsWith('我方:') || line.startsWith('我方：')) {
-      return { role: 'me', text: line.replace(/^我方[:：]\s*/, '') };
+      return { role: 'me', text: line.replace(/^我方[:：]/, '').trim() };
     } else {
-      return { role: 'hr', text: line.replace(/^HR[:：]\s*/, '') };
+      return { role: 'hr', text: line.replace(/^HR[:：]/, '').trim() };
     }
   });
 
@@ -2501,11 +2501,11 @@ async function runPlaygroundSimulation() {
   if (pgConversationHistory.length === 0) {
     const rawHist = (document.getElementById('pgHistory') ? document.getElementById('pgHistory').value : '').trim();
     if (rawHist) {
-      pgConversationHistory = rawHist.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(line => {
+      pgConversationHistory = String(rawHist).split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean).map(line => {
         if (line.startsWith('我方:') || line.startsWith('我方：')) {
-          return { role: 'me', text: line.replace(/^我方[:：]\s*/, '') };
+          return { role: 'me', text: line.replace(/^我方[:：]/, '').trim() };
         } else {
-          return { role: 'hr', text: line.replace(/^HR[:：]\s*/, '') };
+          return { role: 'hr', text: line.replace(/^HR[:：]/, '').trim() };
         }
       });
     }
@@ -2561,7 +2561,7 @@ async function runPlaygroundSimulation() {
 
     // 实时同步回写到右侧历史输入框，保持多轮上下文完全透明与连贯
     if (document.getElementById('pgHistory')) {
-      document.getElementById('pgHistory').value = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text).join('\n');
+      document.getElementById('pgHistory').value = pgConversationHistory.map(m => (m.role === 'hr' ? 'HR: ' : '我方: ') + m.text).join(String.fromCharCode(10));
     }
 
     // 右侧更新透视与门禁数据
