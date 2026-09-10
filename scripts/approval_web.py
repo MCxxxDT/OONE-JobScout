@@ -2145,7 +2145,7 @@ const PG_PRESETS = {
     salary: "250-350元/天",
     city: "北京/上海",
     jd: "职责：参与美团商户智能化与Agent产品搭建；任职要求：统招本科27届，具备大模型应用与工作流搭建经验，每周到岗5天，实习6个月以上。",
-    history: "我方: 您好！非常关注贵团队的 Agent 业务落地，这是我的基本情况。\nHR: 收到，看项目经历很契合，方便发一份完整的附件简历给我看看吗？"
+    history: "我方: 您好！非常关注贵团队的 Agent 业务落地，这是我的基本情况。\\nHR: 收到，看项目经历很契合，方便发一份完整的附件简历给我看看吗？"
   },
   arrival_time: {
     msg: "同学你好，目前在校还是已经可以出来实习了？最快什么时候可以到岗？能实习几个月？",
@@ -2154,7 +2154,7 @@ const PG_PRESETS = {
     salary: "300-400元/天",
     city: "上海",
     jd: "职责：负责小红书创作者端大模型辅助写作功能；任职要求：统招本科在读，毕业设计已交付无日常课程羁绊，可随时现场到岗，2027届毕业优先转正。",
-    history: "我方: 您好！我对创作者端大模型工具非常感兴趣，希望有机会交流！\nHR: 同学你好，目前在校还是已经可以出来实习了？最快什么时候可以到岗？能实习几个月？"
+    history: "我方: 您好！我对创作者端大模型工具非常感兴趣，希望有机会交流！\\nHR: 同学你好，目前在校还是已经可以出来实习了？最快什么时候可以到岗？能实习几个月？"
   },
   ask_wechat: {
     msg: "平台打字不太方便，留个你的微信或者电话吧，我让业务主管直接加你电话沟通！",
@@ -2172,7 +2172,7 @@ const PG_PRESETS = {
     salary: "180-250元/天",
     city: "杭州",
     jd: "职责：参与游戏化与具身智能产品评估；任职要求：统招本科，了解多模态技术。",
-    history: "我方: 您好！对伏羲实验室的大模型方向很感兴趣！\nHR: 请问同学你目前的期望薪资是多少？从福州跨城过来能接受我们的实习津贴吗？"
+    history: "我方: 您好！对伏羲实验室的大模型方向很感兴趣！\\nHR: 请问同学你目前的期望薪资是多少？从福州跨城过来能接受我们的实习津贴吗？"
   },
   interview_offline: {
     msg: "明天下午两点或者周五下午，方便直接来上海杨浦现场面试吗？",
@@ -2181,7 +2181,7 @@ const PG_PRESETS = {
     salary: "250-300元/天",
     city: "上海",
     jd: "职责：参与模型 Eval 体系搭建；任职要求：2027届本科，逻辑清晰。",
-    history: "我方: 您好，这是我的经历简介，期待交流！\nHR: 明天下午两点或者周五下午，方便直接来上海杨浦现场面试吗？"
+    history: "我方: 您好，这是我的经历简介，期待交流！\\nHR: 明天下午两点或者周五下午，方便直接来上海杨浦现场面试吗？"
   },
   closing: {
     msg: "好的，收到！我先同步给部门主管评估一下，谢谢同学！",
@@ -2190,7 +2190,7 @@ const PG_PRESETS = {
     salary: "250-350元/天",
     city: "杭州",
     jd: "职责：淘天商家端智能经营工具设计。",
-    history: "我方: 好的，附件简历已为您发出，期待您的反馈！\nHR: 好的，收到！我先同步给部门主管评估一下，谢谢同学！"
+    history: "我方: 好的，附件简历已为您发出，期待您的反馈！\\nHR: 好的，收到！我先同步给部门主管评估一下，谢谢同学！"
   }
 };
 
@@ -2244,7 +2244,7 @@ async function runPlaygroundSimulation() {
   if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> 正在推演 (LLM生成中)…';
   if (statusEl) { statusEl.style.color = 'var(--acc)'; statusEl.textContent = '大模型思考中…'; }
 
-  const histLines = document.getElementById('pgHistory').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const histLines = document.getElementById('pgHistory').value.split(/\\r?\\n/).map(s => s.trim()).filter(Boolean);
   const payload = {
     message: msg,
     company: document.getElementById('pgCompany').value.trim(),
