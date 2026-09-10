@@ -909,31 +909,132 @@ PAGE = """<!DOCTYPE html>
   .form-switch-apple input:checked + .switch-slider:before { transform: translateX(20px); }
 
   /* Mobile Responsive */
+  /* Mobile Responsive */
   @media (max-width: 768px) {
     .admin-header { padding: 12px 16px; }
     .brand-text h1 { font-size: 15px; }
     .island-nav-row { top: 62px; padding: 6px 0; }
     .island-capsule { height: 46px; }
     .panel-card { padding: 18px; border-radius: 20px; }
-  /* Playground Custom Styles */
-  .preset-chips-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  }
+
+  /* Gemini-style Chat Arena Styles */
+  .chat-arena-card {
+    background: #fff; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.035);
+    border: 1px solid rgba(0,0,0,0.05); display: flex; flex-direction: column;
+    height: 820px; overflow: hidden; position: relative;
+  }
+  .chat-arena-header {
+    padding: 16px 22px; border-bottom: 1px solid #f1f5f9; display: flex;
+    justify-content: space-between; align-items: center; background: #fafafa; flex-shrink: 0;
+  }
+  .chat-avatar {
+    width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center;
+    justify-content: center; font-weight: 800; font-size: 15px; flex-shrink: 0;
+  }
+  .chat-avatar.hr { background: #e0e7ff; color: #4338ca; }
+  .chat-avatar.agent { background: #0f172a; color: #fff; }
+  
+  .chat-flow-container {
+    flex: 1; padding: 22px; overflow-y: auto; display: flex; flex-direction: column;
+    gap: 20px; background: #fdfdfd; scroll-behavior: smooth;
+  }
+  .chat-welcome-box {
+    text-align: center; padding: 60px 20px; margin: auto; max-width: 460px;
+  }
+  .chat-welcome-title {
+    font-size: 20px; font-weight: 900; color: var(--txt); margin-bottom: 8px; letter-spacing: -0.3px;
+  }
+  .chat-welcome-desc {
+    font-size: 13px; color: var(--mut); line-height: 1.6; margin-bottom: 20px;
+  }
+  
+  .chat-msg-row {
+    display: flex; gap: 12px; max-width: 88%; animation: fadeInMsg 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes fadeInMsg {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .chat-msg-row.hr { align-self: flex-start; }
+  .chat-msg-row.agent { align-self: flex-end; flex-direction: row-reverse; }
+  
+  .chat-bubble {
+    padding: 14px 18px; border-radius: 20px; font-size: 14px; line-height: 1.6;
+    word-break: break-word; box-shadow: 0 2px 8px rgba(0,0,0,0.02); position: relative;
+  }
+  .chat-msg-row.hr .chat-bubble {
+    background: #f1f5f9; color: #1e293b; border-top-left-radius: 4px; border: 1px solid #e2e8f0;
+  }
+  .chat-msg-row.agent .chat-bubble {
+    background: #0f172a; color: #f8fafc; border-top-right-radius: 4px; border: 1px solid #1e293b;
+  }
+  .chat-bubble-meta {
+    display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: #94a3b8;
+  }
+  .chat-msg-row.agent .chat-bubble-meta { justify-content: flex-end; color: #94a3b8; }
+  
+  .chat-bubble-action-badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px;
+    font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.15); color: #fff;
+  }
+  
+  /* Gemini-style Input Box */
+  .chat-input-wrapper {
+    padding: 14px 18px 18px; background: #fff; border-top: 1px solid #f1f5f9; flex-shrink: 0;
+  }
+  .preset-chips-scroll {
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 6px;
+    scrollbar-width: thin;
+  }
   .preset-chip {
     background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 20px;
-    padding: 6px 14px; font-size: 12px; font-weight: 700; color: #475569;
-    cursor: pointer; transition: all 0.2s; user-select: none; display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 13px; font-size: 12px; font-weight: 700; color: #475569;
+    cursor: pointer; transition: all 0.2s; user-select: none; display: inline-flex;
+    align-items: center; gap: 4px; white-space: nowrap; flex-shrink: 0;
   }
-  .preset-chip:hover { background: #111; color: #fff; border-color: #111; transform: translateY(-1px); }
-  .chat-bubble-mockup {
-    background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 20px 20px 4px 20px;
-    padding: 16px 20px; font-size: 14px; color: #14532d; line-height: 1.6;
-    font-weight: 600; box-shadow: 0 4px 14px rgba(16,185,129,0.06); position: relative;
+  .preset-chip:hover { background: #0f172a; color: #fff; border-color: #0f172a; transform: translateY(-1px); }
+  
+  .chat-input-box {
+    background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 20px;
+    padding: 12px 16px; transition: all 0.2s; display: flex; flex-direction: column; gap: 8px;
   }
-  .chat-bubble-mockup.warn {
-    background: #fffbeb; border-color: #fde68a; color: #92400e; box-shadow: 0 4px 14px rgba(245,158,11,0.06);
+  .chat-input-box:focus-within {
+    border-color: #0f172a; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.06);
   }
-  .chat-bubble-mockup.rej {
-    background: #fef2f2; border-color: #fecaca; color: #991b1b; box-shadow: 0 4px 14px rgba(239,68,68,0.06);
+  .chat-input-textarea {
+    width: 100%; border: none; outline: none; background: transparent;
+    font-size: 14px; font-family: inherit; color: #0f172a; resize: none;
+    max-height: 110px; line-height: 1.5; min-height: 24px;
   }
+  .chat-input-actions {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .chat-send-btn {
+    background: #0f172a; color: #fff; border: none; border-radius: 12px;
+    padding: 7px 16px; font-size: 13px; font-weight: 700; display: inline-flex;
+    align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s;
+  }
+  .chat-send-btn:hover { background: #334155; transform: translateY(-1px); }
+  .chat-send-btn:active { transform: scale(0.96); }
+
+  /* Thinking Animation Bubble */
+  .chat-thinking-bubble {
+    display: inline-flex; align-items: center; gap: 6px; padding: 12px 18px;
+    background: #f1f5f9; border-radius: 18px; border-top-right-radius: 4px;
+    font-size: 13px; color: #64748b; font-weight: 600;
+  }
+  .thinking-dot {
+    width: 6px; height: 6px; background: #64748b; border-radius: 50%;
+    animation: thinkingBounce 1.4s infinite ease-in-out both;
+  }
+  .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+  .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+  @keyframes thinkingBounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+  }
+
   .prompt-view-code {
     background: #0f172a; color: #e2e8f0; border-radius: 14px; padding: 16px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -1339,172 +1440,196 @@ PAGE = """<!DOCTYPE html>
   <!-- Tab 4: 回复演练场 (Playground) -->
   <main id="tab-playground" class="tab-content">
     <div class="row g-4">
-      <!-- Left Col: 模拟输入与预设场景 -->
-      <div class="col-lg-6">
-        <div class="panel-card">
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold mb-0 d-flex align-items-center">
-              <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
-              模拟输入与场景预设
-            </h5>
-            <span class="soft-badge badge-blue">沙盒只读模式</span>
-          </div>
-
-          <div style="font-size:12px;color:var(--mut);margin-bottom:14px">
-            💡 点击预设场景快速载入典型沟通情景，或手动模拟 HR 发问与岗位背景，直接与底层大模型交互推演：
-          </div>
-
-          <!-- Preset Chips -->
-          <div class="preset-chips-row">
-            <span class="preset-chip" onclick="loadPlaygroundPreset('ask_resume')">📄 索要简历</span>
-            <span class="preset-chip" onclick="loadPlaygroundPreset('arrival_time')">📅 到岗与毕业</span>
-            <span class="preset-chip" onclick="loadPlaygroundPreset('ask_wechat')">🔒 索要微信电话 (套话测试)</span>
-            <span class="preset-chip" onclick="loadPlaygroundPreset('salary')">💰 询问期望薪资</span>
-            <span class="preset-chip" onclick="loadPlaygroundPreset('interview_offline')">🏢 询问能否线下面试</span>
-            <span class="preset-chip" onclick="loadPlaygroundPreset('closing')">☕ 礼貌闭环 (好的谢谢)</span>
-          </div>
-
-          <!-- Form Fields -->
-          <div class="settings-block">
-            <div class="d-flex justify-content-between align-items-center">
-              <label style="margin-bottom:4px">💬 HR 最新发送的消息 (Message)</label>
-              <span style="font-size:11px;color:var(--mut);cursor:pointer" onclick="document.getElementById('pgMsg').value=''">清空</span>
-            </div>
-            <textarea id="pgMsg" style="height:70px" placeholder="输入模拟 HR 发来的消息，如：你好，简历看了很合适，可以周一来现场面试吗？"></textarea>
-
-            <div class="row g-2 mt-1">
-              <div class="col-6">
-                <label>公司名称</label>
-                <input type="text" id="pgCompany" placeholder="如：字节跳动" value="字节跳动">
-              </div>
-              <div class="col-6">
-                <label>岗位名称</label>
-                <input type="text" id="pgJobTitle" placeholder="如：AI产品经理实习生" value="AI产品经理实习生">
+      <!-- Left Col: Gemini-style Chat Arena (会话聊天流) -->
+      <div class="col-lg-7">
+        <div class="chat-arena-card">
+          <!-- Chat Header -->
+          <div class="chat-arena-header">
+            <div class="d-flex align-items-center gap-3">
+              <div class="chat-avatar hr" id="chatTargetAvatar">HR</div>
+              <div>
+                <div style="font-size:15px;font-weight:800;color:var(--txt)">
+                  <span id="chatTargetCompany">米哈游 · 人力资源部</span>
+                  <span style="color:var(--mut-dark);margin:0 4px">·</span>
+                  <span id="chatTargetJob" style="color:var(--mut);font-weight:600;font-size:13px">AI产品经理实习生</span>
+                </div>
+                <div style="font-size:11px;color:var(--ok);font-weight:600;display:flex;align-items:center;gap:4px">
+                  <span class="pulse-dot dot-green" style="width:6px;height:6px"></span>
+                  沙盒推演就绪 (零物理外发)
+                </div>
               </div>
             </div>
-
-            <div class="row g-2 mt-1">
-              <div class="col-6">
-                <label>薪资范围</label>
-                <input type="text" id="pgSalary" placeholder="如：200-300元/天" value="200-300元/天">
-              </div>
-              <div class="col-6">
-                <label>工作地点</label>
-                <input type="text" id="pgCity" placeholder="如：上海" value="上海">
-              </div>
-            </div>
-
-            <div class="mt-2">
-              <label>岗位 JD 描述 (Job Description)</label>
-              <textarea id="pgJd" style="height:90px" placeholder="模拟岗位职责与任职要求…">职责：负责大模型 Agent 业务落地与工作流设计；任职要求：统招本科及以上，熟悉 Prompt 工程与自动化工具，每周可全职到岗 5 天，27届优先转正。</textarea>
-            </div>
-
-            <div class="mt-2">
-              <label>对话历史记录 (可选，每行一条格式如：我方: ... 或 HR: ...)</label>
-              <textarea id="pgHistory" style="height:80px" placeholder="我方: 您好！看到贵司 AI 产品实习岗位，非常感兴趣&#10;HR: 你好，是27届统招在校生吗？"></textarea>
-            </div>
-
-            <!-- Advanced Prompt Settings Collapsible -->
-            <div class="mt-3">
-              <div class="d-flex align-items-center justify-content-between" style="cursor:pointer" onclick="togglePlaygroundAdv()">
-                <span style="font-size:12px;font-weight:700;color:var(--txt)">⚙️ 高级选项：自定义 System / User Prompt</span>
-                <span id="pgAdvArrow" style="font-size:12px;color:var(--mut)">▼ 展开</span>
-              </div>
-              <div id="pgAdvBlock" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0">
-                <label>自定义 System Prompt（留空使用系统默认人设约束）</label>
-                <textarea id="pgCustomSys" style="height:60px" placeholder="留空使用默认人设与三不原则约束"></textarea>
-                <label class="mt-2">自定义 User Prompt 覆盖（留空根据画像与JD动态组装）</label>
-                <textarea id="pgCustomUser" style="height:80px" placeholder="留空自动由系统画像与上下文组装"></textarea>
-              </div>
-            </div>
-
-            <div class="d-flex align-items-center gap-3 mt-4">
-              <button class="btn-black" style="padding:11px 26px;font-size:13px" id="btnSimulate" onclick="runPlaygroundSimulation()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                🧪 立即运行推演 (Run Simulation)
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn-action-light" style="padding:4px 12px;font-size:11px;border-radius:12px" onclick="clearPlaygroundChat()">
+                🗑️ 清空会话
               </button>
-              <button class="btn-action-light" onclick="resetPlayground()">重置输入</button>
-              <span id="pgStatusHint" style="font-size:12px"></span>
+            </div>
+          </div>
+
+          <!-- Chat Flow Scrollable Area -->
+          <div class="chat-flow-container" id="pgChatFlow">
+            <!-- Welcome Empty State -->
+            <div class="chat-welcome-box" id="pgChatWelcome">
+              <div style="font-size:38px;margin-bottom:12px">✨</div>
+              <div class="chat-welcome-title">AI 求职对话推演沙盒</div>
+              <div class="chat-welcome-desc">
+                在此模拟 HR 与候选人的真实对话。大模型将根据您设定的候选人画像、目标岗位 JD 与防套话铁律，实时推演并生成真人口语化回复。
+              </div>
+              <div style="font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">
+                👇 点击下方场景胶囊，一键载入并推演：
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Input Bottom Area -->
+          <div class="chat-input-wrapper">
+            <!-- Preset Chips Horizontal Scroll -->
+            <div class="preset-chips-scroll">
+              <span class="preset-chip" onclick="loadPlaygroundPreset('birthday_wechat')">🎂 生日蛋糕+要微信 (复合意图)</span>
+              <span class="preset-chip" onclick="loadPlaygroundPreset('ask_resume')">📄 索要简历</span>
+              <span class="preset-chip" onclick="loadPlaygroundPreset('arrival_time')">📅 到岗与毕业</span>
+              <span class="preset-chip" onclick="loadPlaygroundPreset('ask_wechat')">🔒 索要微信电话 (套话测试)</span>
+              <span class="preset-chip" onclick="loadPlaygroundPreset('salary')">💰 询问期望薪资</span>
+              <span class="preset-chip" onclick="loadPlaygroundPreset('interview_offline')">🏢 询问能否线下面试</span>
+              <span class="preset-chip" onclick="loadPlaygroundPreset('closing')">☕ 礼貌闭环 (好的谢谢)</span>
+            </div>
+
+            <!-- Gemini-style Input Box -->
+            <div class="chat-input-box">
+              <textarea id="pgMsg" class="chat-input-textarea" rows="2" placeholder="输入模拟 HR 发来的消息…（按 Enter 运行推演，Shift+Enter 换行）"></textarea>
+              <div class="chat-input-actions">
+                <span id="pgStatusHint" style="font-size:12px;color:var(--mut);font-weight:500">按 Enter 发送</span>
+                <button class="chat-send-btn" id="btnSimulate" onclick="runPlaygroundSimulation()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <span>立即推演</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Right Col: 推演全景透视与审查 -->
-      <div class="col-lg-6">
-        <div class="panel-card" style="min-height:600px">
+      <!-- Right Col: 当前设定调整面板 + 推演透视与安全审查 -->
+      <div class="col-lg-5">
+        <!-- Panel 1: 当前沟通背景与岗位设定 (可查看与调整) -->
+        <div class="panel-card mb-3" style="padding:20px">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
+              <svg class="title-icon blue" style="width:16px;height:16px" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              目标岗位与背景设定
+            </h6>
+            <span style="font-size:11px;color:var(--mut);cursor:pointer" onclick="togglePlaygroundSettings()">
+              <span id="pgSettingsArrow">▼ 折叠/展开</span>
+            </span>
+          </div>
+          <div style="font-size:11px;color:var(--mut);margin-bottom:10px">
+            实时设定影响大模型对 JD 契合度与沟通语气的决策，修改后下一条推演立即生效：
+          </div>
+
+          <div id="pgSettingsBlock" class="settings-block" style="padding:14px;margin-bottom:0">
+            <div class="row g-2">
+              <div class="col-6">
+                <label style="margin:2px 0 3px">公司名称</label>
+                <input type="text" id="pgCompany" placeholder="如：米哈游" value="米哈游 · 人力资源部" oninput="syncChatHeader()">
+              </div>
+              <div class="col-6">
+                <label style="margin:2px 0 3px">岗位名称</label>
+                <input type="text" id="pgJobTitle" placeholder="如：AI产品经理实习生" value="AI产品经理实习生" oninput="syncChatHeader()">
+              </div>
+            </div>
+
+            <div class="row g-2 mt-1">
+              <div class="col-6">
+                <label style="margin:2px 0 3px">薪资范围</label>
+                <input type="text" id="pgSalary" placeholder="如：350-450元/天" value="350-450元/天">
+              </div>
+              <div class="col-6">
+                <label style="margin:2px 0 3px">工作地点</label>
+                <input type="text" id="pgCity" placeholder="如：上海" value="上海">
+              </div>
+            </div>
+
+            <div class="mt-2">
+              <label style="margin:2px 0 3px">岗位 JD 详细描述 (可直接粘贴企业JD)</label>
+              <textarea id="pgJd" style="height:70px;font-size:12px" placeholder="粘贴岗位职责与任职要求…">职责：参与米哈游大模型工具链设计与Agent工作流搭建；任职要求：统招本科2027届，具备优秀的逻辑与沟通表达能力，每周到岗5天，实习6个月以上。</textarea>
+            </div>
+
+            <div class="mt-2">
+              <label style="margin:2px 0 3px">前序对话历史 (格式：我方: ... 或 HR: ...)</label>
+              <textarea id="pgHistory" style="height:55px;font-size:12px" placeholder="我方: 您好，这是我的经历简介&#10;HR: 同学你好"></textarea>
+            </div>
+
+            <!-- Advanced Prompt Settings Collapsible -->
+            <div class="mt-2 pt-2" style="border-top:1px dashed #e2e8f0">
+              <div class="d-flex align-items-center justify-content-between" style="cursor:pointer" onclick="togglePlaygroundAdv()">
+                <span style="font-size:11px;font-weight:700;color:var(--txt)">⚙️ 高级人设与 Prompt 自定义</span>
+                <span id="pgAdvArrow" style="font-size:11px;color:var(--mut)">▼ 展开</span>
+              </div>
+              <div id="pgAdvBlock" style="display:none;margin-top:8px">
+                <label style="margin:2px 0 3px">自定义 System Prompt（留空使用默认人设约束）</label>
+                <textarea id="pgCustomSys" style="height:50px;font-size:11px" placeholder="留空使用系统默认人设与三不原则"></textarea>
+                <label style="margin:4px 0 3px">自定义 User Prompt 覆盖（留空根据画像与JD组装）</label>
+                <textarea id="pgCustomUser" style="height:60px;font-size:11px" placeholder="留空自动由系统画像与上下文动态组装"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 2: 推演全景透视与安全审查 -->
+        <div class="panel-card mb-3" style="padding:20px">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold mb-0 d-flex align-items-center">
-              <svg class="title-icon green" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              推演全景透视与安全审查
-            </h5>
+            <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
+              <svg class="title-icon green" style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              决策透视与安全门禁
+            </h6>
             <div id="pgHeaderBadges" class="d-flex gap-2">
-              <span class="soft-badge badge-pub">沙盒只读模式</span>
+              <span class="soft-badge badge-pub">沙盒拦截锁死</span>
             </div>
           </div>
 
-          <!-- Empty State -->
-          <div id="pgEmptyState" style="text-align:center;padding:80px 20px">
-            <div style="font-size:42px;margin-bottom:12px">🧪</div>
-            <h6 style="font-weight:800;color:var(--txt);margin-bottom:6px">演练场就绪</h6>
-            <p style="font-size:13px;color:var(--mut);max-width:380px;margin:0 auto;line-height:1.6">
-              请在左侧选择预设场景或输入模拟消息，点击【立即运行推演】，即可在此实时查看 LLM 生成决策、Prompt 上下文穿透与安全门禁审查结果。
-            </p>
-          </div>
-
-          <!-- Result Content Box (Hidden initially) -->
-          <div id="pgResultBox" style="display:none">
+          <div id="pgResultBox">
             <!-- Action & Decision Block -->
-            <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:18px;padding:20px;margin-bottom:18px;box-shadow:0 4px 15px rgba(0,0,0,0.02)">
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px">
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <div class="d-flex align-items-center gap-2">
                   <span style="font-size:12px;font-weight:800;color:var(--txt)">🎯 决策动作:</span>
-                  <span id="pgActionBadge" class="soft-badge badge-blue">reply</span>
+                  <span id="pgActionBadge" class="soft-badge badge-blue">待推演</span>
                 </div>
-                <div style="font-size:11px;color:var(--mut);font-weight:600" id="pgLatency">耗时: 0ms</div>
+                <div style="font-size:11px;color:var(--mut);font-weight:600" id="pgLatency">耗时: -</div>
               </div>
-              <div style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:14px">
-                <strong style="color:var(--txt)">决策理由：</strong><span id="pgReasonText">-</span>
-              </div>
-
-              <!-- Chat Bubble -->
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span style="font-size:12px;font-weight:700;color:var(--txt)">💬 生成拟人回复文案 (Cleaned Output):</span>
-                <button class="btn-action-light" style="padding:3px 10px;font-size:11px" onclick="copyCleanedReply()">📋 复制文案</button>
-              </div>
-              <div id="pgReplyBubble" class="chat-bubble-mockup">
-                暂无文案
+              <div style="font-size:12px;color:var(--mut);line-height:1.5">
+                <strong style="color:var(--txt)">决策归因：</strong><span id="pgReasonText">请在左侧发送消息进行推演</span>
               </div>
             </div>
 
             <!-- Safety Gate Checklist -->
-            <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:18px;padding:18px 20px;margin-bottom:18px">
-              <div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:12px">🛡️ 全流程安全门禁审查 (Safety Gates)</div>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px">
+              <div style="font-size:12px;font-weight:800;color:var(--txt);margin-bottom:10px">🛡️ 4 重物理安全门禁审查清单</div>
               <div class="d-flex flex-column gap-2" style="font-size:12px">
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
-                  <span>🔒 隐私防套话审查 (手机/微信正则)</span>
-                  <span id="pgGatePrivacy" class="soft-badge badge-pub">✅ 通过</span>
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                  <span>🔒 隐私防套话审查 (电话/微信号)</span>
+                  <span id="pgGatePrivacy" class="soft-badge badge-pub">✅ 安全通过</span>
                 </div>
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
                   <span>🔥 意向识别与打标</span>
                   <span id="pgGateIntent" class="soft-badge badge-blue">常规意向</span>
                 </div>
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
                   <span>⚙️ Web 隐私权限策略校验</span>
-                  <span id="pgGatePolicy" class="soft-badge badge-pub">允许自动执行</span>
+                  <span id="pgGatePolicy" class="soft-badge badge-pub">允许执行</span>
                 </div>
-                <div class="d-flex justify-content-between align-items-center p-2" style="background:#f8fafc;border-radius:10px">
+                <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
                   <span>🛡️ 线上发送状态 (安全隔离)</span>
-                  <span id="pgGateOnline" class="soft-badge badge-rej">已拦截 (安全沙箱)</span>
+                  <span id="pgGateOnline" class="soft-badge badge-rej">🛡️ 物理拦截 (零外发)</span>
                 </div>
               </div>
             </div>
 
             <!-- Deep Prompt & Raw LLM Inspector -->
-            <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:18px;padding:18px 20px">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div style="font-size:13px;font-weight:800;color:var(--txt)">🔍 完整上下文穿透与原始输出</div>
-                <div class="d-flex gap-2">
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div style="font-size:12px;font-weight:800;color:var(--txt)">🔍 完整上下文穿透查看</div>
+                <div class="d-flex gap-1">
                   <span class="prompt-tab-pill active" id="pillTabUser" onclick="switchPromptInspectorTab('user')">User Prompt</span>
                   <span class="prompt-tab-pill" id="pillTabSys" onclick="switchPromptInspectorTab('sys')">System Prompt</span>
                   <span class="prompt-tab-pill" id="pillTabRaw" onclick="switchPromptInspectorTab('raw')">LLM 原生 JSON</span>
@@ -1514,7 +1639,7 @@ PAGE = """<!DOCTYPE html>
               <div class="d-flex justify-content-end mb-2">
                 <button class="btn-action-light" style="padding:2px 8px;font-size:11px" onclick="copyCurrentPromptInspector()">📋 复制当前代码</button>
               </div>
-              <pre id="pgPromptCode" class="prompt-view-code"></pre>
+              <pre id="pgPromptCode" class="prompt-view-code" style="max-height:260px">// 推演后在此穿透查看完整 Prompt 与大模型原生输出</pre>
             </div>
           </div>
         </div>
@@ -2136,8 +2261,18 @@ async function saveAutoApply() {
 // Playground Simulation State & Logic
 let currentPgData = null;
 let currentInspectorTab = 'user';
+let pgChatMessages = [];
 
 const PG_PRESETS = {
+  birthday_wechat: {
+    msg: "目前岗位还开放，你方便告诉我一下你的生日吗，我们会给每个新入职的人准备生日蛋糕，然后你顺便可以发一下微信给我",
+    company: "米哈游 · 人力资源部",
+    job: "AI产品经理实习生",
+    salary: "350-450元/天",
+    city: "上海",
+    jd: "职责：参与米哈游大模型工具链设计与Agent工作流搭建；任职要求：统招本科2027届，具备优秀的逻辑与沟通表达能力，每周到岗5天，实习6个月以上。",
+    history: "我方: 您好！非常关注米哈游在AI与内容生产方向的探索，这是我的基本情况，希望有机会交流！\\nHR: 目前岗位还开放，你方便告诉我一下你的生日吗，我们会给每个新入职的人准备生日蛋糕，然后你顺便可以发一下微信给我"
+  },
   ask_resume: {
     msg: "你好！看你的项目经历很契合，方便发一份完整的附件简历给我看看吗？",
     company: "美团 · 核心本地商业",
@@ -2194,17 +2329,137 @@ const PG_PRESETS = {
   }
 };
 
+function syncChatHeader() {
+  const comp = (document.getElementById('pgCompany') ? document.getElementById('pgCompany').value.trim() : '') || '模拟HR';
+  const job = (document.getElementById('pgJobTitle') ? document.getElementById('pgJobTitle').value.trim() : '') || '实习生';
+  const compEl = document.getElementById('chatTargetCompany');
+  const jobEl = document.getElementById('chatTargetJob');
+  const avEl = document.getElementById('chatTargetAvatar');
+  if (compEl) compEl.textContent = comp;
+  if (jobEl) jobEl.textContent = job;
+  if (avEl) avEl.textContent = (comp.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '') || 'H').slice(0, 1);
+}
+
+function togglePlaygroundSettings() {
+  const b = document.getElementById('pgSettingsBlock');
+  const arrow = document.getElementById('pgSettingsArrow');
+  if (!b) return;
+  const isShow = b.style.display !== 'none';
+  b.style.display = isShow ? 'none' : 'block';
+  if (arrow) arrow.textContent = isShow ? '▼ 展开设定' : '▲ 折叠设定';
+}
+
+function clearPlaygroundChat() {
+  pgChatMessages = [];
+  const flow = document.getElementById('pgChatFlow');
+  if (flow) {
+    flow.innerHTML = `
+      <div class="chat-welcome-box" id="pgChatWelcome">
+        <div style="font-size:38px;margin-bottom:12px">✨</div>
+        <div class="chat-welcome-title">AI 求职对话推演沙盒</div>
+        <div class="chat-welcome-desc">
+          在此模拟 HR 与候选人的真实对话。大模型将根据您设定的候选人画像、目标岗位 JD 与防套话铁律，实时推演并生成真人口语化回复。
+        </div>
+        <div style="font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">
+          👇 点击下方场景胶囊，一键载入并推演：
+        </div>
+      </div>
+    `;
+  }
+  showToast('会话已清空', 'info');
+}
+
+function appendChatMessage(role, text, meta) {
+  const welcome = document.getElementById('pgChatWelcome');
+  if (welcome) welcome.style.display = 'none';
+
+  const flow = document.getElementById('pgChatFlow');
+  if (!flow) return;
+
+  const row = document.createElement('div');
+  row.className = 'chat-msg-row ' + role;
+
+  const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+  if (role === 'hr') {
+    const compName = (document.getElementById('pgCompany') ? document.getElementById('pgCompany').value : 'HR');
+    const avatarChar = (compName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '') || 'H').slice(0, 1);
+    row.innerHTML = `
+      <div class="chat-avatar hr">${esc(avatarChar)}</div>
+      <div>
+        <div class="chat-bubble">${esc(text)}</div>
+        <div class="chat-bubble-meta">
+          <span>${esc(timeStr)}</span>
+        </div>
+      </div>
+    `;
+  } else {
+    const actBadge = meta && meta.action ? `<span class="chat-bubble-action-badge">${esc(meta.action)}</span>` : '';
+    const latency = meta && meta.latency_ms ? `<span>· 耗时 ${meta.latency_ms}ms</span>` : '';
+    row.innerHTML = `
+      <div class="chat-avatar agent">AI</div>
+      <div>
+        <div class="chat-bubble">
+          ${esc(text)}
+        </div>
+        <div class="chat-bubble-meta">
+          ${actBadge}
+          ${latency}
+          <span>· ${esc(timeStr)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  flow.appendChild(row);
+  flow.scrollTop = flow.scrollHeight;
+}
+
+function showChatThinking() {
+  const flow = document.getElementById('pgChatFlow');
+  if (!flow) return null;
+  const welcome = document.getElementById('pgChatWelcome');
+  if (welcome) welcome.style.display = 'none';
+
+  const row = document.createElement('div');
+  row.className = 'chat-msg-row agent';
+  row.id = 'chatThinkingRow';
+  row.innerHTML = `
+    <div class="chat-avatar agent">AI</div>
+    <div>
+      <div class="chat-thinking-bubble">
+        <span>Agent 深度思考推演中</span>
+        <div class="d-flex align-items-center gap-1 ms-1">
+          <div class="thinking-dot"></div>
+          <div class="thinking-dot"></div>
+          <div class="thinking-dot"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  flow.appendChild(row);
+  flow.scrollTop = flow.scrollHeight;
+  return row;
+}
+
+function removeChatThinking() {
+  const row = document.getElementById('chatThinkingRow');
+  if (row) row.remove();
+}
+
 function loadPlaygroundPreset(key) {
   const p = PG_PRESETS[key];
   if (!p) return;
-  document.getElementById('pgMsg').value = p.msg;
   document.getElementById('pgCompany').value = p.company;
   document.getElementById('pgJobTitle').value = p.job;
   document.getElementById('pgSalary').value = p.salary;
   document.getElementById('pgCity').value = p.city;
   document.getElementById('pgJd').value = p.jd;
   document.getElementById('pgHistory').value = p.history;
-  showToast(`已加载场景：${p.company} · ${p.job}`, 'info');
+  syncChatHeader();
+  document.getElementById('pgMsg').value = p.msg;
+  showToast(`已载入场景：${p.company} · ${p.job}`, 'info');
+  runPlaygroundSimulation();
 }
 
 function togglePlaygroundAdv() {
@@ -2216,45 +2471,42 @@ function togglePlaygroundAdv() {
   if (arrow) arrow.textContent = isShow ? '▼ 展开' : '▲ 收起';
 }
 
-function resetPlayground() {
-  document.getElementById('pgMsg').value = '';
-  document.getElementById('pgCompany').value = '';
-  document.getElementById('pgJobTitle').value = '';
-  document.getElementById('pgSalary').value = '';
-  document.getElementById('pgCity').value = '';
-  document.getElementById('pgJd').value = '';
-  document.getElementById('pgHistory').value = '';
-  document.getElementById('pgCustomSys').value = '';
-  document.getElementById('pgCustomUser').value = '';
-  document.getElementById('pgEmptyState').style.display = 'block';
-  document.getElementById('pgResultBox').style.display = 'none';
-  currentPgData = null;
-  showToast('输入已重置', 'info');
-}
-
 async function runPlaygroundSimulation() {
-  const msg = document.getElementById('pgMsg').value.trim();
+  const msgInput = document.getElementById('pgMsg');
+  const msg = (msgInput ? msgInput.value : '').trim();
   if (!msg) {
-    showToast('请输入 HR 最新发送的消息', 'error');
-    document.getElementById('pgMsg').focus();
+    showToast('请输入 HR 发送的消息', 'error');
+    if (msgInput) msgInput.focus();
     return;
   }
+  
+  // 清空输入框
+  if (msgInput) msgInput.value = '';
+  
+  // 左侧渲染 HR 消息
+  appendChatMessage('hr', msg);
+  
+  // 展现思考等待动效
+  showChatThinking();
+
   const btn = document.getElementById('btnSimulate');
   const statusEl = document.getElementById('pgStatusHint');
-  if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> 正在推演 (LLM生成中)…';
+  if (btn) btn.disabled = true;
   if (statusEl) { statusEl.style.color = 'var(--acc)'; statusEl.textContent = '大模型思考中…'; }
 
-  const histLines = document.getElementById('pgHistory').value.split(/\\r?\\n/).map(s => s.trim()).filter(Boolean);
+  const histLines = (document.getElementById('pgHistory') ? document.getElementById('pgHistory').value : '')
+    .split(/\\r?\\n/).map(s => s.trim()).filter(Boolean);
+
   const payload = {
     message: msg,
-    company: document.getElementById('pgCompany').value.trim(),
-    job_title: document.getElementById('pgJobTitle').value.trim(),
-    salary: document.getElementById('pgSalary').value.trim(),
-    city: document.getElementById('pgCity').value.trim(),
-    jd: document.getElementById('pgJd').value.trim(),
+    company: document.getElementById('pgCompany') ? document.getElementById('pgCompany').value.trim() : '',
+    job_title: document.getElementById('pgJobTitle') ? document.getElementById('pgJobTitle').value.trim() : '',
+    salary: document.getElementById('pgSalary') ? document.getElementById('pgSalary').value.trim() : '',
+    city: document.getElementById('pgCity') ? document.getElementById('pgCity').value.trim() : '',
+    jd: document.getElementById('pgJd') ? document.getElementById('pgJd').value.trim() : '',
     history: histLines,
-    custom_system_prompt: document.getElementById('pgCustomSys').value.trim(),
-    custom_user_prompt: document.getElementById('pgCustomUser').value.trim()
+    custom_system_prompt: document.getElementById('pgCustomSys') ? document.getElementById('pgCustomSys').value.trim() : '',
+    custom_user_prompt: document.getElementById('pgCustomUser') ? document.getElementById('pgCustomUser').value.trim() : ''
   };
 
   try {
@@ -2264,31 +2516,40 @@ async function runPlaygroundSimulation() {
       body: JSON.stringify(payload)
     });
     currentPgData = d;
+    window.currentPgData = d;
+    
+    // 移除等待动效
+    removeChatThinking();
+    
+    // 左侧渲染 Agent 回复
+    const dec = d.parsed_decision || {};
+    const act = dec.action || 'reply';
+    const replyText = d.cleaned_reply || dec.reply_text || dec.suggested_reply || `(执行动作：${act})`;
+    appendChatMessage('agent', replyText, { action: act, latency_ms: d.latency_ms });
+
+    // 右侧更新透视与门禁数据
     renderPlaygroundResult(d);
     showToast(`推演完成！耗时 ${d.latency_ms}ms`, 'success');
     if (statusEl) { statusEl.style.color = 'var(--ok)'; statusEl.textContent = `推演完成 (${d.latency_ms}ms)`; }
   } catch(e) {
+    removeChatThinking();
     showToast('推演异常: ' + e, 'error');
     if (statusEl) { statusEl.style.color = 'var(--dan)'; statusEl.textContent = '推演异常: ' + e; }
   } finally {
-    if (btn) btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> 🧪 立即运行推演 (Run Simulation)';
+    if (btn) btn.disabled = false;
   }
 }
 
 function renderPlaygroundResult(d) {
-  document.getElementById('pgEmptyState').style.display = 'none';
-  const resBox = document.getElementById('pgResultBox');
-  resBox.style.display = 'block';
-
   // 1. Header Badges
   const badgesContainer = document.getElementById('pgHeaderBadges');
   if (badgesContainer) {
     let modeBadge = d.safety_audit && !d.safety_audit.online_reply_enabled
-      ? '<span class="soft-badge badge-rej">🛡️ 线上拦截已锁死 (零物理外发)</span>'
+      ? '<span class="soft-badge badge-rej">🛡️ 线上拦截锁死</span>'
       : '<span class="soft-badge badge-ai">线上回复开启</span>';
     let llmBadge = d.llm_called
-      ? '<span class="soft-badge badge-pub">🤖 LLM 直通调用</span>'
-      : '<span class="soft-badge badge-blue">⚡ 启发式离线模拟</span>';
+      ? '<span class="soft-badge badge-pub">🤖 LLM 直通</span>'
+      : '<span class="soft-badge badge-blue">⚡ 启发式离线</span>';
     badgesContainer.innerHTML = modeBadge + ' ' + llmBadge;
   }
 
@@ -2304,19 +2565,10 @@ function renderPlaygroundResult(d) {
     else if (act === 'skip') badgeEl.className = 'soft-badge badge-blue';
     else if (act === 'needs_human') badgeEl.className = 'soft-badge badge-rej';
   }
-  document.getElementById('pgLatency').textContent = `耗时: ${d.latency_ms || 0}ms` + (d.llm_error ? ` · 提示: ${d.llm_error}` : '');
-  document.getElementById('pgReasonText').textContent = dec.reason || '-';
-
-  // Chat Bubble
-  const bubble = document.getElementById('pgReplyBubble');
-  const replyText = d.cleaned_reply || dec.reply_text || dec.suggested_reply || '';
-  if (!replyText) {
-    bubble.className = 'chat-bubble-mockup warn';
-    bubble.innerHTML = `<em>（当前动作为【${esc(act)}】，无对外伴随纯文本消息发送）</em>`;
-  } else {
-    bubble.className = 'chat-bubble-mockup';
-    bubble.textContent = replyText;
-  }
+  const latEl = document.getElementById('pgLatency');
+  if (latEl) latEl.textContent = `耗时: ${d.latency_ms || 0}ms` + (d.llm_error ? ` · 提示: ${d.llm_error}` : '');
+  const rzEl = document.getElementById('pgReasonText');
+  if (rzEl) rzEl.textContent = dec.reason || '-';
 
   // Safety Gates
   const audit = d.safety_audit || {};
@@ -2324,7 +2576,7 @@ function renderPlaygroundResult(d) {
   if (privEl) {
     if (audit.privacy_blocked) {
       privEl.className = 'soft-badge badge-rej';
-      privEl.textContent = '🚨 拦截！疑似泄露明文电话/微信';
+      privEl.textContent = '🚨 拦截！疑似泄露联系方式';
     } else {
       privEl.className = 'soft-badge badge-pub';
       privEl.textContent = '✅ 安全通过 (无明文泄露)';
@@ -2396,6 +2648,29 @@ function switchPromptInspectorTab(tab) {
     pre.textContent = currentPgData.reasoning_content || '(模型无 reasoning_content 思考过程)';
   }
 }
+
+function copyCurrentPromptInspector() {
+  const pre = document.getElementById('pgPromptCode');
+  if (!pre || !pre.textContent) return;
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    showToast('Prompt 内容已复制！', 'success');
+  }).catch(() => {
+    showToast('复制失败，请手动选取', 'error');
+  });
+}
+
+// 绑定输入框键盘回车事件
+document.addEventListener('DOMContentLoaded', () => {
+  const msgInput = document.getElementById('pgMsg');
+  if (msgInput) {
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        runPlaygroundSimulation();
+      }
+    });
+  }
+});
 
 function copyCleanedReply() {
   if (!currentPgData) return;
