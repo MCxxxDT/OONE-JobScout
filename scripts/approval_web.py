@@ -1807,6 +1807,7 @@ async function load(isManual) {
     fullLedger = d.ledger || [];
 
     renderPending();
+    renderResolved();
     renderLedger();
     loadSettings();
     if (isManual) showToast('工作台数据已更新！', 'success');
@@ -1929,7 +1930,9 @@ function renderPending() {
       </div>
     </div>
   `).join('');
+}
 
+function renderResolved() {
   // 渲染近期已处理会话（点评打分 1-10 与真人优化示范自学习闭环）
   const rb = document.getElementById('resolvedList');
   if (rb) {
