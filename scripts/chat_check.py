@@ -7,6 +7,7 @@ import json
 import os
 import sys
 
+sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from boss_apply import config as cfgmod, flows
