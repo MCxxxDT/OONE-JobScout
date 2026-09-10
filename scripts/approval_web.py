@@ -1525,6 +1525,14 @@ PAGE = """<!DOCTYPE html>
 
 <script>
 let TOKEN = new URLSearchParams(location.search).get('token') || '';
+if (!TOKEN) {
+  const match = document.cookie.match(/(?:^|;\\s*)boss_apply_token=([^;]*)/);
+  TOKEN = match ? decodeURIComponent(match[1]) : (localStorage.getItem('boss_apply_token') || '');
+}
+if (TOKEN) {
+  localStorage.setItem('boss_apply_token', TOKEN);
+  document.cookie = 'boss_apply_token=' + encodeURIComponent(TOKEN) + ';path=/;max-age=2592000';
+}
 let currentTab = 'pending';
 let fullLedger = [];
 let pendingData = [];
@@ -2450,12 +2458,60 @@ def _is_alert_resolved(alert_ts, company, rows):
     return False, None, None, None
 
 
+AUTH_PAGE = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOSS求职守护 · 工作台认证</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; margin: 0; }
+  .auth-card { background: #fff; border-radius: 24px; box-shadow: 0 12px 36px rgba(0,0,0,0.06); padding: 36px; max-width: 440px; width: 100%; text-align: center; border: 1px solid rgba(0,0,0,0.05); }
+  .logo-icon { width: 56px; height: 56px; background: #0ea5e9; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; color: #fff; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(14,165,233,0.3); }
+  .btn-quick { display: block; width: 100%; padding: 13px; background: #0f172a; color: #fff; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 14px; margin-top: 20px; transition: all 0.2s; box-shadow: 0 4px 14px rgba(15,23,42,0.2); }
+  .btn-quick:hover { background: #1e293b; color: #fff; transform: translateY(-1px); }
+</style>
+<script>
+  const saved = localStorage.getItem('boss_apply_token');
+  if (saved && saved !== 'wrong') {
+    location.replace('/?token=' + encodeURIComponent(saved));
+  }
+</script>
+</head>
+<body>
+<div class="auth-card">
+  <div class="logo-icon">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  </div>
+  <h4 style="font-weight:800;color:#0f172a;margin-bottom:8px">工作台访问认证</h4>
+  <p style="font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px">
+    您当前未携带 Token 或 Token 无效。<br>如在个人电脑本机访问，可直接点击下方一键进入：
+  </p>
+  <a class="btn-quick" href="/?token=boss-apply">⚡ 一键使用默认 Token (boss-apply) 进入</a>
+  <div style="margin:22px 0 16px;font-size:12px;color:#94a3b8;position:relative">
+    <hr style="margin:0 0 12px;opacity:0.1">或输入自定义 Token
+  </div>
+  <form onsubmit="event.preventDefault(); const v=document.getElementById('tok').value.trim(); if(v) location.href='/?token='+encodeURIComponent(v);">
+    <input type="text" id="tok" class="form-control" placeholder="输入 Token (如 boss-apply)" style="border-radius:12px;font-size:13px;padding:11px 14px;margin-bottom:12px;text-align:center">
+    <button type="submit" class="btn btn-outline-secondary w-100" style="border-radius:12px;font-size:13px;font-weight:600;padding:10px">确认进入</button>
+  </form>
+</div>
+</body>
+</html>
+"""
+
+
 @app.get("/", response_class=HTMLResponse)
-def index(token: str = ""):
+def index(request: Request, token: str = ""):
     cfg = cfgmod.load()
+    if not token:
+        token = request.cookies.get("boss_apply_token", "")
     if not _check_token(cfg, token):
-        return HTMLResponse("<h1>401</h1><p>token 无效。访问: /?token=你的token（config web.token，缺省 boss-apply）</p>", status_code=401)
-    return PAGE
+        return HTMLResponse(AUTH_PAGE, status_code=401)
+    resp = HTMLResponse(PAGE)
+    resp.set_cookie("boss_apply_token", token, max_age=30 * 86400, httponly=False)
+    return resp
 
 
 @app.get("/api/overview")
@@ -2554,11 +2610,12 @@ def main():
     import uvicorn
     cfg = cfgmod.load()
     token = _web_cfg(cfg).get("token") or os.getenv("APPROVAL_TOKEN") or "boss-apply"
-    print("=" * 58)
-    print("  BOSS直聘求职守护 · 审批台")
-    print("  访问: http://%s:%d/?token=%s" % (args.host, args.port, token))
-    print("  手机(同WiFi/Tailscale): 先查本机IP, 用 http://<本机IP>:%d/?token=%s" % (args.port, token))
-    print("=" * 58)
+    host_display = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
+    print("=" * 62)
+    print("  BOSS直聘求职守护 · 运营中枢 (Web工作台)")
+    print("  本机访问: http://%s:%d/?token=%s" % (host_display, args.port, token))
+    print("  手机/局域网: http://<本机IP>:%d/?token=%s" % (args.port, token))
+    print("=" * 62)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
