@@ -168,8 +168,8 @@ def _probe_js():
 """
 
 
-def _pick_conversation_js(company):
-    """消息中心会话定位：优先按公司名/HR名多粒度匹配；company 为空才取最新一条。
+def _pick_conversation_js(company, extra_kw=""):
+    """消息中心会话定位：优先按公司名/HR名/职位名多粒度匹配；company 为空才取最新一条。
     支持去除标点符号与空白符（\\s/\\xa0）以及小写化双向子串/分词命中。
     优先识别当前右侧是否已激活目标会话，免去重复点击造成的 SPA 状态震荡。
     针对 BOSS 2026 Vue 3 组件，在 .friend-content / .friend-content-warp 上同时派发完整的
@@ -177,45 +177,55 @@ def _pick_conversation_js(company):
     return """
 (() => {
   const company = %s;
+  const extraKw = %s;
   const clean = (s) => (s || '').toLowerCase().replace(/[\\s\\xa0\\u3000\\-_·•,，.()（）\\[\\]【】]/g, '');
   const qClean = clean(company);
+  const extraClean = clean(extraKw);
 
   // 1. 检查右侧聊天视窗是否已激活该会话
-  const curHeader = document.querySelector('.chat-conversation .base-info, .chat-title, .user-name, .base-info');
-  if (curHeader && qClean) {
+  const curHeader = document.querySelector('.chat-conversation .top-info-content, .top-info-content, .chat-conversation .base-info, .chat-title, .user-name, .base-info');
+  if (curHeader) {
     const curClean = clean(curHeader.innerText);
-    if (curClean.includes(qClean) || (qClean.length >= 4 && curClean.includes(qClean.slice(0, 4)))) {
+    let matchedActive = false;
+    if (qClean && (curClean.includes(qClean) || (qClean.length >= 4 && curClean.includes(qClean.slice(0, 4))))) {
+      matchedActive = true;
+    } else if (extraClean && (curClean.includes(extraClean) || (extraClean.length >= 4 && curClean.includes(extraClean.slice(0, 4))))) {
+      matchedActive = true;
+    }
+    if (matchedActive) {
       return JSON.stringify({r: 'already_active', head: curHeader.innerText.replace(/\\n/g, ' ')});
     }
   }
 
-  // 2. 遍历左侧会话列表
-  const lis = Array.from(document.querySelectorAll('.chat-user li, ul.user-list li, li'));
-  const validLis = lis.filter(li => {
+  // 2. 遍历左侧会话列表（优先匹配 2026 Vue 3 的 .friend-content-warp，排除顶部导航 li）
+  const items = Array.from(document.querySelectorAll('.user-list .friend-content-warp, .friend-content-warp, .user-list .friend-content, .chat-user li, ul.user-list li'));
+  const validLis = items.filter(li => {
     const t = li.innerText || '';
     return t.length > 8 && !['全部', '未读', '新招呼', '仅沟通', '更多', '有交换', '有面试', '不感兴趣'].includes(t.trim());
   });
 
   let target = null, picked = 'none', bestScore = 0;
-  if (qClean) {
-    const tokens = (company || '').toLowerCase().match(/[\\u4e00-\\u9fa5]{2,}|[a-z0-9]{3,}/g) || [];
+  if (qClean || extraClean) {
+    const combinedTokens = ((company || '') + ' ' + (extraKw || '')).toLowerCase().match(/[\\u4e00-\\u9fa5]{2,}|[a-z0-9]{3,}/g) || [];
     for (const li of validLis) {
       const textClean = clean(li.innerText);
       if (textClean.length < 5) continue;
       let score = 0, type = 'none';
-      if (textClean.indexOf(qClean) >= 0) {
+      if (qClean && textClean.indexOf(qClean) >= 0) {
         score = 100; type = 'company_exact';
-      } else if (qClean.indexOf(textClean) >= 0) {
+      } else if (qClean && qClean.indexOf(textClean) >= 0) {
         score = 90; type = 'company_reverse';
-      } else if (tokens.length > 0) {
+      } else if (extraClean && textClean.indexOf(extraClean) >= 0) {
+        score = 85; type = 'extra_exact';
+      } else if (combinedTokens.length > 0) {
         let hits = 0;
-        for (const tk of tokens) {
+        for (const tk of combinedTokens) {
           const tkClean = clean(tk);
           if (tkClean.length >= 2 && textClean.indexOf(tkClean) >= 0) hits++;
         }
         if (hits > 0) {
-          score = Math.round((hits / tokens.length) * 85);
-          type = 'company_token_' + hits;
+          score = Math.round((hits / combinedTokens.length) * 85);
+          type = 'token_' + hits;
         }
       }
       if (score > bestScore) {
@@ -224,7 +234,7 @@ def _pick_conversation_js(company):
         picked = type;
       }
     }
-    if (!target || bestScore < 30) {
+    if (!target || bestScore < 25) {
       return JSON.stringify({r: 'notfound', picked: 'company_missing', company: company, bestScore: bestScore});
     }
   } else {
@@ -245,7 +255,8 @@ def _pick_conversation_js(company):
   return JSON.stringify({r: 'found', picked: picked, head: head, score: bestScore,
     x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2)});
 })()
-""" % json.dumps(company or "", ensure_ascii=False)
+""" % (json.dumps(company or "", ensure_ascii=False), json.dumps(extra_kw or "", ensure_ascii=False))
+
 
 
 def _trusted_click(sess, x, y):
@@ -316,7 +327,7 @@ _SURE_JS = """
 """
 
 
-def _open_conversation_input(sess, company, poll_s=12):
+def _open_conversation_input(sess, company, poll_s=12, extra_kw=""):
     """消息中心点开会话并等输入框就绪。返回 (info, conv_head)；失败返回 (None, head或None)。"""
     cur_href = _ev(sess, "location.href") or ""
     if CHAT_URL not in str(cur_href):
@@ -326,7 +337,7 @@ def _open_conversation_input(sess, company, poll_s=12):
     company_clean = (company or "").strip()
     clicked = None
     for i in range(8):
-        clicked = _ev(sess, _pick_conversation_js(company_clean))
+        clicked = _ev(sess, _pick_conversation_js(company_clean, extra_kw=extra_kw))
         if isinstance(clicked, dict):
             if clicked.get("r") == "already_active":
                 info = _ev(sess, _probe_js())
@@ -673,26 +684,34 @@ def send_greeting_raw(sess, job, cfg):
     """裸CDP版打招呼（调用前调用方需已导航到职位详情页且 wait_ready 通过）。
     注意：点击"立即沟通"即可能建立沟通关系，视为消耗一次机会。
     流程：点按钮(建连+BOSS默认招呼) → 页内面板兜底探测3秒 → 消息中心点开会话
-    （按公司名，缺省取最新）→ 跟发自定义文案。任一步失败抛异常供上层记台账。"""
-    # 1) 找到并点击 立即沟通/继续沟通
+    （按公司名/职位名，缺省取最新）→ 跟发自定义文案。任一步失败抛异常供上层记台账。"""
+    # 1) 找到并点击 立即沟通/继续沟通，并抓取可能携带的跳转链接
     r1 = _ev(sess, """
 (() => {
   const btns = [];
   const primary = document.querySelector('.btn-startchat');
-  if (primary) btns.push(primary);
+  let redir = '';
+  if (primary) {
+    btns.push(primary);
+    redir = primary.getAttribute('redirect-url') || primary.getAttribute('href') || '';
+  }
   document.querySelectorAll('a,button,span').forEach(e => {
     const t = (e.innerText || '').trim();
-    if (t === '立即沟通' || t === '继续沟通') btns.push(e);
+    if (t === '立即沟通' || t === '继续沟通') {
+      if (!btns.includes(e)) btns.push(e);
+      if (!redir) redir = e.getAttribute('redirect-url') || e.getAttribute('href') || '';
+    }
   });
   if (!btns.length) return JSON.stringify({r: 'notfound'});
   const el = btns[0];
   const cls = String(el.className || el.tagName).slice(0, 50);
   el.click();
-  return JSON.stringify({r: 'clicked', cls: cls});
+  return JSON.stringify({r: 'clicked', cls: cls, redir: redir});
 })()
 """)
     if not (isinstance(r1, dict) and r1.get("r") == "clicked"):
         raise RuntimeError("start-chat button not found: %r" % (r1,))
+    redir = (r1.get("redir") or "").strip()
 
     # 2) 页内面板兜底探测3秒（若BOSS A/B仍返回页内面板则直接用）
     confirmed = False
@@ -710,14 +729,26 @@ def send_greeting_raw(sess, job, cfg):
     if not inpage:
         # 3) 主路径：消息中心
         company = (job.get("company") or "").strip()
-        info, conv_head = _open_conversation_input(sess, company)
+        title = (job.get("title") or "").strip()
+        if redir and CHAT_URL in redir:
+            cur_href = _ev(sess, "location.href") or ""
+            if redir not in str(cur_href):
+                target_url = rawcdp.BASE + redir if redir.startswith("/") else redir
+                sess.nav(target_url)
+                sess.wait_ready(want_cards=False, timeout_s=10)
+        info, conv_head = _open_conversation_input(sess, company, extra_kw=title)
         if not info:
-            dump = sess.eval("""(() => JSON.stringify({href: location.href.slice(0, 90),
+            # 二次兜底：若当前会话输入框已就绪，直接复用
+            info = _ev(sess, _probe_js())
+            if isinstance(info, dict) and info.get("inputTag"):
+                conv_head = conv_head or company
+            else:
+                dump = sess.eval("""(() => JSON.stringify({href: location.href.slice(0, 90),
   bodyTail: (document.body ? document.body.innerText : '').slice(-300).replace(/\\n/g, '|'),
   hasSure: !!document.querySelector('.btn-sure-v2'),
   hasChatInput: !!document.querySelector('.chat-input'),
   ces: document.querySelectorAll('[contenteditable="true"]').length}))()""")
-            raise RuntimeError("chat input not found after click; company=%r probe=%r dump=%s" % (company, info, dump))
+                raise RuntimeError("chat input not found after click; company=%r probe=%r dump=%s" % (company, info, dump))
 
     # 4) 填入招呼语并发送（以输入框清零为成功标准）
     text = greeting_text(cfg, job)
