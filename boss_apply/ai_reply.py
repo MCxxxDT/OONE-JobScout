@@ -657,25 +657,25 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
             prompt = (
                 f"【候选人背景】：{prof.get('school', '')} {prof.get('major', '')}，{prof.get('grade_desc', '应届生')}。\n"
                 f"核心亮点：{prof.get('tech_highlights', '')}；{prof.get('business_highlights', '')}。\n"
-                f"常驻{cur_city}，强烈意向奔赴{target_city}全职到岗。\n\n"
+                f"常驻{cur_city}，强烈意向奔赴{target_city}全职到岗实习。\n\n"
                 f"【应聘岗位信息】：\n"
                 f"- 公司：{company}\n"
                 f"- 岗位：{title}\n"
                 f"- 城市：{city}\n"
-                f"- JD摘要：{jd_text[:300]}\n\n"
-                f"【任务】：请以该求职者本人口吻，写一句向招聘方打招呼的第一句开场白（看岗位下菜碟）。\n"
+                f"- 职位详细描述与要求（JD全文）：\n{jd_text[:1500] if jd_text else '(未抓取到详细JD，请紧密围绕岗位名称核心职责展开)'}\n\n"
+                f"【任务】：请你作为张烨韬本人，深入研读上述岗位的具体工作职责与任职要求（JD），写一句向招聘方打招呼的第一声开场白（看岗位下菜碟，拒绝千篇一律）。\n"
                 f"要求：\n"
-                f"1. 针对该岗位的核心诉求（提取核心技术或业务关键词），精准点出候选人最相关的1-2项实际经验亮点；\n"
-                f"2. 态度诚恳、从容自信、不卑不亢，符合 20+ 岁年轻职场人沟通感；\n"
-                f"3. 严禁出现“从...来看”、“祝好”、“非常荣幸”等客服八股废话；严禁Markdown标记（如**）；\n"
-                f"4. 严格控制在 35-65 字之间，单段纯文本，句子完整收尾；\n"
-                f"直接输出开场白正文，不要有任何解释或前后缀。"
+                f"1. 务必深度结合该岗位具体的职位要求/工作职责（JD），提炼其最关键的1-2个业务场景或技术要点，并精准对齐候选人最匹配的实操经历（如FastMCP与智能体生产流全栈落地、高校社交系统全栈交付、或操盘200人团队破10万GMV商业闭环）；\n"
+                f"2. 口吻真诚干练、从容自信、不卑不亢，展示能够即插即用的实干战斗力，绝无学生气或机器人客服感；\n"
+                f"3. 严禁出现“从...来看”、“祝好”、“非常荣幸”、“期待沟通”等客服八股废话；严禁Markdown标记（如**）；\n"
+                f"4. 严格控制在 40-75 字之间，单段纯文本，标点完整，句子自然收尾；\n"
+                f"直接输出开场白正文，不要有任何解释说明、前后缀或引号。"
             )
 
             payload = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "你是一位真实人类求职者，正在BOSS直聘手机端向HR主动发送第一条打招呼消息。言简意赅，看岗位下菜碟，真人口语化。"},
+                    {"role": "system", "content": "你是一位真实人类求职者，正在BOSS直聘手机端向HR主动发送第一条打招呼消息。深入研读具体岗位JD，看岗位下菜碟，真人口语化。"},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": round(random.uniform(0.7, 0.85), 2),
@@ -687,7 +687,7 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
                 if resp.status == 200:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     text = (resp_data["choices"][0]["message"].get("content") or "").strip()
-                    cleaned = sanitize_and_clean_reply(text, max_chars=80)
+                    cleaned = sanitize_and_clean_reply(text, max_chars=90)
                     is_leak, _ = detect_privacy_leak(cleaned, cfg, prof)
                     if cleaned and not is_leak and len(cleaned) >= 20:
                         return cleaned

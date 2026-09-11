@@ -683,8 +683,25 @@ def agree_wechat_via_chat(sess, company, poll_s=12):
 def send_greeting_raw(sess, job, cfg):
     """裸CDP版打招呼（调用前调用方需已导航到职位详情页且 wait_ready 通过）。
     注意：点击"立即沟通"即可能建立沟通关系，视为消耗一次机会。
-    流程：点按钮(建连+BOSS默认招呼) → 页内面板兜底探测3秒 → 消息中心点开会话
-    （按公司名/职位名，缺省取最新）→ 跟发自定义文案。任一步失败抛异常供上层记台账。"""
+    流程：
+    0) 抓取详情页完整 JD，结合候选人画像由 LLM 深度定制开场白；
+    1) 点"立即沟通"建联（平台默认打招呼语送达，同时提取跳转 redirect-url）；
+    2) 页内面板或跳转消息中心，直达输入框；
+    3) 在聊天输入框中填入 LLM 深度定制开场白并以清零验证送达。"""
+    # 0) 页面抓取：从当前已打开的职位详情页提取完整的 JD 全文与职位标签（供 LLM 深度精读）
+    if not job.get("jd_text"):
+        page_jd = _ev(sess, """
+        (() => {
+          const el = document.querySelector('.job-sec-text, .job-detail, .job-detail-section, .detail-content');
+          return el ? el.innerText.trim() : (document.body ? document.body.innerText.slice(0, 3000) : '');
+        })()
+        """)
+        if page_jd and len(str(page_jd)) > 20:
+            job["jd_text"] = str(page_jd)
+
+    # 预先根据岗位与完整 JD 生成定制化开场白（看岗位下菜碟）
+    text = greeting_text(cfg, job)
+
     # 1) 找到并点击 立即沟通/继续沟通，并抓取可能携带的跳转链接
     r1 = _ev(sess, """
 (() => {
@@ -750,8 +767,7 @@ def send_greeting_raw(sess, job, cfg):
   ces: document.querySelectorAll('[contenteditable="true"]').length}))()""")
                 raise RuntimeError("chat input not found after click; company=%r probe=%r dump=%s" % (company, info, dump))
 
-    # 4) 填入招呼语并发送（以输入框清零为成功标准）
-    text = greeting_text(cfg, job)
+    # 4) 填入定制开场白并发送（以输入框清零为成功标准）
     r3 = _ev(sess, _fill_js(text))
     if not (isinstance(r3, dict) and r3.get("r") == "filled"):
         raise RuntimeError("fill greeting failed: %r" % (r3,))
@@ -759,8 +775,8 @@ def send_greeting_raw(sess, job, cfg):
     if not ok:
         raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
 
-    return {"clicked": r1.get("cls"), "chat_href": info.get("href"), "conv": conv_head,
-            "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
+    return {"clicked": r1.get("cls"), "chat_href": info.get("href") if info else None, "conv": conv_head,
+            "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post, "greeting": text}
 
 
 ACTIVE_JOB_JS = """

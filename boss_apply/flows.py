@@ -643,13 +643,16 @@ def execute_jobs(cfg, g, jobs, max_count=10):
                     time.sleep(2)
                 if not st:
                     raise RuntimeError("detail page not ready: %s" % full[:80])
-                greeter.send_greeting_raw(sess, job, cfg)
+                greet_res = greeter.send_greeting_raw(sess, job, cfg)
                 g.record_greet(city)
+                greeting_text_sent = (greet_res or {}).get("greeting") or ""
                 ledger.append({"action": "greet", "status": "ok", "city": city,
                                "title": job.get("title"), "company": job.get("company"),
-                               "href": href, "score": job.get("score")})
+                               "href": href, "score": job.get("score"),
+                               "greeting": greeting_text_sent})
                 done += 1
-                results.append({"ok": True, "title": job.get("title"), "company": job.get("company")})
+                results.append({"ok": True, "title": job.get("title"), "company": job.get("company"),
+                                "greeting": greeting_text_sent})
             except browser.RiskControl as e:
                 g.pause("risk: %s" % e)
                 ledger.append({"action": "greet", "status": "risk_paused", "reason": str(e), "title": job.get("title")})

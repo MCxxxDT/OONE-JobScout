@@ -16,6 +16,7 @@ g = guard.Guard(cfg)
 import argparse
 parser = argparse.ArgumentParser(description="T3 单次沟通实弹验证")
 parser.add_argument("-y", "--yes", action="store_true", help="跳过确认直接执行")
+parser.add_argument("--idx", type=int, default=None, help="指定计划中的岗位序号(从1开始)")
 cli_args, _ = parser.parse_known_args()
 
 if not cli_args.yes and cfg.get("profile") == "real":
@@ -38,7 +39,22 @@ if not jobs:
     print("没有可投岗位。请先生成 daily_plan 或跑扫描。")
     sys.exit(0)
 
-top = jobs[0]
+greeted_hrefs = set()
+for r in ledger.load_all():
+    if r.get("action") == "greet" and r.get("status") == "ok":
+        h = r.get("href")
+        if h:
+            greeted_hrefs.add(h)
+
+if cli_args.idx is not None and 1 <= cli_args.idx <= len(jobs):
+    top = jobs[cli_args.idx - 1]
+else:
+    pending_jobs = [j for j in jobs if (j.get("href") or "") not in greeted_hrefs]
+    if not pending_jobs:
+        print("所有候选岗位均已打过招呼！")
+        sys.exit(0)
+    top = pending_jobs[0]
+
 print("目标：[%s] %s | %s | score=%s" % (top.get("city"), top.get("title"), top.get("company"), top.get("score")))
 r = flows.execute_jobs(cfg, g, [top], max_count=1)
 print(json.dumps(r, ensure_ascii=False, indent=2))
