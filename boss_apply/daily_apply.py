@@ -139,10 +139,12 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
 # Phase 3: LLM 综合择优
 # ---------------------------------------------------------------------------
 
-def rank_and_plan(candidates, cfg, top_n=15):
+def rank_and_plan(candidates, cfg, top_n=None):
     """LLM 批量打分 → 全局排序 → 截取 Top N → 写 daily_plan.json。
     LLM 不可用时回退 base_score 排序。
     返回 (plan_list, rank_stats)。"""
+    if top_n is None:
+        top_n = int((cfg.get("daemon") or {}).get("apply_top_n", 50))
     min_verdict_order = {"veto": 0, "low": 1, "medium": 2, "high": 3}
     min_verdict = str((cfg.get("job_fit_gate") or {}).get("min_verdict") or "medium")
     min_order = min_verdict_order.get(min_verdict, 2)
@@ -207,8 +209,10 @@ def rank_and_plan(candidates, cfg, top_n=15):
 # Phase 4: 择优投递
 # ---------------------------------------------------------------------------
 
-def execute_daily_plan(cfg, g, top_n=15):
+def execute_daily_plan(cfg, g, top_n=None):
     """读取 daily_plan.json → execute_jobs 投递。返回 execute 结果。"""
+    if top_n is None:
+        top_n = int((cfg.get("daemon") or {}).get("apply_top_n", 50))
     plan_path = cfgmod.state_path("daily_plan.json")
     if not os.path.exists(plan_path):
         return {"error": "daily_plan.json not found, run rank_and_plan first"}
