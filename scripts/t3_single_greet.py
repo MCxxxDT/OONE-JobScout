@@ -13,15 +13,29 @@ from boss_apply import config as cfgmod, flows, guard, ledger
 cfg = cfgmod.load()
 g = guard.Guard(cfg)
 
-if cfg.get("profile") == "real":
+import argparse
+parser = argparse.ArgumentParser(description="T3 单次沟通实弹验证")
+parser.add_argument("-y", "--yes", action="store_true", help="跳过确认直接执行")
+cli_args, _ = parser.parse_known_args()
+
+if not cli_args.yes and cfg.get("profile") == "real":
     ans = input("当前 profile=real（将使用含个人信息的文案）。确认继续？(y/N) ")
     if ans.strip().lower() != "y":
         print("已取消。建议先用 profile=test 验证链路。")
         sys.exit(0)
 
-jobs = ledger.pending(cfg)
+plan_file = cfgmod.state_path("daily_plan.json")
+if os.path.exists(plan_file):
+    try:
+        with open(plan_file, "r", encoding="utf-8") as f:
+            jobs = json.load(f)
+    except Exception:
+        jobs = []
+else:
+    jobs = ledger.pending(cfg)
+
 if not jobs:
-    print("台账中没有可投岗位。先跑 t2_readonly_scan.py")
+    print("没有可投岗位。请先生成 daily_plan 或跑扫描。")
     sys.exit(0)
 
 top = jobs[0]
