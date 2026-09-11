@@ -2495,15 +2495,16 @@ function clearDraft(i) {
 }
 
 function triggerApplyNow() {
+  const topN = (window.__cachedSettings && window.__cachedSettings.auto_apply && window.__cachedSettings.auto_apply.apply_top_n) || 50;
   showConfirm(
     '⚡ 执行今日智能投递',
-    '系统将对已生成的今日 14 个高意向候选岗位（包含字节跳动、快手、阿里淘天等）发起实弹打招呼投递。<br><br><span style="color:var(--dan);font-weight:600">注意：此操作将直接向 BOSS 直聘平台发送打招呼消息并消耗今日投递配额。</span>',
+    `系统将对已生成的候选岗位计划（按单日上限最多 ${topN} 个，按评分从高到低排序）发起实弹打招呼投递。<br><br><span style="color:var(--dan);font-weight:600">注意：此操作将直接向 BOSS 直聘平台发送针对具体JD定制的打招呼消息并消耗今日投递配额。</span>`,
     async () => {
       showToast('正在执行今日投递计划…', 'info');
       try {
         const res = await api('/api/apply/now', {
           method: 'POST',
-          body: JSON.stringify({ mode: 'execute_plan', top_n: 15 })
+          body: JSON.stringify({ mode: 'execute_plan', top_n: topN })
         });
         if (res.ok) {
           const count = (res.result && res.result.executed) || 0;
@@ -4226,7 +4227,9 @@ async def api_apply_now(request: Request, token: str = ""):
         pass
     mode = body.get("mode", "execute_plan")
     dry_run = bool(body.get("dry_run", False))
-    top_n = int(body.get("top_n", 15))
+    daemon_cfg = cfg.get("daemon") or {}
+    default_top_n = int(daemon_cfg.get("apply_top_n", 30))
+    top_n = int(body.get("top_n") or default_top_n)
 
     from boss_apply import daily_apply
     g = guardmod.Guard(cfg)
