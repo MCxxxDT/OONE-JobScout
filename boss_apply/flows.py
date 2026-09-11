@@ -619,14 +619,19 @@ def execute_jobs(cfg, g, jobs, max_count=10):
     jobs = filter_greeted(jobs)
     done, results = 0, []
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
+    print(f"  [投递执行] 待投递岗位池: {len(jobs)} 个 (本次上限: {max_count})")
     try:
         sess.open_tab()
-        for job in jobs:
+        for idx, job in enumerate(jobs, 1):
             if done >= max_count:
                 break
             city = job.get("city") or "杭州"
+            company = job.get("company") or ""
+            title = job.get("title") or ""
+            print(f"\n  [{idx}/{len(jobs)}] 正在处理: {company} - {title} ({city}, {job.get('score')}分)...")
             ok, info = g.check_greet(city)
             if not ok:
+                print(f"  [{idx}/{len(jobs)}] 护栏熔断拦截: {info}")
                 results.append({"stopped": info})
                 break
             try:
@@ -653,15 +658,18 @@ def execute_jobs(cfg, g, jobs, max_count=10):
                 done += 1
                 results.append({"ok": True, "title": job.get("title"), "company": job.get("company"),
                                 "greeting": greeting_text_sent})
+                print(f"  [{idx}/{len(jobs)}] 实弹送达成功! 专属开场白: {greeting_text_sent}")
             except browser.RiskControl as e:
                 g.pause("risk: %s" % e)
                 ledger.append({"action": "greet", "status": "risk_paused", "reason": str(e), "title": job.get("title")})
                 results.append({"PAUSED": str(e)})
+                print(f"  [{idx}/{len(jobs)}] 风控暂停: {e}")
                 break
             except Exception as e:
                 ledger.append({"action": "greet", "status": "failed", "error": str(e)[:200],
                                "title": job.get("title"), "company": job.get("company"), "href": job.get("href")})
                 results.append({"ok": False, "title": job.get("title"), "error": str(e)[:120]})
+                print(f"  [{idx}/{len(jobs)}] 投递异常: {e}")
             browser.human_wait(cfg, "greet")
     finally:
         sess.close_tab()
