@@ -384,15 +384,27 @@ def _do_send(sess):
     return r if isinstance(r, dict) and r.get("r") == "sent" else None
 
 
-def _send_verified(sess, tries=2):
-    """发送并以'输入框清零'为准验证成功；未清零重试一轮，仍失败返回 False。"""
+def _send_verified(sess, tries=3, expect_text=""):
+    """发送并以'输入框清零'或'消息出现在聊天列表'为准验证成功；未清零多轮等待并重试发送。"""
+    r4 = None
     for attempt in range(tries):
-        r4 = _do_send(sess)
-        time.sleep(1.5)
-        post = _ev(sess, _probe_js())
-        if isinstance(post, dict) and post.get("inputLen") == 0:
-            return True, r4, post
-        time.sleep(1.0)
+        r4 = _do_send(sess) or r4
+        for _ in range(3):
+            time.sleep(1.0)
+            post = _ev(sess, _probe_js())
+            if isinstance(post, dict) and post.get("inputLen") == 0:
+                return True, r4, post
+            # 双重核验：若消息流中已包含该文本片段，判定成功（应对异步清零延迟与送达即时刷新）
+            if expect_text and len(expect_text) >= 6:
+                clean_snippet = re.sub(r"[\s\xa0\u3000\-_·•,，.()（）\[\]【】！!？?]", "", expect_text[:16])
+                msg_check = sess.eval("""(() => {
+                    const list = document.querySelector('.chat-message, .chat-conversation, .im-list, .chat-main');
+                    if (!list) return false;
+                    const text = (list.innerText || '').replace(/[\s\\xa0\\u3000\\-_·•,，.()（）\\[\\]【】！!？?]/g, '');
+                    return text.includes(%s);
+                })()""" % json.dumps(clean_snippet, ensure_ascii=False))
+                if msg_check is True or msg_check == "true":
+                    return True, r4, post
     return False, None, post
 
 
@@ -407,7 +419,7 @@ def send_message_via_chat(sess, company, text, poll_s=12):
     r3 = _ev(sess, _fill_js(text))
     if not (isinstance(r3, dict) and r3.get("r") == "filled"):
         raise RuntimeError("fill failed: %r" % (r3,))
-    ok, r4, post = _send_verified(sess)
+    ok, r4, post = _send_verified(sess, expect_text=text)
     if not ok:
         raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
     return {"conv": head, "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
@@ -422,7 +434,7 @@ def send_message_in_current_conv(sess, text):
     r3 = _ev(sess, _fill_js(text))
     if not (isinstance(r3, dict) and r3.get("r") == "filled"):
         raise RuntimeError("fill failed: %r" % (r3,))
-    ok, r4, post = _send_verified(sess)
+    ok, r4, post = _send_verified(sess, expect_text=text)
     if not ok:
         raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
     return {"filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
@@ -771,7 +783,7 @@ def send_greeting_raw(sess, job, cfg):
     r3 = _ev(sess, _fill_js(text))
     if not (isinstance(r3, dict) and r3.get("r") == "filled"):
         raise RuntimeError("fill greeting failed: %r" % (r3,))
-    ok, r4, post = _send_verified(sess)
+    ok, r4, post = _send_verified(sess, expect_text=text)
     if not ok:
         raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
 
