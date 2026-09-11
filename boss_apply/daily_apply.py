@@ -45,6 +45,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
         city = city_info["name"]
         code = city_info["code"]
         stats["cities"] += 1
+        print(f"  [城市扫描] 正在扫描城市: {city} (关键词: {len(kws)} 个, 最大页数: {max_pages} 页)...")
         sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
         try:
             sess.open_tab()
@@ -52,6 +53,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                 for p in range(1, max_pages + 1):
                     ok, info = g.check_search()
                     if not ok:
+                        print(f"    ! [{city}] 搜索门禁拦截: {info}")
                         stats["errors"].append("search limit: %s" % info)
                         break
                     # experience 门禁参数
@@ -68,6 +70,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                     except browser.RiskControl as e:
                         g.pause("risk: %s" % e)
                         stats["errors"].append("risk_control: %s" % str(e)[:100])
+                        print(f"    ! [{city}] 遭遇风控: {e}")
                         break
                     except Exception as e:
                         stats["errors"].append("search_error: %s" % str(e)[:100])
@@ -75,6 +78,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                     g.record_search()
                     stats["pages_searched"] += 1
                     stats["raw_found"] += len(jobs)
+                    print(f"    > [{city}] 关键词: {kw} (第 {p} 页) -> 发现 {len(jobs)} 个岗位")
 
                     for job in jobs:
                         href = job.get("href") or ""
@@ -112,16 +116,19 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
 
     # Phase 2: JD 精读（可选）
     if fetch_detail and candidates:
+        print(f"  [Phase 2] 开始 JD 精读 (共 {len(candidates)} 个高匹配度候选岗位)...")
         sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
         try:
             sess.open_tab()
-            for item in candidates:
+            for idx, item in enumerate(candidates, 1):
                 try:
                     detail, active = sess.fetch_detail(item["job"])
                     item["detail"] = detail or ""
                     if active is not None and active >= 0:
                         item["job"]["boss_active"] = active
                     stats["details_fetched"] += 1
+                    if idx % 5 == 0 or idx == len(candidates):
+                        print(f"    > JD 精读进度: [{idx}/{len(candidates)}] ({item['job'].get('company')})")
                 except Exception:
                     item["detail"] = ""
                 browser.human_wait(cfg, "page")
