@@ -116,19 +116,22 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
 
     # Phase 2: JD 精读（可选）
     if fetch_detail and candidates:
-        print(f"  [Phase 2] 开始 JD 精读 (共 {len(candidates)} 个高匹配度候选岗位)...")
+        top_n_cfg = int((cfg.get("daemon") or {}).get("apply_top_n", 50))
+        max_details = max(75, top_n_cfg + 25)
+        detail_targets = sorted(candidates, key=lambda x: -x["base_score"])[:max_details]
+        print(f"  [Phase 2] 开始 JD 精读 (从 {len(candidates)} 个候选优先精读头部 {len(detail_targets)} 个岗位)...")
         sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
         try:
             sess.open_tab()
-            for idx, item in enumerate(candidates, 1):
+            for idx, item in enumerate(detail_targets, 1):
                 try:
                     detail, active = sess.fetch_detail(item["job"])
                     item["detail"] = detail or ""
                     if active is not None and active >= 0:
                         item["job"]["boss_active"] = active
                     stats["details_fetched"] += 1
-                    if idx % 5 == 0 or idx == len(candidates):
-                        print(f"    > JD 精读进度: [{idx}/{len(candidates)}] ({item['job'].get('company')})")
+                    if idx % 10 == 0 or idx == len(detail_targets):
+                        print(f"    > JD 精读进度: [{idx}/{len(detail_targets)}] ({item['job'].get('company')})")
                 except Exception:
                     item["detail"] = ""
                 browser.human_wait(cfg, "page")
