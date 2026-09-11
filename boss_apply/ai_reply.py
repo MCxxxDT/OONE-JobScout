@@ -683,7 +683,7 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
             }
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=45) as resp:
                 if resp.status == 200:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     text = (resp_data["choices"][0]["message"].get("content") or "").strip()
