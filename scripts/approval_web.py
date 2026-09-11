@@ -186,8 +186,8 @@ def api_settings_get(token: str = ""):
         "auto_apply": {
             "enabled": daemon_cfg.get("auto_apply", True),
             "apply_window": daemon_cfg.get("apply_window", "10:00-14:00"),
-            "apply_max_pages": daemon_cfg.get("apply_max_pages", 3),
-            "apply_top_n": daemon_cfg.get("apply_top_n", 15),
+            "apply_max_pages": daemon_cfg.get("apply_max_pages", 5),
+            "apply_top_n": daemon_cfg.get("apply_top_n", 50),
             "apply_fetch_detail": daemon_cfg.get("apply_fetch_detail", True),
         },
         "llm": {
@@ -4228,7 +4228,7 @@ async def api_apply_now(request: Request, token: str = ""):
     mode = body.get("mode", "execute_plan")
     dry_run = bool(body.get("dry_run", False))
     daemon_cfg = cfg.get("daemon") or {}
-    default_top_n = int(daemon_cfg.get("apply_top_n", 30))
+    default_top_n = int(daemon_cfg.get("apply_top_n", 50))
     top_n = int(body.get("top_n") or default_top_n)
 
     from boss_apply import daily_apply

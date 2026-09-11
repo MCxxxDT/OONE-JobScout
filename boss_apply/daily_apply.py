@@ -242,8 +242,8 @@ def scan_and_apply_daily(cfg, dry_run=False):
     dry_run=True 时只跑 Phase 1~3（生成计划），不执行 Phase 4 投递。
     返回完整的管线执行报告。"""
     daemon_cfg = cfg.get("daemon") or {}
-    max_pages = int(daemon_cfg.get("apply_max_pages", 3))
-    top_n = int(daemon_cfg.get("apply_top_n", 15))
+    max_pages = int(daemon_cfg.get("apply_max_pages", 5))
+    top_n = int(daemon_cfg.get("apply_top_n", 50))
     fetch_detail = bool(daemon_cfg.get("apply_fetch_detail", True))
 
     g = guardmod.Guard(cfg)
