@@ -511,6 +511,9 @@ class RawCDP:
             if attempt == 1:
                 time.sleep(2)  # 质询重试
             else:
+                final_st = self.state()
+                if final_st and not final_st.get("captcha") and not final_st.get("security") and not final_st.get("blank") and final_st.get("bodyLen", 0) > 200:
+                    return []
                 raise RiskControl("search page not ready: %s" % url[:90])
         v = self.eval(CARD_JS)
         try:
