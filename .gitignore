@@ -1,6 +1,7 @@
 # 运行时状态（日切自动重置，不入库）
 state/guard_state.json
 state/daily_plan.json
+state/daemon_heartbeat.json
 # 截图/二维码（可能含登录态敏感信息）
 state/*.png
 # 运行日志（不入库）

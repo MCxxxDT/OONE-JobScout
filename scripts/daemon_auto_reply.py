@@ -217,6 +217,23 @@ def guard_blocked(cfg):
     return (reason is not None), reason
 
 
+def write_heartbeat(status="running", details=None):
+    """写入守护进程心跳文件，供 Web 控制台和外部监控实时探测真实存活状态。"""
+    try:
+        hb_path = cfgmod.state_path("daemon_heartbeat.json")
+        data = {
+            "pid": os.getpid(),
+            "ts": time.time(),
+            "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "status": status,
+            "details": details or {},
+        }
+        with open(hb_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # 收工日报（补全项 e）
 # ---------------------------------------------------------------------------
@@ -302,6 +319,7 @@ def run_cycle(cfg, engine, args, st=None):
             engine.openrouter_key = ""
     now = datetime.datetime.now()
     now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    write_heartbeat("running", {"action": "cycle_start", "time": now_str})
     print(f"\n[{now_str}] ======= 开启新一轮巡检 =======")
 
     # 1. 检查工作时间闸门（软收工：过点后若仍有活跃会话继续沟通直至完成）
@@ -367,7 +385,8 @@ def run_cycle(cfg, engine, args, st=None):
                 print("  [🎯 每日自动投递] 进入投递扫描窗口，启动三阶段管线...")
                 try:
                     report = daily_apply.scan_and_apply_daily(cfg, dry_run=args.dry_run)
-                    g_apply.mark_scan_done()
+                    if not args.dry_run:
+                        g_apply.mark_scan_done()
                     print(f"  [🎯 每日投递完成] 阶段: {report.get('phase')} | "
                           f"候选: {report.get('candidates_count', 0)} | "
                           f"计划: {report.get('plan_count', 0)} | "
@@ -737,28 +756,35 @@ def main():
 
     # 常驻循环：每轮重载配置并重建引擎——Web 端更新 Key/简历画像/偏好后自动生效（≤一个轮询周期）
     st = {"guard_alerted": False}
-    while True:
-        cfg = cfgmod.load()
-        res = run_cycle(cfg, None, args, st)
-        status = res.get("status")
-        if status == "outside_active_hours":
-            wait_s = res.get("wait_seconds", 3600)
-            # 按不超过30分钟分段休眠，便于随时响应或感知系统时钟
-            chunk = min(wait_s, 1800)
-            print(f"[DAEMON] 非工作时间休眠中... 本段休眠 {chunk/60:.1f} 分钟 (总需等待 {wait_s/3600:.1f} 小时)")
-            time.sleep(chunk)
-            continue
-        if status == "guard_paused":
-            # 熔断休眠：分段等待人工 resume_guard，解除后自动恢复巡检（不退出进程）
-            print(f"[DAEMON] 护栏熔断中，休眠 30 分钟后复查（人工处理页面并 resume_guard 后自动恢复）...")
-            time.sleep(1800)
-            continue
+    write_heartbeat("running", {"mode": "loop", "dry_run": args.dry_run})
+    try:
+        while True:
+            cfg = cfgmod.load()
+            res = run_cycle(cfg, None, args, st)
+            status = res.get("status")
+            if status == "outside_active_hours":
+                wait_s = res.get("wait_seconds", 3600)
+                # 按不超过30分钟分段休眠，便于随时响应或感知系统时钟
+                chunk = min(wait_s, 1800)
+                print(f"[DAEMON] 非工作时间休眠中... 本段休眠 {chunk/60:.1f} 分钟 (总需等待 {wait_s/3600:.1f} 小时)")
+                write_heartbeat("sleeping", {"reason": "outside_active_hours", "wait_seconds": chunk})
+                time.sleep(chunk)
+                continue
+            if status == "guard_paused":
+                # 熔断休眠：分段等待人工 resume_guard，解除后自动恢复巡检（不退出进程）
+                print(f"[DAEMON] 护栏熔断中，休眠 30 分钟后复查（人工处理页面并 resume_guard 后自动恢复）...")
+                write_heartbeat("paused", {"reason": "guard_paused"})
+                time.sleep(1800)
+                continue
 
-        base_mins = random.uniform(args.interval_min, args.interval_max)
-        jitter_s = random.uniform(-45.0, 45.0)
-        sleep_s = max(60, int(base_mins * 60 + jitter_s))
-        print(f"\n[DAEMON] 巡检完毕。拟人随机休眠 {sleep_s/60:.1f} 分钟后开始下一轮...")
-        time.sleep(sleep_s)
+            base_mins = random.uniform(args.interval_min, args.interval_max)
+            jitter_s = random.uniform(-45.0, 45.0)
+            sleep_s = max(60, int(base_mins * 60 + jitter_s))
+            print(f"\n[DAEMON] 巡检完毕。拟人随机休眠 {sleep_s/60:.1f} 分钟后开始下一轮...")
+            write_heartbeat("sleeping", {"next_wake_seconds": sleep_s})
+            time.sleep(sleep_s)
+    finally:
+        write_heartbeat("stopped", {"exit_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
 
 
 if __name__ == "__main__":

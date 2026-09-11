@@ -63,9 +63,9 @@ def _profile_block(cfg):
     return "\n".join(lines)
 
 
-def _job_block(jobs):
+def _job_block(jobs, start_idx=0):
     lines = []
-    for i, j in enumerate(jobs):
+    for i, j in enumerate(jobs, start=start_idx):
         detail = (j.get("detail") or j.get("jd_text") or "")[:400].replace("\n", " ")
         lines.append("%d. 标题：%s | 公司：%s | 薪资：%s | 标签：%s\n   JD：%s" % (
             i, j.get("title") or "?", j.get("company") or "?",
@@ -82,13 +82,14 @@ def match_batch(jobs, cfg, batch_size=20):
     if not (cfg.get("llm_match") or {}).get("enabled", True):
         return None
     out = {}
+    any_success = False
     for start in range(0, len(jobs), batch_size):
         batch = jobs[start:start + batch_size]
-        res = _call_once(batch, cfg)
-        if res is None:
-            return None  # 任一批失败即整体回退（保守：宁可用稳定的关键词分也不半吊混合）
-        out.update(res)
-    return out or None
+        res = _call_once(batch, cfg, start_idx=start)
+        if res is not None:
+            out.update(res)
+            any_success = True
+    return out if any_success else None
 
 
 def match_one(job, cfg):
@@ -99,7 +100,7 @@ def match_one(job, cfg):
     if not (llm.get("api_key") and llm.get("base_url")):
         return None
     for attempt in range(2):
-        res = _call_once([job], cfg)
+        res = _call_once([job], cfg, start_idx=0)
         if res is not None and 0 in res:
             return res[0]
         if attempt == 0:
@@ -107,12 +108,12 @@ def match_one(job, cfg):
     return None
 
 
-def _call_once(batch, cfg):
+def _call_once(batch, cfg, start_idx=0):
     llm = cfg.get("llm") or {}
     try:
         import urllib.request
         url = llm["base_url"].rstrip("/") + "/chat/completions"
-        prompt = _MATCH_PROMPT % (_profile_block(cfg), _prefs_block(cfg), _job_block(batch))
+        prompt = _MATCH_PROMPT % (_profile_block(cfg), _prefs_block(cfg), _job_block(batch, start_idx=start_idx))
         payload = {
             "model": llm.get("model") or "gpt-4o-mini",
             "messages": [

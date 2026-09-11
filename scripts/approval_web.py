@@ -19,7 +19,9 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -96,6 +98,56 @@ def _key_source(cfg):
     if os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY"):
         return "环境变量"
     return "未配置"
+
+
+def get_daemon_status():
+    """检测守护进程（daemon_auto_reply.py）的物理真实存活状态与心跳。"""
+    hb_path = cfgmod.state_path("daemon_heartbeat.json")
+    if not os.path.exists(hb_path):
+        return {"running": False, "reason": "no_heartbeat", "detail": "未检测到守护进程心跳文件"}
+    try:
+        with open(hb_path, "r", encoding="utf-8") as f:
+            hb = json.load(f)
+    except Exception:
+        return {"running": False, "reason": "corrupt_heartbeat", "detail": "心跳文件损坏"}
+
+    pid = hb.get("pid")
+    ts = hb.get("ts", 0)
+    status = hb.get("status", "unknown")
+    age = time.time() - ts
+
+    # 1. 进程存活性探测（Windows ctypes）
+    is_alive = False
+    if pid and pid > 0:
+        try:
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if handle:
+                exit_code = ctypes.c_ulong()
+                ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+                ctypes.windll.kernel32.CloseHandle(handle)
+                is_alive = (exit_code.value == 259)  # STILL_ACTIVE
+        except Exception:
+            is_alive = False
+
+    if not is_alive:
+        return {"running": False, "pid": pid, "status": "dead", "reason": "process_dead", "detail": f"进程 (PID {pid}) 已离线"}
+
+    if status == "stopped":
+        return {"running": False, "pid": pid, "status": "stopped", "reason": "stopped", "detail": "守护已主动停止"}
+
+    if age > 1800 and status != "sleeping":
+        return {"running": False, "pid": pid, "status": "stale", "reason": "heartbeat_timeout", "detail": f"心跳超时 ({int(age)}秒无响应)"}
+
+    return {
+        "running": True,
+        "pid": pid,
+        "status": status,
+        "last_seen_seconds": round(age, 1),
+        "time": hb.get("time", ""),
+        "details": hb.get("details", {}),
+    }
 
 
 def _llm_ping(base_url, api_key, model):
@@ -1597,9 +1649,9 @@ PAGE = """<!DOCTYPE html>
 
     <!-- Sidebar Footer -->
     <div class="sidebar-footer">
-      <div class="sidebar-status-pill">
-        <span class="pulse-dot dot-green"></span>
-        <span>守护监控中</span>
+      <div class="sidebar-status-pill" id="sideStatusPill">
+        <span class="pulse-dot dot-red" id="sideStatusDot"></span>
+        <span id="sideStatusText">守护离线</span>
       </div>
       <div class="sidebar-sync-text" id="sidebarSync">就绪同步</div>
     </div>
@@ -1619,13 +1671,17 @@ PAGE = """<!DOCTYPE html>
         <div>
           <div class="topbar-title" id="topbarTitle">待办审批</div>
           <div class="status-line" style="font-size:11px;color:var(--mut);display:flex;align-items:center;gap:6px">
-            <span id="guardPill" class="soft-badge badge-pub" style="padding:2px 8px;font-size:10px"><span class="pulse-dot dot-green" style="width:6px;height:6px"></span> 守护运行中</span>
+            <span id="guardPill" class="soft-badge badge-rej" style="padding:2px 8px;font-size:10px"><span class="pulse-dot dot-red" style="width:6px;height:6px"></span> 正在检测…</span>
             <span>·</span>
             <span id="sub">正在同步…</span>
           </div>
         </div>
       </div>
       <div class="d-flex align-items-center gap-2">
+        <button class="btn-action-light" style="padding:7px 14px;font-size:12px;border-radius:10px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.08);color:#2563eb;display:inline-flex;align-items:center;gap:4px" onclick="triggerApplyNow()" title="执行今日候选岗位投递计划">
+          <span>⚡</span>
+          <span>今日投递</span>
+        </button>
         <button class="btn-black" style="padding:7px 16px;font-size:12px;border-radius:10px" onclick="load(true)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
           <span class="d-none d-sm-inline ms-1">刷新数据</span>
@@ -2438,20 +2494,71 @@ function clearDraft(i) {
   }
 }
 
+function triggerApplyNow() {
+  showConfirm(
+    '⚡ 执行今日智能投递',
+    '系统将对已生成的今日 14 个高意向候选岗位（包含字节跳动、快手、阿里淘天等）发起实弹打招呼投递。<br><br><span style="color:var(--dan);font-weight:600">注意：此操作将直接向 BOSS 直聘平台发送打招呼消息并消耗今日投递配额。</span>',
+    async () => {
+      showToast('正在执行今日投递计划…', 'info');
+      try {
+        const res = await api('/api/apply/now', {
+          method: 'POST',
+          body: JSON.stringify({ mode: 'execute_plan', top_n: 15 })
+        });
+        if (res.ok) {
+          const count = (res.result && res.result.executed) || 0;
+          showToast(`今日投递完成！已成功投递 ${count} 个岗位`, 'success');
+          load(true);
+        } else {
+          showToast(`投递未完成: ${res.error || (res.result && res.result.error) || '未知错误'}`, 'danger');
+        }
+      } catch (e) {
+        showToast('请求异常: ' + e.message, 'danger');
+      }
+    }
+  );
+}
+
 async function load(isManual) {
   if (isManual) showToast('正在刷新工作台数据…', 'info');
   try {
     const d = await api('/api/overview');
     document.getElementById('sub').textContent = '已同步: ' + new Date().toLocaleTimeString();
 
-    // 护栏状态
+    // 真实进程与心跳探测
     const gp = document.getElementById('guardPill');
-    if (d.guard.paused) {
-      gp.className = 'soft-badge badge-rej';
-      gp.innerHTML = '<span class="pulse-dot dot-red"></span> ⛔ 风控熔断: ' + esc(d.guard.paused);
+    const sideDot = document.getElementById('sideStatusDot');
+    const sideText = document.getElementById('sideStatusText');
+    const sidePill = document.getElementById('sideStatusPill');
+
+    const daemon = d.daemon || {};
+    const guard = d.guard || {};
+
+    if (guard.paused) {
+      if (gp) {
+        gp.className = 'soft-badge badge-rej';
+        gp.innerHTML = '<span class="pulse-dot dot-red"></span> ⛔ 风控熔断: ' + esc(guard.paused);
+      }
+      if (sideDot) sideDot.className = 'pulse-dot dot-red';
+      if (sideText) sideText.textContent = '风控熔断停摆';
+      if (sidePill) sidePill.style.borderColor = 'rgba(239,68,68,0.3)';
+    } else if (!daemon.running) {
+      if (gp) {
+        gp.className = 'soft-badge badge-rej';
+        gp.innerHTML = '<span class="pulse-dot dot-red"></span> 🔴 守护未运行 (后台进程离线)';
+      }
+      if (sideDot) sideDot.className = 'pulse-dot dot-red';
+      if (sideText) sideText.textContent = '守护进程离线';
+      if (sidePill) sidePill.style.borderColor = 'rgba(239,68,68,0.3)';
     } else {
-      gp.className = 'soft-badge badge-pub';
-      gp.innerHTML = '<span class="pulse-dot dot-green"></span> 守护运行中 (正常)';
+      if (gp) {
+        gp.className = 'soft-badge badge-pub';
+        const stText = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
+        gp.innerHTML = `<span class="pulse-dot dot-green"></span> 🟢 ${stText} (PID ${daemon.pid || '已就绪'})`;
+      }
+      if (sideDot) sideDot.className = 'pulse-dot dot-green';
+      if (sideText) sideText.textContent = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
+      if (sidePill) sidePill.style.borderColor = '';
     }
 
     // KPI 统计
@@ -4048,6 +4155,7 @@ def api_overview(token: str = ""):
             "paused": guardmod.Guard(cfg).paused,
             "max_replies_per_day": cfg.get("daily_limit", 30),
         },
+        "daemon": get_daemon_status(),
         "pending": pending[:100],
         "resolved": resolved[:100],
         "ledger": enriched_ledger,
@@ -4103,6 +4211,77 @@ async def api_feedback(request: Request, token: str = ""):
         return {"ok": True, "record": record}
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/apply/now")
+async def api_apply_now(request: Request, token: str = ""):
+    """立即执行今日投递计划（Phase 4）或全链路扫描投递（Phase 1~4）。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    mode = body.get("mode", "execute_plan")
+    dry_run = bool(body.get("dry_run", False))
+    top_n = int(body.get("top_n", 15))
+
+    from boss_apply import daily_apply
+    g = guardmod.Guard(cfg)
+    if mode == "full_scan":
+        report = daily_apply.scan_and_apply_daily(cfg, dry_run=dry_run)
+        if not dry_run and report.get("phase") == "complete":
+            g.mark_scan_done()
+        return {"ok": True, "mode": "full_scan", "report": report}
+    else:
+        exec_res = daily_apply.execute_daily_plan(cfg, g, top_n=top_n)
+        if not dry_run and (exec_res.get("executed", 0) > 0 or not exec_res.get("error")):
+            g.mark_scan_done()
+        return {"ok": True, "mode": "execute_plan", "result": exec_res}
+
+
+@app.post("/api/daemon/toggle")
+async def api_daemon_toggle(request: Request, token: str = ""):
+    """启动或停止后台常驻守护进程。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    action = body.get("action", "start")
+    status = get_daemon_status()
+
+    if action == "start":
+        if status.get("running"):
+            return {"ok": True, "message": f"守护进程已在运行中 (PID {status.get('pid')})", "pid": status.get("pid")}
+        python_exe = sys.executable
+        daemon_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "daemon_auto_reply.py")
+        cmd = [python_exe, "-u", daemon_script, "--loop"]
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        DETACHED_PROCESS = 0x00000008
+        p = subprocess.Popen(cmd, creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"ok": True, "message": f"已成功启动常驻守护进程 (PID {p.pid})", "pid": p.pid}
+    elif action == "stop":
+        pid = status.get("pid")
+        if not status.get("running") or not pid:
+            return {"ok": True, "message": "守护进程未在运行"}
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                from scripts.daemon_auto_reply import write_heartbeat
+                write_heartbeat("stopped", {"reason": "manual_web_stop"})
+            except Exception:
+                pass
+            return {"ok": True, "message": f"已停止守护进程 (PID {pid})"}
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    return JSONResponse({"error": "invalid_action"}, status_code=400)
 
 
 def main():
