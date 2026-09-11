@@ -64,7 +64,7 @@ def score(job, detail, cfg):
     weak = w.get("weak", [])
     kill = w.get("kill", [])
 
-    title = job.get("title", "")
+    title = job.get("title") or ""
     company = job.get("company") or ""
     for k in kill:
         if k in title:
@@ -73,8 +73,12 @@ def score(job, detail, cfg):
             return 0, "kill: company contains %r" % k
 
     # 岗位类型门槛（仅看标题）：销售/客服/前后端/算法等非PM岗，JD关键词堆分也无效
+    # 若用户显式将某技术方向设为 want_jobs，则不应被 title_kill 误杀
+    prefs_want = [pw.lower() for pw in (cfg.get("prefs", {}).get("want_jobs") or [])]
     for k in w.get("title_kill", []):
         if k in title:
+            if any(k in pw or pw in k for pw in prefs_want):
+                continue
             return 0, "kill: title role-gate %r" % k
 
     # boss_active: -1/None = 新版卡片无此字段（未知），放行；详情页会补验

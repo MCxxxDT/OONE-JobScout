@@ -50,7 +50,7 @@ def get_web_token() -> str:
     """获取控制台 token"""
     try:
         from boss_apply import config as cfgmod
-        cfg = cfgmod.load_config()
+        cfg = cfgmod.load()
         token = (cfg.get("web") or {}).get("token") or os.getenv("APPROVAL_TOKEN") or "boss-apply"
         return token
     except Exception:

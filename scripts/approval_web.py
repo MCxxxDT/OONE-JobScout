@@ -2495,7 +2495,9 @@ function clearDraft(i) {
 }
 
 function triggerApplyNow() {
-  const topN = (window.__cachedSettings && window.__cachedSettings.auto_apply && window.__cachedSettings.auto_apply.apply_top_n) || 50;
+  const inputTopN = document.getElementById('inApplyTopN') ? parseInt(document.getElementById('inApplyTopN').value) : 0;
+  const cachedTopN = (window.__cachedSettings && window.__cachedSettings.auto_apply && window.__cachedSettings.auto_apply.apply_top_n) || 0;
+  const topN = inputTopN > 0 ? inputTopN : (cachedTopN > 0 ? cachedTopN : 50);
   showConfirm(
     '⚡ 执行今日智能投递',
     `系统将对已生成的候选岗位计划（按单日上限最多 ${topN} 个，按评分从高到低排序）发起实弹打招呼投递。<br><br><span style="color:var(--dan);font-weight:600">注意：此操作将直接向 BOSS 直聘平台发送针对具体JD定制的打招呼消息并消耗今日投递配额。</span>`,
@@ -3186,6 +3188,7 @@ function renderLedger() {
 
 async function loadSettings() {
   const s = await api('/api/settings');
+  window.__cachedSettings = s;
   document.getElementById('llmMeta').textContent = `当前Key：${s.llm.api_key_masked || '未配置'}（来源：${s.llm.key_source}）`;
   document.getElementById('inBase').value = s.llm.base_url || '';
   document.getElementById('inModel').value = s.llm.model || '';

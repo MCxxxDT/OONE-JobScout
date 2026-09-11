@@ -72,7 +72,7 @@ def greeting_text(cfg, job):
 
     # 2. 保底降级：使用静态模板
     profile = cfg.get("profile", "test")
-    templates = (cfg.get("greeting", {}) or {}).get(profile) or cfg["greeting"]["test"]
+    templates = (cfg.get("greeting", {}) or {}).get(profile) or (cfg.get("greeting", {}) or {}).get("test") or ["您好，我对该岗位很感兴趣，期待沟通！"]
     t = random.choice(templates)
     if privacy_blocked(t):
         raise RuntimeError("greeting template contains contact info (privacy), profile=%r" % profile)
@@ -387,6 +387,7 @@ def _do_send(sess):
 def _send_verified(sess, tries=3, expect_text=""):
     """发送并以'输入框清零'或'消息出现在聊天列表'为准验证成功；未清零多轮等待并重试发送。"""
     r4 = None
+    post = None
     for attempt in range(tries):
         r4 = _do_send(sess) or r4
         for _ in range(3):
