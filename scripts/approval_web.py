@@ -220,6 +220,7 @@ def api_settings_get(token: str = ""):
             "keywords": flows.effective_keywords(cfg)[:12],
         },
         "profile": profile_store.profile_meta(),
+        "user_profile": qr_login.get_cached_user_profile(),
     }
 
 
@@ -2226,11 +2227,11 @@ PAGE = """<!DOCTYPE html>
           <button id="btnBossAuth" class="btn-user-profile" onclick="toggleProfileDropdown()" title="个人画像与凭证状态">
             <div class="user-avatar-box">
               <img id="topUserAvatar" src="" alt="avatar" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%" />
-              <span id="topUserAvatarPlaceholder" class="avatar-placeholder">张</span>
+              <span id="topUserAvatarPlaceholder" class="avatar-placeholder">👤</span>
               <span id="authDot" class="pulse-dot dot-green"></span>
             </div>
             <div class="user-info-text d-none d-sm-flex flex-column text-start">
-              <span id="topUserName" class="user-name-label">张烨韬</span>
+              <span id="topUserName" class="user-name-label">--</span>
               <span id="authBtnText" class="user-sub-label">⚡ 已接入 BOSS</span>
             </div>
             <svg class="dropdown-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -2241,14 +2242,14 @@ PAGE = """<!DOCTYPE html>
             <div class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">
               <div class="popover-avatar-box">
                 <img id="popoverAvatar" src="" alt="avatar" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%" />
-                <span id="popoverAvatarPlaceholder" class="avatar-placeholder" style="font-size:18px">张</span>
+                <span id="popoverAvatarPlaceholder" class="avatar-placeholder" style="font-size:18px">👤</span>
               </div>
               <div class="overflow-hidden">
                 <div class="d-flex align-items-center gap-2">
-                  <span id="popoverName" class="fw-bold" style="font-size:15px;color:#0f172a">张烨韬</span>
-                  <span id="popoverGrade" class="soft-badge badge-pub" style="font-size:10px;padding:1px 6px">2027届</span>
+                  <span id="popoverName" class="fw-bold" style="font-size:15px;color:#0f172a">--</span>
+                  <span id="popoverGrade" class="soft-badge badge-pub" style="font-size:10px;padding:1px 6px">--</span>
                 </div>
-                <div id="popoverStatus" class="text-muted" style="font-size:11px;margin-top:2px">已连接BOSS · 在校可实习</div>
+                <div id="popoverStatus" class="text-muted" style="font-size:11px;margin-top:2px">已连接BOSS</div>
               </div>
             </div>
 
@@ -2256,17 +2257,17 @@ PAGE = """<!DOCTYPE html>
               <div class="profile-meta-item">
                 <span class="meta-icon">🎓</span>
                 <span class="meta-label">就读院校:</span>
-                <span id="popoverSchool" class="meta-val">福建师范大学</span>
+                <span id="popoverSchool" class="meta-val">--</span>
               </div>
               <div class="profile-meta-item">
                 <span class="meta-icon">📚</span>
                 <span class="meta-label">所学专业:</span>
-                <span id="popoverMajor" class="meta-val">数字媒体技术</span>
+                <span id="popoverMajor" class="meta-val">--</span>
               </div>
               <div class="profile-meta-item">
                 <span class="meta-icon">📍</span>
                 <span class="meta-label">常驻城市:</span>
-                <span id="popoverCity" class="meta-val">福州市</span>
+                <span id="popoverCity" class="meta-val">--</span>
               </div>
               <div class="profile-meta-item">
                 <span class="meta-icon">🕒</span>
@@ -2303,15 +2304,15 @@ PAGE = """<!DOCTYPE html>
         <div class="d-flex align-items-center gap-3">
           <div class="welcome-avatar-wrap">
             <img id="welcomeAvatar" src="" alt="avatar" style="display:none;width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3)" />
-            <div id="welcomeAvatarPlaceholder" style="width:44px;height:44px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px">张</div>
+            <div id="welcomeAvatarPlaceholder" style="width:44px;height:44px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px">👤</div>
           </div>
           <div>
             <div class="d-flex align-items-center gap-2">
-              <span style="font-size:16px;font-weight:900" id="welcomeName">张烨韬</span>
+              <span style="font-size:16px;font-weight:900" id="welcomeName">--</span>
               <span class="badge bg-success" style="font-size:10px;font-weight:600">BOSS 登录成功</span>
             </div>
             <div style="font-size:12px;opacity:0.85;margin-top:2px" id="welcomeDetail">
-              福建师范大学 · 数字媒体技术 · 2027届 · 已与底座完成画像对齐
+              已与 BOSS 底座完成画像对齐
             </div>
           </div>
         </div>
@@ -2644,13 +2645,13 @@ PAGE = """<!DOCTYPE html>
           <div>
             <div class="hub-card-top">
               <div class="hub-icon-box amber">📄</div>
-              <span class="soft-badge badge-pub" id="hubBadgeProfileCandidate">张烨韬 · 2027届</span>
+              <span class="soft-badge badge-pub" id="hubBadgeProfileCandidate">--</span>
             </div>
             <div class="hub-title">简历与画像中心</div>
             <div class="hub-desc">PDF/Word/文本简历解析，AI 自动提炼核心高光标签与求职竞争力矩阵</div>
             <div class="hub-meta-tags">
-              <span class="soft-badge badge-ok" id="hubBadgeProfileSchool">福建师范大学</span>
-              <span class="soft-badge">数字媒体技术</span>
+              <span class="soft-badge badge-ok" id="hubBadgeProfileSchool">--</span>
+              <span class="soft-badge" id="hubBadgeProfileMajor">--</span>
             </div>
           </div>
           <button type="button" class="hub-card-btn">⚙️ 上传与提炼画像</button>
@@ -3529,6 +3530,7 @@ async function load(isManual) {
     // BOSS 鉴权状态联动
     const auth = d.auth || {};
     const userProfile = d.user_profile || (auth && auth.user_profile) || {};
+    window.__cachedUserProfile = userProfile;
     updateAuthStatusUI(auth, userProfile);
 
     renderPending();
@@ -3555,13 +3557,13 @@ function updateAuthStatusUI(auth, userProfile) {
   const loginGate = document.getElementById('loginGate');
   const welcomeBanner = document.getElementById('welcomeBanner');
 
-  const pName = (userProfile && userProfile.name) || '张烨韬';
+  const pName = (userProfile && userProfile.name) || '求职者';
   const pAvatar = (userProfile && userProfile.avatar) || '';
-  const pSchool = (userProfile && userProfile.school) || '福建师范大学';
-  const pMajor = (userProfile && userProfile.major) || '数字媒体技术';
-  const pGrad = (userProfile && userProfile.grad_year) || '2027届';
-  const pCity = (userProfile && userProfile.current_city) || '福州市';
-  const pStatus = (userProfile && userProfile.status_desc) || '在校可实习';
+  const pSchool = (userProfile && userProfile.school) || '';
+  const pMajor = (userProfile && userProfile.major) || '';
+  const pGrad = (userProfile && userProfile.grad_year) || '';
+  const pCity = (userProfile && userProfile.current_city) || '';
+  const pStatus = (userProfile && userProfile.status_desc) || '已连接BOSS';
   const pSynced = (userProfile && userProfile.synced_at) || '已对齐底座';
 
   if (auth.logged_in) {
@@ -3579,7 +3581,7 @@ function updateAuthStatusUI(auth, userProfile) {
     } else {
       if (topAvatar) topAvatar.style.display = 'none';
       if (topAvatarPlaceholder) {
-        topAvatarPlaceholder.textContent = pName ? pName.slice(0, 1) : '张';
+        topAvatarPlaceholder.textContent = pName ? pName.slice(0, 1) : '👤';
         topAvatarPlaceholder.style.display = 'inline-block';
       }
     }
@@ -3644,7 +3646,7 @@ function updateAuthStatusUI(auth, userProfile) {
   } else {
     if (popAvatar) popAvatar.style.display = 'none';
     if (popAvatarPlaceholder) {
-      popAvatarPlaceholder.textContent = pName ? pName.slice(0, 1) : '张';
+      popAvatarPlaceholder.textContent = pName ? pName.slice(0, 1) : '👤';
       popAvatarPlaceholder.style.display = 'inline-block';
     }
   }
@@ -3680,11 +3682,11 @@ function updateAuthStatusUI(auth, userProfile) {
 function showWelcomeBanner(userProfile) {
   const wb = document.getElementById('welcomeBanner');
   if (!wb) return;
-  const pName = (userProfile && userProfile.name) || '张烨韬';
+  const pName = (userProfile && userProfile.name) || '求职者';
   const pAvatar = (userProfile && userProfile.avatar) || '';
-  const pSchool = (userProfile && userProfile.school) || '福建师范大学';
-  const pMajor = (userProfile && userProfile.major) || '数字媒体技术';
-  const pGrad = (userProfile && userProfile.grad_year) || '2027届';
+  const pSchool = (userProfile && userProfile.school) || '';
+  const pMajor = (userProfile && userProfile.major) || '';
+  const pGrad = (userProfile && userProfile.grad_year) || '';
 
   const wName = document.getElementById('welcomeName');
   const wDetail = document.getElementById('welcomeDetail');
@@ -3692,7 +3694,8 @@ function showWelcomeBanner(userProfile) {
   const wPlaceholder = document.getElementById('welcomeAvatarPlaceholder');
 
   if (wName) wName.textContent = pName;
-  if (wDetail) wDetail.textContent = `${pSchool} · ${pMajor} · ${pGrad} · 已与求职底座完成画像对齐`;
+  const details = [pSchool, pMajor, pGrad].filter(Boolean);
+  if (wDetail) wDetail.textContent = details.length ? `${details.join(' · ')} · 已与求职底座完成画像对齐` : '已与求职底座完成画像对齐';
 
   if (pAvatar && wAvatar) {
     wAvatar.src = pAvatar;
@@ -3701,7 +3704,7 @@ function showWelcomeBanner(userProfile) {
   } else {
     if (wAvatar) wAvatar.style.display = 'none';
     if (wPlaceholder) {
-      wPlaceholder.textContent = pName.slice(0, 1) || '张';
+      wPlaceholder.textContent = pName.slice(0, 1) || '👤';
       wPlaceholder.style.display = 'flex';
     }
   }
@@ -4707,10 +4710,15 @@ async function loadSettings() {
   const hMin = document.getElementById('hubBadgeBrowserMin');
   if (hMin) hMin.textContent = br.minimize_on_start !== false ? '启动最小化' : '默认尺寸';
   const hCandidate = document.getElementById('hubBadgeProfileCandidate');
+  const hSchool = document.getElementById('hubBadgeProfileSchool');
+  const hMajor = document.getElementById('hubBadgeProfileMajor');
+  const pData = s.user_profile || window.__cachedUserProfile || {};
+  const profName = pData.name || '求职者';
   if (hCandidate) {
-    const profName = (s.user_profile && s.user_profile.name) || '张烨韬';
-    hCandidate.textContent = s.profile.has_refined ? `${profName} · 画像已提炼` : '画像待提炼';
+    hCandidate.textContent = (s.profile && s.profile.has_refined) || pData.name ? `${profName} · 画像已提炼` : '画像待提炼';
   }
+  if (hSchool && pData.school) hSchool.textContent = pData.school;
+  if (hMajor && pData.major) hMajor.textContent = pData.major;
 }
 
 async function saveSettings() {

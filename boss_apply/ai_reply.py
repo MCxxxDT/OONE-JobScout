@@ -654,16 +654,17 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
 
             cur_city = prof.get("current_city", "福州")
             target_city = city or prof.get("target_region", "江浙沪")
+            cand_name = prof.get("name") or "求职者"
             prompt = (
                 f"【候选人背景】：{prof.get('school', '')} {prof.get('major', '')}，{prof.get('grade_desc', '应届生')}。\n"
                 f"核心亮点：{prof.get('tech_highlights', '')}；{prof.get('business_highlights', '')}。\n"
-                f"常驻{cur_city}，强烈意向奔赴{target_city}全职到岗实习。\n\n"
+                f"你是一名真实求职者（姓名：{cand_name}），常驻{cur_city}，强烈意向奔赴{target_city}全职到岗实习。\n\n"
                 f"【应聘岗位信息】：\n"
                 f"- 公司：{company}\n"
                 f"- 岗位：{title}\n"
                 f"- 城市：{city}\n"
                 f"- 职位详细描述与要求（JD全文）：\n{jd_text[:1500] if jd_text else '(未抓取到详细JD，请紧密围绕岗位名称核心职责展开)'}\n\n"
-                f"【任务】：请你作为张烨韬本人，深入研读上述岗位的具体工作职责与任职要求（JD），写一句向招聘方打招呼的第一声开场白（看岗位下菜碟，拒绝千篇一律）。\n"
+                f"【任务】：请你作为{cand_name}本人，深入研读上述岗位的具体工作职责与任职要求（JD），写一句向招聘方打招呼的第一声开场白（看岗位下菜碟，拒绝千篇一律）。\n"
                 f"要求：\n"
                 f"1. 务必深度结合该岗位具体的职位要求/工作职责（JD），提炼其最关键的1-2个业务场景或技术要点，并精准对齐候选人最匹配的实操经历（如FastMCP与智能体生产流全栈落地、高校社交系统全栈交付、或操盘200人团队破10万GMV商业闭环）；\n"
                 f"2. 口吻真诚干练、从容自信、不卑不亢，展示能够即插即用的实干战斗力，绝无学生气或机器人客服感；\n"

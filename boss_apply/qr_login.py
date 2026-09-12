@@ -105,8 +105,6 @@ def get_cached_user_profile() -> dict:
             with open(USER_PROFILE_CACHE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict) and data.get("name"):
-                    if data.get("name") == "龙雅涵":
-                        data["name"] = "张烨韬"
                     return data
         except Exception:
             pass
@@ -118,18 +116,16 @@ def get_cached_user_profile() -> dict:
             with open(p_path, "r", encoding="utf-8") as f:
                 p_data = json.load(f)
                 refined = p_data.get("refined", {})
-                r_name = refined.get("name", "张烨韬")
-                if r_name == "龙雅涵":
-                    r_name = "张烨韬"
+                r_name = refined.get("name")
                 if r_name:
                     return {
                         "name": r_name,
                         "avatar": "",
-                        "school": refined.get("school", "福建师范大学"),
-                        "major": refined.get("major", "数字媒体技术"),
-                        "grad_year": str(refined.get("grad_year", "2027")),
-                        "grade_desc": refined.get("grade_desc", "本科在读"),
-                        "current_city": refined.get("current_city", "福州市"),
+                        "school": refined.get("school", ""),
+                        "major": refined.get("major", ""),
+                        "grad_year": str(refined.get("grad_year", "")),
+                        "grade_desc": refined.get("grade_desc", ""),
+                        "current_city": refined.get("current_city", ""),
                         "status_desc": "在线求职中",
                         "synced_at": ""
                     }
@@ -137,13 +133,13 @@ def get_cached_user_profile() -> dict:
             pass
 
     return {
-        "name": "张烨韬",
+        "name": "求职者",
         "avatar": "",
-        "school": "福建师范大学",
-        "major": "数字媒体技术",
-        "grad_year": "2027届",
-        "grade_desc": "本科在读",
-        "current_city": "福州市",
+        "school": "",
+        "major": "",
+        "grad_year": "",
+        "grade_desc": "",
+        "current_city": "",
         "status_desc": "在线求职中",
         "synced_at": ""
     }
@@ -161,8 +157,65 @@ def fetch_boss_user_profile(cfg=None) -> dict:
 
     name = ""
     avatar = ""
+    school = ""
+    major = ""
+    grad_year = ""
+    status_desc = ""
 
-    # 1. 优先从已有求职者会话 tab（geek/chat, geek/jobs, geek/recommend 等）直接提取，避免重复开页面触发平台风控
+    extract_js = """
+    (() => {
+        let name = '';
+        let avatar = '';
+        let school = '';
+        let major = '';
+        let grad_year = '';
+        let status_desc = '';
+
+        const banner = document.querySelector('.userinfo-banner');
+        if (banner) {
+            name = (banner.querySelector('.username span') || {}).innerText || '';
+            avatar = (banner.querySelector('.headbox img') || {}).src || '';
+            const userinfoSpans = Array.from(banner.querySelectorAll('.userinfo span')).map(s => s.innerText.trim());
+            const state = (banner.querySelector('.now-state .ui-select-selected-value') || {}).innerText || '';
+            const expect = (banner.querySelector('.expect') || {}).innerText || '';
+            const edu = (banner.querySelector('.edu') || {}).innerText || '';
+
+            if (state) status_desc = state;
+            for (let s of userinfoSpans) {
+                if (s.includes('毕业')) grad_year = s;
+                else if (!s.includes('岁')) school = s;
+            }
+            if (edu && !school) school = edu;
+            if (expect) major = expect.replace('期望：', '').trim();
+        }
+
+        if (!name) {
+            const navText = document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text');
+            if (navText) name = navText.innerText.trim();
+        }
+        if (!avatar) {
+            const navImg = document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img');
+            if (navImg) avatar = navImg.src;
+        }
+        if (!name && window._PAGE && window._PAGE.name) {
+            name = window._PAGE.name;
+        }
+        if (!avatar && window._PAGE && (window._PAGE.largeAvatar || window._PAGE.tinyAvatar)) {
+            avatar = window._PAGE.largeAvatar || window._PAGE.tinyAvatar;
+        }
+
+        return JSON.stringify({
+            name: name.trim(),
+            avatar: avatar.trim(),
+            school: school.trim(),
+            major: major.trim(),
+            grad_year: grad_year.trim(),
+            status_desc: status_desc.trim()
+        });
+    })()
+    """
+
+    # 1. 优先从已有求职者会话 tab（geek/recommend, geek/chat, geek/jobs 等）提取
     try:
         req = urlopen(cdp_http + "/json", timeout=3)
         tabs = json.loads(req.read().decode("utf-8"))
@@ -170,13 +223,7 @@ def fetch_boss_user_profile(cfg=None) -> dict:
         if geek_tab:
             import websocket
             ws = websocket.create_connection(geek_tab["webSocketDebuggerUrl"], timeout=5)
-            js_eval = """
-            JSON.stringify({
-              name: (document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text') ? document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text').innerText.trim() : ''),
-              avatar: (document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img') ? document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img').src : '')
-            })
-            """
-            ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {"expression": js_eval, "returnByValue": True}}))
+            ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {"expression": extract_js, "returnByValue": True}}))
             raw_res = json.loads(ws.recv())
             val = raw_res.get("result", {}).get("result", {}).get("value")
             ws.close()
@@ -184,22 +231,21 @@ def fetch_boss_user_profile(cfg=None) -> dict:
                 parsed = json.loads(val)
                 name = parsed.get("name", "").strip()
                 avatar = parsed.get("avatar", "").strip()
+                school = parsed.get("school", "").strip()
+                major = parsed.get("major", "").strip()
+                grad_year = parsed.get("grad_year", "").strip()
+                status_desc = parsed.get("status_desc", "").strip()
     except Exception:
         pass
 
-    # 2. 若未从已有 tab 提取成功，通过 RawCDP 在后台打开真实求职者聊天会话页 /web/geek/chat（绝不访问公共 SEO 落地页）
-    if not name or not avatar:
+    # 2. 若未提取完整，通过 RawCDP 在后台打开个人中心 /web/geek/recommend 抓取完整画像
+    if not name or not school or not grad_year:
         sess = None
         try:
             sess = rawcdp.RawCDP(cdp_http)
-            tab_id = sess.open_tab("https://www.zhipin.com/web/geek/chat", background=True)
+            tab_id = sess.open_tab("https://www.zhipin.com/web/geek/recommend", background=True)
             time.sleep(2.5)
-            raw_res = sess.eval("""
-            JSON.stringify({
-              name: (document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text') ? document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text').innerText.trim() : ''),
-              avatar: (document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img') ? document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img').src : '')
-            })
-            """)
+            raw_res = sess.eval(extract_js)
             sess.close_tab()
 
             if raw_res:
@@ -208,6 +254,14 @@ def fetch_boss_user_profile(cfg=None) -> dict:
                     name = parsed.get("name", "").strip()
                 if not avatar:
                     avatar = parsed.get("avatar", "").strip()
+                if not school:
+                    school = parsed.get("school", "").strip()
+                if not major:
+                    major = parsed.get("major", "").strip()
+                if not grad_year:
+                    grad_year = parsed.get("grad_year", "").strip()
+                if not status_desc:
+                    status_desc = parsed.get("status_desc", "").strip()
         except Exception:
             pass
         finally:
@@ -217,24 +271,23 @@ def fetch_boss_user_profile(cfg=None) -> dict:
                 except Exception:
                     pass
 
-    # 3. 严格过滤脏数据与公共落地页假人占位符（如“登录/注册”、“龙雅涵”）
-    if not name or name in ("登录/注册", "注册/登录", "登录", "注册", "龙雅涵"):
+    # 3. 严格过滤非登录状态占位符（仅过滤未登录提示文本）
+    if name in ("登录/注册", "注册/登录", "登录", "注册", "立即登录", "请登录"):
         name = ""
 
     cached = get_cached_user_profile()
-    real_name = name or cached.get("name") or "张烨韬"
-    if real_name == "龙雅涵":
-        real_name = "张烨韬"
+    real_name = name or cached.get("name") or "求职者"
 
+    grade = "离校" if "离校" in status_desc else ("在校" if "在校" in status_desc else cached.get("grade_desc", "在读"))
     profile_res = {
         "name": real_name,
         "avatar": avatar or cached.get("avatar") or "",
-        "school": cached.get("school", "福建师范大学"),
-        "major": cached.get("major", "数字媒体技术"),
-        "grad_year": cached.get("grad_year", "2027届"),
-        "grade_desc": cached.get("grade_desc", "本科在读"),
+        "school": school or cached.get("school", ""),
+        "major": major or cached.get("major", ""),
+        "grad_year": grad_year or cached.get("grad_year", ""),
+        "grade_desc": grade,
         "current_city": cached.get("current_city", "福州市"),
-        "status_desc": "已连接BOSS·在校可实习",
+        "status_desc": status_desc or cached.get("status_desc", "已连接BOSS"),
         "synced_at": time.strftime("%Y-%m-%d %H:%M:%S")
     }
 
@@ -256,10 +309,8 @@ def sync_profile_to_local(profile_data: dict) -> dict:
 
     refined = local_data.get("refined", {})
     r_name = profile_data.get("name")
-    if r_name and r_name != "龙雅涵":
+    if r_name and r_name not in ("登录/注册", "注册/登录", "登录", "注册"):
         refined["name"] = r_name
-    elif not refined.get("name") or refined.get("name") == "龙雅涵":
-        refined["name"] = "张烨韬"
 
     if profile_data.get("school"):
         refined["school"] = profile_data["school"]
@@ -268,7 +319,8 @@ def sync_profile_to_local(profile_data: dict) -> dict:
     if profile_data.get("grad_year"):
         try:
             yr = int(re.sub(r"\D", "", str(profile_data["grad_year"])))
-            refined["grad_year"] = yr
+            if yr:
+                refined["grad_year"] = yr
         except Exception:
             pass
     refined["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
