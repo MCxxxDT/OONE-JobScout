@@ -2986,6 +2986,17 @@ PAGE = """<!DOCTYPE html>
             </div>
           </div>
           <div id="pending">加载中…</div>
+
+          <!-- 已处理会话与经验沉淀闭环（已处理项消单，已打分项折叠收拢在归档内） -->
+          <div class="mt-4 pt-3" style="border-top:1px dashed #e2e8f0">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-bold mb-0" style="font-size:13px;color:var(--txt)">
+                <span>💬 已处理真实会话与经验沉淀</span>
+              </h6>
+              <span class="text-muted" style="font-size:11px">已处理消单 · 点评与优化自学习闭环</span>
+            </div>
+            <div id="resolvedList"></div>
+          </div>
         </div>
       </main>
 
@@ -3172,7 +3183,6 @@ PAGE = """<!DOCTYPE html>
 
           <!-- Hidden compatibility elements for existing automation tests and handlers -->
           <table class="d-none" id="ledger"><tbody id="ledgerBody"></tbody></table>
-          <div class="d-none" id="resolvedList"></div>
           <div class="d-none" id="ledgerEventsView"></div>
           <div class="d-none" id="ledgerResolvedView"></div>
         </div>
@@ -4122,6 +4132,9 @@ function switchTab(name) {
     titleEl.innerHTML = `<span class="title-primary">${esc(item.short)}</span><span class="title-secondary d-none d-md-inline">${esc(sub)}</span>`;
   }
   toggleMobileSidebar(false);
+  if (name === 'pending') {
+    renderResolved();
+  }
   if (name === 'monitor') {
     fetchDaemonLogs();
   }
@@ -4917,6 +4930,7 @@ function askConfirm(title, desc, onOk) {
   _confirmCallback = onOk;
   m.classList.add('active');
 }
+const showConfirm = askConfirm;
 
 function closeConfirm() {
   const m = document.getElementById('confirmModal');
