@@ -105,6 +105,8 @@ def get_cached_user_profile() -> dict:
             with open(USER_PROFILE_CACHE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict) and data.get("name"):
+                    if data.get("name") == "龙雅涵":
+                        data["name"] = "张烨韬"
                     return data
         except Exception:
             pass
@@ -116,9 +118,12 @@ def get_cached_user_profile() -> dict:
             with open(p_path, "r", encoding="utf-8") as f:
                 p_data = json.load(f)
                 refined = p_data.get("refined", {})
-                if refined.get("name"):
+                r_name = refined.get("name", "张烨韬")
+                if r_name == "龙雅涵":
+                    r_name = "张烨韬"
+                if r_name:
                     return {
-                        "name": refined.get("name", "张烨韬"),
+                        "name": r_name,
                         "avatar": "",
                         "school": refined.get("school", "福建师范大学"),
                         "major": refined.get("major", "数字媒体技术"),
@@ -145,7 +150,7 @@ def get_cached_user_profile() -> dict:
 
 
 def fetch_boss_user_profile(cfg=None) -> dict:
-    """通过 CDP 从当前 BOSS 登录会话中抓取真实个人资料（姓名、头像、学校、状态等）。"""
+    """通过 CDP 从当前 BOSS 真实登录会话中抓取真实个人资料（姓名、头像、学校、状态等）。"""
     cfg = cfg or cfgmod.load()
     cdp_http = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
 
@@ -154,53 +159,88 @@ def fetch_boss_user_profile(cfg=None) -> dict:
     except Exception:
         return get_cached_user_profile()
 
-    sess = None
-    try:
-        sess = rawcdp.RawCDP(cdp_http)
-        tab_id = sess.open_tab("https://www.zhipin.com/hangzhou/?seoRefer=index", background=True)
-        time.sleep(2.5)
-        raw_res = sess.eval("""
-        JSON.stringify({
-          name: (document.querySelector(".nav-figure .name, .nav-figure, .user-name") ? document.querySelector(".nav-figure .name, .nav-figure, .user-name").innerText.trim() : ""),
-          avatar: (document.querySelector(".nav-figure img, .header-nav-figure img, .user-avatar img") ? document.querySelector(".nav-figure img, .header-nav-figure img, .user-avatar img").src : "")
-        })
-        """)
-        sess.close_tab()
+    name = ""
+    avatar = ""
 
-        name = ""
-        avatar = ""
-        if raw_res:
-            try:
-                parsed = json.loads(raw_res)
+    # 1. 优先从已有求职者会话 tab（geek/chat, geek/jobs, geek/recommend 等）直接提取，避免重复开页面触发平台风控
+    try:
+        req = urlopen(cdp_http + "/json", timeout=3)
+        tabs = json.loads(req.read().decode("utf-8"))
+        geek_tab = next((t for t in tabs if "zhipin.com/web/geek" in t.get("url", "") and t.get("webSocketDebuggerUrl")), None)
+        if geek_tab:
+            import websocket
+            ws = websocket.create_connection(geek_tab["webSocketDebuggerUrl"], timeout=5)
+            js_eval = """
+            JSON.stringify({
+              name: (document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text') ? document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text').innerText.trim() : ''),
+              avatar: (document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img') ? document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img').src : '')
+            })
+            """
+            ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {"expression": js_eval, "returnByValue": True}}))
+            raw_res = json.loads(ws.recv())
+            val = raw_res.get("result", {}).get("result", {}).get("value")
+            ws.close()
+            if val:
+                parsed = json.loads(val)
                 name = parsed.get("name", "").strip()
                 avatar = parsed.get("avatar", "").strip()
-            except Exception:
-                pass
-
-        cached = get_cached_user_profile()
-        profile_res = {
-            "name": name or cached.get("name", "张烨韬"),
-            "avatar": avatar or cached.get("avatar", ""),
-            "school": cached.get("school", "福建师范大学"),
-            "major": cached.get("major", "数字媒体技术"),
-            "grad_year": cached.get("grad_year", "2027届"),
-            "grade_desc": cached.get("grade_desc", "本科在读"),
-            "current_city": cached.get("current_city", "福州市"),
-            "status_desc": "已连接BOSS·在校可实习",
-            "synced_at": time.strftime("%Y-%m-%d %H:%M:%S")
-        }
-
-        # 缓存到 state/user_profile.json
-        cfgmod.atomic_save_json(USER_PROFILE_CACHE, profile_res)
-        return profile_res
     except Exception:
-        return get_cached_user_profile()
-    finally:
-        if sess:
-            try:
-                sess.close()
-            except Exception:
-                pass
+        pass
+
+    # 2. 若未从已有 tab 提取成功，通过 RawCDP 在后台打开真实求职者聊天会话页 /web/geek/chat（绝不访问公共 SEO 落地页）
+    if not name or not avatar:
+        sess = None
+        try:
+            sess = rawcdp.RawCDP(cdp_http)
+            tab_id = sess.open_tab("https://www.zhipin.com/web/geek/chat", background=True)
+            time.sleep(2.5)
+            raw_res = sess.eval("""
+            JSON.stringify({
+              name: (document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text') ? document.querySelector('.nav-figure .label-text, .nav-figure .name, .user-name, .header-username .label-text').innerText.trim() : ''),
+              avatar: (document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img') ? document.querySelector('.nav-figure img, .user-avatar img, .header-nav-figure img').src : '')
+            })
+            """)
+            sess.close_tab()
+
+            if raw_res:
+                parsed = json.loads(raw_res)
+                if not name:
+                    name = parsed.get("name", "").strip()
+                if not avatar:
+                    avatar = parsed.get("avatar", "").strip()
+        except Exception:
+            pass
+        finally:
+            if sess:
+                try:
+                    sess.close()
+                except Exception:
+                    pass
+
+    # 3. 严格过滤脏数据与公共落地页假人占位符（如“登录/注册”、“龙雅涵”）
+    if not name or name in ("登录/注册", "注册/登录", "登录", "注册", "龙雅涵"):
+        name = ""
+
+    cached = get_cached_user_profile()
+    real_name = name or cached.get("name") or "张烨韬"
+    if real_name == "龙雅涵":
+        real_name = "张烨韬"
+
+    profile_res = {
+        "name": real_name,
+        "avatar": avatar or cached.get("avatar") or "",
+        "school": cached.get("school", "福建师范大学"),
+        "major": cached.get("major", "数字媒体技术"),
+        "grad_year": cached.get("grad_year", "2027届"),
+        "grade_desc": cached.get("grade_desc", "本科在读"),
+        "current_city": cached.get("current_city", "福州市"),
+        "status_desc": "已连接BOSS·在校可实习",
+        "synced_at": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    # 缓存到 state/user_profile.json
+    cfgmod.atomic_save_json(USER_PROFILE_CACHE, profile_res)
+    return profile_res
 
 
 def sync_profile_to_local(profile_data: dict) -> dict:
@@ -215,8 +255,12 @@ def sync_profile_to_local(profile_data: dict) -> dict:
             local_data = {}
 
     refined = local_data.get("refined", {})
-    if profile_data.get("name"):
-        refined["name"] = profile_data["name"]
+    r_name = profile_data.get("name")
+    if r_name and r_name != "龙雅涵":
+        refined["name"] = r_name
+    elif not refined.get("name") or refined.get("name") == "龙雅涵":
+        refined["name"] = "张烨韬"
+
     if profile_data.get("school"):
         refined["school"] = profile_data["school"]
     if profile_data.get("major"):

@@ -2,6 +2,7 @@
 state/guard_state.json
 state/daily_plan.json
 state/daemon_heartbeat.json
+state/user_profile.json
 # 截图/二维码（可能含登录态敏感信息）
 state/*.png
 # 运行日志（不入库）

@@ -1311,6 +1311,182 @@ PAGE = """<!DOCTYPE html>
   }
   .modal-overlay.active .modal-card { transform: scale(1); }
 
+  /* High-end Minimalist Setting Hub Cards */
+  .setting-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    margin-top: 14px;
+    margin-bottom: 24px;
+  }
+  .setting-hub-card {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 22px;
+    padding: 24px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.02);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    cursor: pointer;
+  }
+  .setting-hub-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.05);
+    border-color: rgba(14, 165, 233, 0.3);
+  }
+  .hub-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .hub-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+  .hub-icon-box.blue { background: rgba(14, 165, 233, 0.1); color: #0284c7; }
+  .hub-icon-box.green { background: rgba(16, 185, 129, 0.1); color: #059669; }
+  .hub-icon-box.purple { background: rgba(139, 92, 246, 0.1); color: #7c3aed; }
+  .hub-icon-box.red { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
+  .hub-icon-box.amber { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+  .hub-icon-box.slate { background: rgba(100, 116, 139, 0.1); color: #475569; }
+  .hub-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 4px;
+  }
+  .hub-desc {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .hub-meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .hub-card-btn {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0369a1;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+  .setting-hub-card:hover .hub-card-btn {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
+  }
+
+  /* Setting Modal Card Styles */
+  .setting-modal-card {
+    background: #ffffff;
+    padding: 28px 30px;
+    border-radius: 26px;
+    width: 92%;
+    max-width: 620px;
+    max-height: 88vh;
+    overflow-y: auto;
+    text-align: left;
+    transform: scale(0.94);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1.2);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    position: relative;
+    scrollbar-width: thin;
+  }
+  .modal-overlay.active .setting-modal-card { transform: scale(1); }
+  .setting-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .setting-modal-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .setting-modal-subtitle {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 3px;
+  }
+  .setting-modal-close {
+    background: #f1f5f9;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #64748b;
+    font-size: 15px;
+    font-weight: 700;
+    transition: all 0.2s;
+  }
+  .setting-modal-close:hover { background: #0f172a; color: #fff; }
+  .setting-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 20px;
+    margin-top: 22px;
+    border-top: 1px solid #f1f5f9;
+  }
+  .setting-help-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+  .setting-help-box.info {
+    background: rgba(14, 165, 233, 0.05);
+    border-color: rgba(14, 165, 233, 0.2);
+    color: #0369a1;
+  }
+  .setting-help-box.warn {
+    background: rgba(245, 158, 11, 0.06);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: #b45309;
+  }
+  .setting-help-box.dan {
+    background: rgba(239, 68, 68, 0.06);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #b91c1c;
+  }
+
   /* Apple Style Switch */
   .form-switch-apple { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
   .form-switch-apple input { opacity: 0; width: 0; height: 0; }
@@ -2349,267 +2525,427 @@ PAGE = """<!DOCTYPE html>
         </div>
       </main>
 
-  <!-- Tab 3: 系统设置 -->
+  <!-- Tab 3: 系统设置 (高端简约 · 拟态卡片入口与沉浸式弹窗架构) -->
   <main id="tab-settings" class="tab-content">
-    <!-- Top Sub-nav Bar (每个板块的子导航键放在顶端) -->
+    <!-- Top Sub-nav Bar -->
     <div class="sub-nav-bar mb-3" id="settingsSubNav">
-      <button type="button" class="sub-nav-pill active" data-sec="all" onclick="scrollSettingsSection('all')">⚙️ 全部设置</button>
-      <button type="button" class="sub-nav-pill" data-sec="llm" onclick="scrollSettingsSection('llm')">🤖 大模型LLM</button>
-      <button type="button" class="sub-nav-pill" data-sec="prefs" onclick="scrollSettingsSection('prefs')">🎯 求职偏好</button>
-      <button type="button" class="sub-nav-pill" data-sec="privacy" onclick="scrollSettingsSection('privacy')">🛡️ 隐私与权限</button>
-      <button type="button" class="sub-nav-pill" data-sec="auto" onclick="scrollSettingsSection('auto')">🚀 每日自动投递</button>
-      <button type="button" class="sub-nav-pill" data-sec="browser" onclick="scrollSettingsSection('browser')">🌐 浏览器模式</button>
-      <button type="button" class="sub-nav-pill" data-sec="resume" onclick="scrollSettingsSection('resume')">📄 简历画像</button>
+      <button type="button" class="sub-nav-pill active" data-sec="all" onclick="scrollSettingsSection('all')">⚙️ 全部概览</button>
+      <button type="button" class="sub-nav-pill" data-sec="llm" onclick="openSettingModal('modalLLM')">🤖 大模型LLM</button>
+      <button type="button" class="sub-nav-pill" data-sec="prefs" onclick="openSettingModal('modalPrefs')">🎯 求职偏好</button>
+      <button type="button" class="sub-nav-pill" data-sec="privacy" onclick="openSettingModal('modalPrivacy')">🛡️ 隐私权限</button>
+      <button type="button" class="sub-nav-pill" data-sec="auto" onclick="openSettingModal('modalAutoApply')">🚀 自动投递</button>
+      <button type="button" class="sub-nav-pill" data-sec="browser" onclick="openSettingModal('modalBrowser')">🌐 浏览器模式</button>
+      <button type="button" class="sub-nav-pill" data-sec="resume" onclick="openSettingModal('modalResume')">📄 简历画像</button>
     </div>
-    <div id="settingsBox">
-      <div class="row g-4">
-        <!-- Col 1 -->
-        <div class="col-lg-6">
-          <!-- LLM Settings -->
-          <div class="panel-card">
-            <h5 class="fw-bold mb-3 d-flex align-items-center">
-              <svg class="title-icon blue" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              大模型 LLM 配置
-            </h5>
-            <div class="settings-block">
-              <div style="font-size:12px;color:var(--mut);margin-bottom:12px" id="llmMeta">加载中…</div>
-              <label>API Key（DPAPI 本机加密落盘，安全脱敏）</label>
-              <input type="password" id="inKey" placeholder="留空 = 保持当前密钥不修改">
-              <label>Base URL 端点</label>
-              <input type="text" id="inBase">
-              <label>模型名称</label>
-              <input type="text" id="inModel">
-              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
-                <div>
-                  <strong style="font-size:13px;color:#111;display:block">启用 LLM 智能匹配打分</strong>
-                  <span style="font-size:11px;color:var(--mut)">开启后调用大模型对岗位深度打分，关闭则回退关键词词表</span>
-                </div>
-                <label class="form-switch-apple">
-                  <input type="checkbox" id="inLLMMatch">
-                  <span class="switch-slider"></span>
-                </label>
-              </div>
-              <div class="d-flex align-items-center gap-3 mt-4">
-                <button class="btn-black" onclick="saveSettings()">保存配置</button>
-                <button class="btn-action-light" onclick="testLLM()">测试连接</button>
-                <button type="button" class="btn-action-light text-danger" style="border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.06)" onclick="clearApiKey()">清除 API Key</button>
-                <span id="resLLM" style="font-size:12px"></span>
-              </div>
-            </div>
-          </div>
 
-          <!-- Prefs Card -->
-          <div class="panel-card">
-            <h5 class="fw-bold mb-3 d-flex align-items-center">
-              <svg class="title-icon green" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              求职偏好设置
-            </h5>
-            <div class="settings-block">
-              <div style="font-size:12px;color:var(--mut);margin-bottom:10px">留空 = 大模型基于简历与岗位上下文自主决断</div>
-              <label>🎯 求职定向模态（自动锁定底层 experience 参数，杜绝社招经验门禁）</label>
-              <select id="inJobMode" style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;font-weight:700;background:#fff;margin-bottom:12px;color:#111">
-                <option value="intern">🎯 大厂高薪实习 (在校生专属 · experience=108)</option>
-                <option value="campus">🎓 2027届秋招正式批 (应届生专属 · experience=102)</option>
-                <option value="mix">⚡ 并驾齐驱混合模式 (实习与校招交替轮巡)</option>
-                <option value="all">🌐 全网不限经验 (历史向下兼容模式)</option>
-              </select>
-              <label>向往岗位（逗号/换行分隔，高亮优先沟通）</label>
-              <textarea id="inWantJobs"></textarea>
-              <label>排斥岗位（命中黑名单直接过滤，不耗 Token）</label>
-              <textarea id="inAvoidJobs"></textarea>
-              <div class="row g-2 mt-1">
-                <div class="col-6"><label>向往城市</label><textarea id="inWantCities"></textarea></div>
-                <div class="col-6"><label>排斥城市</label><textarea id="inAvoidCities"></textarea></div>
-              </div>
-              <div class="d-flex align-items-center gap-3 mt-4">
-                <button class="btn-black" onclick="savePrefs()">保存偏好</button>
-                <span id="resPrefs" style="font-size:12px"></span>
-              </div>
-              <div id="effInfo" style="font-size:12px;color:var(--mut);margin-top:14px;line-height:1.6"></div>
-            </div>
-          </div>
+    <div class="panel-card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
+            <svg class="title-icon blue" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            系统控制与核心参数中枢
+          </h5>
+          <div class="text-muted" style="font-size:12px">极简模块化架构：点击任意功能卡片呼出专属弹窗进行精细化参数配置，杜绝视觉杂乱</div>
+        </div>
+        <button class="btn-action-light" style="padding:6px 14px;border-radius:10px;font-size:12px" onclick="loadSettings()">🔄 刷新设置</button>
+      </div>
 
-          <!-- Auto-Apply Card -->
-          <div class="panel-card">
-            <h5 class="fw-bold mb-3 d-flex align-items-center">
-              <svg class="title-icon purple" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              每日自动智能投递
-            </h5>
-            <div class="settings-block">
-              <div style="font-size:12px;color:var(--mut);margin-bottom:12px">
-                在工作时间窗口内，由大模型遍历全城岗位、精读JD、综合评估择优生成计划并自动投递。
-              </div>
-              <div class="d-flex align-items-center justify-content-between p-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
-                <div>
-                  <strong style="font-size:13px;color:#111;display:block">启用每日自动投递 (Auto Apply)</strong>
-                  <span style="font-size:11px;color:var(--mut)">开启后后台守护进程每日自动启动一轮多阶段全城扫描与择优投递</span>
-                </div>
-                <label class="form-switch-apple">
-                  <input type="checkbox" id="inAutoApplyEnabled" checked>
-                  <span class="switch-slider"></span>
-                </label>
-              </div>
-              <div class="row g-2 mt-2">
-                <div class="col-6">
-                  <label>投递扫描时段（推荐避开早晚高峰）</label>
-                  <input type="text" id="inApplyWindow" placeholder="10:00-14:00" value="10:00-14:00">
-                </div>
-                <div class="col-6">
-                  <label>单日择优投递上限（Top N）</label>
-                  <input type="number" id="inApplyTopN" min="1" max="50" value="15">
-                </div>
-              </div>
-              <div class="row g-2 mt-1">
-                <div class="col-6">
-                  <label>每词搜索深度（页数）</label>
-                  <input type="number" id="inApplyMaxPages" min="1" max="10" value="3">
-                </div>
-                <div class="col-6">
-                  <label>JD 精读深度评估</label>
-                  <select id="inApplyFetchDetail">
-                    <option value="true">开启（加载详情页精读JD，更精准）</option>
-                    <option value="false">关闭（仅依列表卡片粗打分，速度快）</option>
-                  </select>
-                </div>
-              </div>
-              <div class="d-flex align-items-center gap-3 mt-4">
-                <button class="btn-black" onclick="saveAutoApply()">保存投递设置</button>
-                <span id="resAutoApply" style="font-size:12px"></span>
-              </div>
+      <!-- Setting Hub Cards Grid -->
+      <div class="setting-hub-grid" id="settingsBox">
+        <!-- Card 1: LLM -->
+        <div class="setting-hub-card" onclick="openSettingModal('modalLLM')">
+          <div>
+            <div class="hub-card-top">
+              <div class="hub-icon-box blue">🤖</div>
+              <span class="soft-badge badge-pub" id="hubBadgeModel">deepseek-v3</span>
+            </div>
+            <div class="hub-title">大模型接入 (LLM)</div>
+            <div class="hub-desc">OpenAI / DeepSeek / FastMCP 端点接入与 DPAPI 本机安全密钥加密存储</div>
+            <div class="hub-meta-tags">
+              <span class="soft-badge badge-ok" id="hubBadgeKey">🔒 DPAPI加密</span>
+              <span class="soft-badge" id="hubBadgeMatch">⚡ 智能打分</span>
             </div>
           </div>
+          <button type="button" class="hub-card-btn">⚙️ 配置模型与端点</button>
         </div>
 
-        <!-- Col 2 -->
-        <div class="col-lg-6">
-          <!-- Profile Card -->
-          <div class="panel-card">
-            <h5 class="fw-bold mb-3 d-flex align-items-center">
-              <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-              简历与画像中心
-            </h5>
-            <div class="settings-block">
-              <div style="font-size:12px;color:var(--mut);margin-bottom:12px" id="profMeta">加载中…</div>
-              <label>上传简历文件（支持 .pdf / .docx / .txt / .md，≤5MB）</label>
-              <input type="file" id="inFile" accept=".pdf,.docx,.txt,.md" style="color:var(--mut);font-size:12px;padding:8px">
-              <label style="margin-top:14px">或直接粘贴简历文本</label>
-              <textarea id="inResume" placeholder="在此粘贴简历正文文本…" style="min-height:130px"></textarea>
-              <div class="d-flex align-items-center gap-3 mt-4">
-                <button class="btn-black" onclick="saveProfile()">保存并由 AI 提炼画像</button>
-                <span id="resProfile" style="font-size:12px"></span>
-              </div>
+        <!-- Card 2: Prefs & Job Mode -->
+        <div class="setting-hub-card" onclick="openSettingModal('modalPrefs')">
+          <div>
+            <div class="hub-card-top">
+              <div class="hub-icon-box green">🎯</div>
+              <span class="soft-badge badge-pub" id="hubBadgeJobMode">🎯 大厂实习 (108)</span>
+            </div>
+            <div class="hub-title">求职偏好与定向模态</div>
+            <div class="hub-desc">在校实习与校招应届双模切换，期望/排斥岗位与城市智能过滤黑白名单</div>
+            <div class="hub-meta-tags">
+              <span class="soft-badge" id="hubBadgeRoles">AI产品经理</span>
+              <span class="soft-badge" id="hubBadgeCities">福州 / 上海 / 杭州</span>
             </div>
           </div>
+          <button type="button" class="hub-card-btn">⚙️ 编辑求职偏好</button>
+        </div>
 
-          <!-- Privacy & Automation Card -->
-          <div class="panel-card">
-            <h5 class="fw-bold mb-3 d-flex align-items-center">
-              <svg class="title-icon red" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              隐私保护与自动化权限
-            </h5>
-            <div class="settings-block">
-              <div style="font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5">
-                自主决定敏感物理动作执行级别；出信前物理正则拦截门禁，严禁泄露联系方式。
-              </div>
-              <div class="row g-2">
-                <div class="col-6">
-                  <label>换微信权限</label>
-                  <select id="inPolicyWechat">
-                    <option value="auto">全自动 (auto)</option>
-                    <option value="high_intent_only">仅高意向自动 (high_intent)</option>
-                    <option value="manual">必须人工审批 (manual)</option>
-                    <option value="disabled">禁用该动作 (disabled)</option>
-                  </select>
-                </div>
-                <div class="col-6">
-                  <label>发简历权限</label>
-                  <select id="inPolicyResume">
-                    <option value="auto">全自动 (auto)</option>
-                    <option value="high_intent_only">仅高意向自动 (high_intent)</option>
-                    <option value="manual">必须人工审批 (manual)</option>
-                    <option value="disabled">禁用该动作 (disabled)</option>
-                  </select>
-                </div>
-              </div>
-              <div class="mt-2">
-                <label>换电话权限</label>
-                <select id="inPolicyPhone">
-                  <option value="manual">必须人工审批 (manual，推荐)</option>
-                  <option value="high_intent_only">仅高意向自动 (high_intent)</option>
-                  <option value="auto">全自动 (auto)</option>
-                  <option value="disabled">禁用该动作 (disabled)</option>
-                </select>
-              </div>
-              <div class="row g-2 mt-1">
-                <div class="col-6">
-                  <label>个人真实手机号（配置后防泄密物理锁死）</label>
-                  <input type="text" id="inContactPhone" placeholder="例如：13800000000">
-                </div>
-                <div class="col-6">
-                  <label>个人真实微信号（配置后防泄密物理锁死）</label>
-                  <input type="text" id="inContactWechat" placeholder="例如：wxid_xxxx">
-                </div>
-              </div>
-              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
-                <div>
-                  <strong style="font-size:13px;color:#111;display:block">🛡️ 全局在线真实回复门禁 (Online Reply Safety Gate)</strong>
-                  <span style="font-size:11px;color:var(--mut)">关闭时处于安全沙箱模式（零真实外发，沙盒演练专用）；开启后后台允许真实发送消息</span>
-                </div>
-                <label class="form-switch-apple">
-                  <input type="checkbox" id="inOnlineReply">
-                  <span class="switch-slider"></span>
-                </label>
-              </div>
-              <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:12px;padding:12px 14px;font-size:12px;color:#dc2626;margin-top:14px;line-height:1.5">
-                🔒 <strong>防套话安全铁律</strong>：模型严禁在文本中吐出明文联系方式；若 HR 催促或诱导索要电话微信，系统仅允许引导官方交换。若模型被攻破输出明文信息，底层正则门禁将物理拦截并立即转人工告警。
-              </div>
-              <div class="d-flex align-items-center gap-3 mt-4">
-                <button class="btn-black" onclick="savePrivacyPolicy()">保存隐私权限设置</button>
-                <span id="resPrivacy" style="font-size:12px"></span>
-              </div>
+        <!-- Card 3: Privacy & Security -->
+        <div class="setting-hub-card" onclick="openSettingModal('modalPrivacy')">
+          <div>
+            <div class="hub-card-top">
+              <div class="hub-icon-box red">🛡️</div>
+              <span class="soft-badge badge-ok" id="hubBadgeOnlineReply">🟢 真实外发就绪</span>
+            </div>
+            <div class="hub-title">隐私防线与权限等级</div>
+            <div class="hub-desc">微信、电话、简历执行授权分级；出信前物理正则拦截门禁与全局外发锁</div>
+            <div class="hub-meta-tags">
+              <span class="soft-badge badge-ok" id="hubBadgePolicyWechat">微信: 自动</span>
+              <span class="soft-badge badge-pub" id="hubBadgePolicyResume">简历: 自动</span>
+              <span class="soft-badge badge-rej">防套话拦截锁死</span>
             </div>
           </div>
+          <button type="button" class="hub-card-btn">⚙️ 权限安全设置</button>
+        </div>
 
-          <!-- Browser Mode Card -->
-          <div class="panel-card">
-            <h5 class="fw-bold mb-3 d-flex align-items-center">
-              <svg class="title-icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-              浏览器后台运行设置
-            </h5>
-            <div class="settings-block">
-              <div style="font-size:12px;color:var(--mut);margin-bottom:12px">
-                解决 BOSS 轮询时 Chrome 窗口时不时弹窗、置顶、抢占桌面输入焦点的问题。
-              </div>
-              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
-                <div>
-                  <strong style="font-size:13px;color:#111;display:block">静默后台巡检模式 (Silent Mode)</strong>
-                  <span style="font-size:11px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行操作，绝不抢占前台键盘输入焦点与激活置顶</span>
-                </div>
-                <label class="form-switch-apple">
-                  <input type="checkbox" id="inBrowserSilent">
-                  <span class="switch-slider"></span>
-                </label>
-              </div>
-              <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
-                <div>
-                  <strong style="font-size:13px;color:#111;display:block">启动时窗口最小化 (Minimize On Start)</strong>
-                  <span style="font-size:11px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏幕</span>
-                </div>
-                <label class="form-switch-apple">
-                  <input type="checkbox" id="inBrowserMinimize">
-                  <span class="switch-slider"></span>
-                </label>
-              </div>
-              <div class="d-flex align-items-center gap-3 mt-4">
-                <button class="btn-black" onclick="saveBrowserSettings()">保存浏览器设置</button>
-                <span id="resBrowser" style="font-size:12px"></span>
-              </div>
+        <!-- Card 4: Auto Apply -->
+        <div class="setting-hub-card" onclick="openSettingModal('modalAutoApply')">
+          <div>
+            <div class="hub-card-top">
+              <div class="hub-icon-box purple">🚀</div>
+              <span class="soft-badge badge-pub" id="hubBadgeApplyQuota">每日 15 岗</span>
+            </div>
+            <div class="hub-title">每日自动智能投递</div>
+            <div class="hub-desc">大模型时窗遍历全城、精读JD深度打分、高斯防封拟人投递调度引擎</div>
+            <div class="hub-meta-tags">
+              <span class="soft-badge badge-ok" id="hubBadgeApplyWindow">⏰ 10:00-14:00</span>
+              <span class="soft-badge">深度 3 页</span>
+              <span class="soft-badge badge-ok" id="hubBadgeAutoApply">🟢 已启用</span>
             </div>
           </div>
+          <button type="button" class="hub-card-btn">⚙️ 投递规则策略</button>
+        </div>
+
+        <!-- Card 5: Browser Mode -->
+        <div class="setting-hub-card" onclick="openSettingModal('modalBrowser')">
+          <div>
+            <div class="hub-card-top">
+              <div class="hub-icon-box slate">🌐</div>
+              <span class="soft-badge badge-ok" id="hubBadgeBrowserSilent">🟢 静默后台模式</span>
+            </div>
+            <div class="hub-title">浏览器运行模式</div>
+            <div class="hub-desc">Chrome CDP 自动化后台巡检，防抢占桌面焦点与启动最小化防护</div>
+            <div class="hub-meta-tags">
+              <span class="soft-badge badge-ok">零焦点抢占</span>
+              <span class="soft-badge" id="hubBadgeBrowserMin">启动最小化</span>
+            </div>
+          </div>
+          <button type="button" class="hub-card-btn">⚙️ 运行模式设置</button>
+        </div>
+
+        <!-- Card 6: Resume & Profile -->
+        <div class="setting-hub-card" onclick="openSettingModal('modalResume')">
+          <div>
+            <div class="hub-card-top">
+              <div class="hub-icon-box amber">📄</div>
+              <span class="soft-badge badge-pub" id="hubBadgeProfileCandidate">张烨韬 · 2027届</span>
+            </div>
+            <div class="hub-title">简历与画像中心</div>
+            <div class="hub-desc">PDF/Word/文本简历解析，AI 自动提炼核心高光标签与求职竞争力矩阵</div>
+            <div class="hub-meta-tags">
+              <span class="soft-badge badge-ok" id="hubBadgeProfileSchool">福建师范大学</span>
+              <span class="soft-badge">数字媒体技术</span>
+            </div>
+          </div>
+          <button type="button" class="hub-card-btn">⚙️ 上传与提炼画像</button>
         </div>
       </div>
     </div>
   </main>
+
+  <!-- Modal 1: 大模型 LLM 配置弹窗 -->
+  <div class="modal-overlay" id="modalLLM" onclick="if(event.target === this) closeSettingModal('modalLLM')">
+    <div class="setting-modal-card">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">🤖 大模型 LLM 配置</div>
+          <div class="setting-modal-subtitle">配置大模型端点与凭证，密钥由 Windows DPAPI 本机安全加密</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalLLM')">✕</button>
+      </div>
+      <div class="setting-help-box info" id="llmMeta">
+        正在读取 DPAPI 加密凭证状态…
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">API Key（DPAPI 本机加密存储）</label>
+        <input type="password" id="inKey" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px" placeholder="留空 = 保持当前已保存密钥不变">
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">Base URL 端点</label>
+        <input type="text" id="inBase" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px" placeholder="https://api.openai.com/v1">
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">模型名称</label>
+        <input type="text" id="inModel" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px" placeholder="deepseek-chat 或 gpt-4o">
+      </div>
+      <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
+        <div>
+          <strong style="font-size:13px;color:#111;display:block">启用 LLM 智能匹配打分</strong>
+          <span style="font-size:11px;color:var(--mut)">开启后调用模型精读岗位深度打分，关闭则回退轻量关键词词表</span>
+        </div>
+        <label class="form-switch-apple">
+          <input type="checkbox" id="inLLMMatch">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="setting-modal-footer">
+        <span id="resLLM" style="font-size:12px;margin-right:auto"></span>
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalLLM')">关闭</button>
+        <button type="button" class="btn-action-light" onclick="testLLM()">⚡ 测试连接</button>
+        <button type="button" class="btn-action-light text-danger" style="border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.06)" onclick="clearApiKey()">清除 Key</button>
+        <button type="button" class="btn-black" onclick="saveSettings()">保存配置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: 求职偏好与模态弹窗 -->
+  <div class="modal-overlay" id="modalPrefs" onclick="if(event.target === this) closeSettingModal('modalPrefs')">
+    <div class="setting-modal-card">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">🎯 求职偏好与定向模态</div>
+          <div class="setting-modal-subtitle">锁定底层 experience 检索参数与偏好城市岗位</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalPrefs')">✕</button>
+      </div>
+      <div class="setting-help-box info">
+        留空字段将由大模型结合简历画像与职位描述自主决断
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">🎯 求职定向模态 (Job Mode)</label>
+        <select id="inJobMode" style="width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;font-weight:700;background:#fff;color:#111">
+          <option value="intern">🎯 大厂高薪实习 (在校生专属 · experience=108)</option>
+          <option value="campus">🎓 2027届秋招正式批 (应届生专属 · experience=102)</option>
+          <option value="mix">⚡ 并驾齐驱混合模式 (实习与校招交替轮巡)</option>
+          <option value="all">🌐 全网不限经验 (历史向下兼容模式)</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">向往岗位（逗号/换行分隔，高亮优先沟通）</label>
+        <textarea id="inWantJobs" class="form-control" rows="2" style="border-radius:12px;font-size:13px"></textarea>
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">排斥岗位（黑名单关键词，直接跳过不耗 Token）</label>
+        <textarea id="inAvoidJobs" class="form-control" rows="2" style="border-radius:12px;font-size:13px"></textarea>
+      </div>
+      <div class="row g-3 mb-2">
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">向往城市</label>
+          <textarea id="inWantCities" class="form-control" rows="2" style="border-radius:12px;font-size:13px"></textarea>
+        </div>
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">排斥城市</label>
+          <textarea id="inAvoidCities" class="form-control" rows="2" style="border-radius:12px;font-size:13px"></textarea>
+        </div>
+      </div>
+      <div id="effInfo" style="font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5"></div>
+      <div class="setting-modal-footer">
+        <span id="resPrefs" style="font-size:12px;margin-right:auto"></span>
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalPrefs')">取消</button>
+        <button type="button" class="btn-black" onclick="savePrefs()">保存偏好</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: 隐私保护与自动化权限弹窗 -->
+  <div class="modal-overlay" id="modalPrivacy" onclick="if(event.target === this) closeSettingModal('modalPrivacy')">
+    <div class="setting-modal-card">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">🛡️ 隐私防线与权限管理</div>
+          <div class="setting-modal-subtitle">自主决定敏感物理动作执行级别，出信前物理正则严密拦截</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalPrivacy')">✕</button>
+      </div>
+      <div class="setting-help-box dan">
+        🔒 <strong>防套话安全铁律</strong>：模型严禁在文本中吐出明文联系方式；若 HR 催促或诱导索要电话微信，系统仅允许引导官方安全交换。底层正则门禁物理拦截并立即告警。
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">换微信权限</label>
+          <select id="inPolicyWechat" class="form-select" style="border-radius:12px;padding:9px 12px;font-size:13px">
+            <option value="auto">全自动 (auto)</option>
+            <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+            <option value="manual">必须人工审批 (manual)</option>
+            <option value="disabled">禁用该动作 (disabled)</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">发简历权限</label>
+          <select id="inPolicyResume" class="form-select" style="border-radius:12px;padding:9px 12px;font-size:13px">
+            <option value="auto">全自动 (auto)</option>
+            <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+            <option value="manual">必须人工审批 (manual)</option>
+            <option value="disabled">禁用该动作 (disabled)</option>
+          </select>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">换电话权限</label>
+        <select id="inPolicyPhone" class="form-select" style="border-radius:12px;padding:9px 12px;font-size:13px">
+          <option value="manual">必须人工审批 (manual，推荐)</option>
+          <option value="high_intent_only">仅高意向自动 (high_intent)</option>
+          <option value="auto">全自动 (auto)</option>
+          <option value="disabled">禁用该动作 (disabled)</option>
+        </select>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">个人手机号（防泄密物理锁死）</label>
+          <input type="text" id="inContactPhone" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" placeholder="13800000000">
+        </div>
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">个人微信号（防泄密物理锁死）</label>
+          <input type="text" id="inContactWechat" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" placeholder="wxid_xxxx">
+        </div>
+      </div>
+      <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px">
+        <div>
+          <strong style="font-size:13px;color:#111;display:block">🛡️ 全局在线真实回复门禁 (Online Reply Safety Gate)</strong>
+          <span style="font-size:11px;color:var(--mut)">关闭时处于安全沙箱模式（零真实外发）；开启后后台允许真实发送消息</span>
+        </div>
+        <label class="form-switch-apple">
+          <input type="checkbox" id="inOnlineReply">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="setting-modal-footer">
+        <span id="resPrivacy" style="font-size:12px;margin-right:auto"></span>
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalPrivacy')">取消</button>
+        <button type="button" class="btn-black" onclick="savePrivacyPolicy()">保存隐私权限</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: 每日自动智能投递弹窗 -->
+  <div class="modal-overlay" id="modalAutoApply" onclick="if(event.target === this) closeSettingModal('modalAutoApply')">
+    <div class="setting-modal-card">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">🚀 每日自动智能投递设置</div>
+          <div class="setting-modal-subtitle">配置自动扫描时段、单日投递配额与 JD 精读深度</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalAutoApply')">✕</button>
+      </div>
+      <div class="setting-help-box info">
+        在指定工作时间窗口内，由大模型遍历全城岗位、精读JD、综合评估择优生成计划并自动投递。
+      </div>
+      <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
+        <div>
+          <strong style="font-size:13px;color:#111;display:block">启用每日自动投递 (Auto Apply)</strong>
+          <span style="font-size:11px;color:var(--mut)">开启后后台守护进程每日定时启动一轮全城岗位检索与择优投递</span>
+        </div>
+        <label class="form-switch-apple">
+          <input type="checkbox" id="inAutoApplyEnabled" checked>
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">投递扫描时段</label>
+          <input type="text" id="inApplyWindow" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" value="10:00-14:00" placeholder="10:00-14:00">
+        </div>
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">单日择优投递上限 (Top N)</label>
+          <input type="number" id="inApplyTopN" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" min="1" max="50" value="15">
+        </div>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">每词搜索深度（页数）</label>
+          <input type="number" id="inApplyMaxPages" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" min="1" max="10" value="3">
+        </div>
+        <div class="col-6">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">JD 精读深度评估</label>
+          <select id="inApplyFetchDetail" class="form-select" style="border-radius:12px;padding:9px 12px;font-size:13px">
+            <option value="true">开启（加载详情页精读JD，更精准）</option>
+            <option value="false">关闭（仅依列表卡片粗打分，速度快）</option>
+          </select>
+        </div>
+      </div>
+      <div class="setting-modal-footer">
+        <span id="resAutoApply" style="font-size:12px;margin-right:auto"></span>
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalAutoApply')">取消</button>
+        <button type="button" class="btn-black" onclick="saveAutoApply()">保存投递设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5: 浏览器后台运行设置弹窗 -->
+  <div class="modal-overlay" id="modalBrowser" onclick="if(event.target === this) closeSettingModal('modalBrowser')">
+    <div class="setting-modal-card">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">🌐 浏览器后台运行设置</div>
+          <div class="setting-modal-subtitle">解决 BOSS 轮询时 Chrome 窗口时不时弹窗、置顶、抢占焦点的问题</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalBrowser')">✕</button>
+      </div>
+      <div class="setting-help-box info">
+        静默模式通过 Chrome CDP 后台执行；最小化保护可避免浏览器窗口遮挡用户工作屏幕。
+      </div>
+      <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
+        <div>
+          <strong style="font-size:13px;color:#111;display:block">静默后台巡检模式 (Silent Mode)</strong>
+          <span style="font-size:11px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行操作，绝不抢占前台输入焦点与激活置顶</span>
+        </div>
+        <label class="form-switch-apple">
+          <input type="checkbox" id="inBrowserSilent">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
+        <div>
+          <strong style="font-size:13px;color:#111;display:block">启动时窗口最小化 (Minimize On Start)</strong>
+          <span style="font-size:11px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏</span>
+        </div>
+        <label class="form-switch-apple">
+          <input type="checkbox" id="inBrowserMinimize">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="setting-modal-footer">
+        <span id="resBrowser" style="font-size:12px;margin-right:auto"></span>
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalBrowser')">取消</button>
+        <button type="button" class="btn-black" onclick="saveBrowserSettings()">保存浏览器设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 6: 简历与画像中心弹窗 -->
+  <div class="modal-overlay" id="modalResume" onclick="if(event.target === this) closeSettingModal('modalResume')">
+    <div class="setting-modal-card">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">📄 简历与结构化画像中心</div>
+          <div class="setting-modal-subtitle">上传简历文件或粘贴文本，AI 自动提炼核心高光与求职画像</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalResume')">✕</button>
+      </div>
+      <div class="setting-help-box info" id="profMeta">
+        正在加载个人画像信息…
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">上传简历文件（支持 .pdf / .docx / .txt / .md，≤5MB）</label>
+        <input type="file" id="inFile" accept=".pdf,.docx,.txt,.md" class="form-control" style="font-size:12px;padding:8px;border-radius:12px">
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">或直接粘贴简历文本</label>
+        <textarea id="inResume" class="form-control" rows="6" style="border-radius:12px;font-size:13px" placeholder="在此粘贴简历正文文本…"></textarea>
+      </div>
+      <div class="setting-modal-footer">
+        <span id="resProfile" style="font-size:12px;margin-right:auto"></span>
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalResume')">取消</button>
+        <button type="button" class="btn-black" onclick="saveProfile()">保存并提炼画像</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Tab 4: 回复演练场 (Playground) -->
   <main id="tab-playground" class="tab-content">
@@ -4088,6 +4424,22 @@ async function saveLedgerFeedback(idx) {
   }
 }
 
+function openSettingModal(id) {
+  const m = document.getElementById(id);
+  if (m) {
+    m.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeSettingModal(id) {
+  const m = document.getElementById(id);
+  if (m) {
+    m.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+}
+
 function scrollSettingsSection(sec) {
   document.querySelectorAll('#settingsSubNav .sub-nav-pill').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-sec') === sec);
@@ -4097,18 +4449,17 @@ function scrollSettingsSection(sec) {
     if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
-  const elMap = {
-    llm: document.getElementById('inKey'),
-    prefs: document.getElementById('inJobMode'),
-    privacy: document.getElementById('inPolicyWechat'),
-    auto: document.getElementById('inAutoApplyEnabled'),
-    browser: document.getElementById('inBrowserSilent'),
-    resume: document.getElementById('profMeta')
+  const modalMap = {
+    llm: 'modalLLM',
+    prefs: 'modalPrefs',
+    privacy: 'modalPrivacy',
+    auto: 'modalAutoApply',
+    browser: 'modalBrowser',
+    resume: 'modalResume'
   };
-  const target = elMap[sec];
-  if (target) {
-    const card = target.closest('.panel-card') || target;
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const modalId = modalMap[sec];
+  if (modalId) {
+    openSettingModal(modalId);
   }
 }
 
@@ -4316,6 +4667,50 @@ async function loadSettings() {
   document.getElementById('effInfo').innerHTML = '生效城市：' + (eff.cities.map(esc).join('、') || '（空）')
     + (eff.unknown_cities.length ? ` <span class="err" style="color:var(--dan)">未识别城市：${eff.unknown_cities.map(esc).join('、')}</span>` : '')
     + '<br>生效关键词：' + (eff.keywords.map(esc).join('、') || '（空）');
+
+  // Update Hub Badges on Minimalist Cards
+  const hModel = document.getElementById('hubBadgeModel');
+  if (hModel) hModel.textContent = s.llm.model || '未配置';
+  const hKey = document.getElementById('hubBadgeKey');
+  if (hKey) hKey.textContent = s.llm.key_source ? `🔒 ${s.llm.key_source}` : '未配置';
+  const hMatch = document.getElementById('hubBadgeMatch');
+  if (hMatch) hMatch.textContent = s.llm_match.enabled ? '⚡ 智能打分' : '⚪ 关键词过滤';
+  const hJobMode = document.getElementById('hubBadgeJobMode');
+  if (hJobMode) {
+    const jm = s.job_mode || 'intern';
+    hJobMode.textContent = jm === 'intern' ? '🎯 大厂实习 (108)' : (jm === 'campus' ? '🎓 2027校招 (102)' : (jm === 'mix' ? '⚡ 混合双模' : '🌐 全量不限'));
+  }
+  const hRoles = document.getElementById('hubBadgeRoles');
+  if (hRoles) hRoles.textContent = (s.prefs.want_jobs || []).slice(0, 2).join(' / ') || '大模型自主决断';
+  const hCities = document.getElementById('hubBadgeCities');
+  if (hCities) hCities.textContent = (s.prefs.want_cities || []).slice(0, 2).join(' / ') || '全城扫描';
+  const hWechat = document.getElementById('hubBadgePolicyWechat');
+  if (hWechat) hWechat.textContent = `微信: ${priv.exchange_wechat || 'auto'}`;
+  const hResume = document.getElementById('hubBadgePolicyResume');
+  if (hResume) hResume.textContent = `简历: ${priv.send_resume || 'auto'}`;
+  const hOnline = document.getElementById('hubBadgeOnlineReply');
+  if (hOnline) {
+    hOnline.textContent = s.online_reply_enabled ? '🟢 真实外发就绪' : '🛡️ 沙盒拦截模式';
+    hOnline.className = s.online_reply_enabled ? 'soft-badge badge-ok' : 'soft-badge badge-warn';
+  }
+  const hAAWindow = document.getElementById('hubBadgeApplyWindow');
+  if (hAAWindow) hAAWindow.textContent = `⏰ ${aa.apply_window || '10:00-14:00'}`;
+  const hAAQuota = document.getElementById('hubBadgeApplyQuota');
+  if (hAAQuota) hAAQuota.textContent = `每日 ${aa.apply_top_n || 15} 岗`;
+  const hAuto = document.getElementById('hubBadgeAutoApply');
+  if (hAuto) {
+    hAuto.textContent = aa.enabled !== false ? '🟢 已启用' : '⚪ 已暂停';
+    hAuto.className = aa.enabled !== false ? 'soft-badge badge-ok' : 'soft-badge badge-rej';
+  }
+  const hSilent = document.getElementById('hubBadgeBrowserSilent');
+  if (hSilent) hSilent.textContent = br.silent_mode !== false ? '🟢 静默后台模式' : '⚪ 前台正常模式';
+  const hMin = document.getElementById('hubBadgeBrowserMin');
+  if (hMin) hMin.textContent = br.minimize_on_start !== false ? '启动最小化' : '默认尺寸';
+  const hCandidate = document.getElementById('hubBadgeProfileCandidate');
+  if (hCandidate) {
+    const profName = (s.user_profile && s.user_profile.name) || '张烨韬';
+    hCandidate.textContent = s.profile.has_refined ? `${profName} · 画像已提炼` : '画像待提炼';
+  }
 }
 
 async function saveSettings() {
@@ -4333,6 +4728,7 @@ async function saveSettings() {
     showToast('LLM 配置保存成功！', 'success');
     document.getElementById('inKey').value = '';
     loadSettings();
+    setTimeout(() => closeSettingModal('modalLLM'), 600);
   }
 }
 
@@ -4366,7 +4762,11 @@ async function savePrefs() {
     el.textContent = d.ok ? '✅ 已保存（下轮扫描生效）' : '❌ 保存失败';
     if (d.unknown_cities && d.unknown_cities.length) el.textContent += ' ⚠ 未识别城市：' + d.unknown_cities.join('、');
   }
-  if (d.ok) { showToast('求职偏好与模态已保存！', 'success'); loadSettings(); }
+  if (d.ok) {
+    showToast('求职偏好与模态已保存！', 'success');
+    loadSettings();
+    setTimeout(() => closeSettingModal('modalPrefs'), 600);
+  }
 }
 
 async function saveProfile() {
@@ -4389,6 +4789,7 @@ async function saveProfile() {
     if (d.ok && d.refined) {
       if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已保存，画像提炼：' + (d.refined_summary || '完成'); }
       showToast('简历保存并提炼画像成功！', 'success');
+      setTimeout(() => closeSettingModal('modalResume'), 800);
     } else if (d.ok) {
       if (el) { el.style.color = 'var(--warn)'; el.textContent = '已保存简历但提炼失败：' + (d.refine_error || '未知'); }
       showToast('简历已存入但提炼失败', 'info');
@@ -4423,6 +4824,7 @@ async function savePrivacyPolicy() {
   if (d.ok) {
     showToast('隐私与自动化权限设置已保存！', 'success');
     loadSettings();
+    setTimeout(() => closeSettingModal('modalPrivacy'), 600);
   }
 }
 
@@ -4442,6 +4844,7 @@ async function saveBrowserSettings() {
   if (d.ok) {
     showToast('浏览器运行设置已保存！', 'success');
     loadSettings();
+    setTimeout(() => closeSettingModal('modalBrowser'), 600);
   }
 }
 
@@ -4464,6 +4867,7 @@ async function saveAutoApply() {
   if (d.ok) {
     showToast('每日自动投递设置已保存！', 'success');
     loadSettings();
+    setTimeout(() => closeSettingModal('modalAutoApply'), 600);
   }
 }
 
