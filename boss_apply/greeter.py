@@ -225,7 +225,11 @@ def _pick_conversation_js(company, extra_kw=""):
 
   let target = null, picked = 'none', bestScore = 0;
   if (qClean || extraClean) {
-    const combinedTokens = ((company || '') + ' ' + (extraKw || '')).toLowerCase().match(/[\\u4e00-\\u9fa5]{2,}|[a-z0-9]{3,}/g) || [];
+    const rawTokens = ((company || '') + ' ' + (extraKw || '')).toLowerCase()
+      .replace(/(?:人事主管|招聘主管|hrbp|人事经理|招聘经理|人事专员|招聘专员|主管|经理|hr|总监|猎头)/gi, ' ')
+      .match(/[\\u4e00-\\u9fa5]{2,}|[a-z0-9]{3,}/g) || [];
+    const origTokens = ((company || '') + ' ' + (extraKw || '')).toLowerCase().match(/[\\u4e00-\\u9fa5]{2,}|[a-z0-9]{3,}/g) || [];
+    const combinedTokens = Array.from(new Set([...rawTokens, ...origTokens]));
     for (const li of validLis) {
       const textClean = clean(li.innerText);
       if (textClean.length < 5) continue;

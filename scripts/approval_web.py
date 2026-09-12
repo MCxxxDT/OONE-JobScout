@@ -6200,13 +6200,14 @@ def _is_alert_resolved(alert_ts, company, rows):
     """
     valid_actions = {
         "reply": {"ok"},
-        "exchange_wechat": {"ok", "already_sent"},
-        "send_resume": {"ok", "already_sent"},
-        "agree_wechat": {"ok", "already_agreed"},
+        "exchange_wechat": {"ok", "already_sent", "blocked_job_fit"},
+        "send_resume": {"ok", "already_sent", "blocked_job_fit"},
+        "agree_wechat": {"ok", "already_agreed", "blocked_job_fit"},
         "card_ignore": None,
         "ignore": None,
         "mark_handled": None,
         "daemon_skip": None,
+        "job_fit_gate": None,
     }
     company_clean = (company or "").replace(" ", "").lower()
     for r in rows:
@@ -6518,9 +6519,35 @@ async def api_feedback(request: Request, token: str = ""):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+_DAILY_APPLY_STATUS = {
+    "running": False,
+    "last_run_time": None,
+    "last_report": None,
+    "last_error": None,
+}
+
+
+@app.get("/api/apply/status")
+def api_apply_status(token: str = ""):
+    """获取今日自动投递管线的实时运行状态与最新报告。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    g = guardmod.Guard(cfg)
+    return {
+        "ok": True,
+        "running": _DAILY_APPLY_STATUS["running"],
+        "last_run_time": _DAILY_APPLY_STATUS["last_run_time"],
+        "last_report": _DAILY_APPLY_STATUS["last_report"],
+        "last_error": _DAILY_APPLY_STATUS["last_error"],
+        "scan_done_today": g.is_scan_done(),
+        "guard_summary": g.summary(),
+    }
+
+
 @app.post("/api/apply/now")
 async def api_apply_now(request: Request, token: str = ""):
-    """立即执行今日投递计划（Phase 4）或全链路扫描投递（Phase 1~4）。"""
+    """立即执行今日投递计划（Phase 4）或全链路扫描投递（Phase 1~4）。支持同步或异步后台执行。"""
     cfg = cfgmod.load()
     if not _check_token(cfg, token):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -6531,22 +6558,48 @@ async def api_apply_now(request: Request, token: str = ""):
         pass
     mode = body.get("mode", "execute_plan")
     dry_run = bool(body.get("dry_run", False))
+    async_run = bool(body.get("async_run", False))
     daemon_cfg = cfg.get("daemon") or {}
     default_top_n = int(daemon_cfg.get("apply_top_n", 50))
     top_n = int(body.get("top_n") or default_top_n)
 
     from boss_apply import daily_apply
     g = guardmod.Guard(cfg)
+
+    def _worker():
+        _DAILY_APPLY_STATUS["running"] = True
+        _DAILY_APPLY_STATUS["last_run_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _DAILY_APPLY_STATUS["last_error"] = None
+        try:
+            if mode == "full_scan":
+                report = daily_apply.scan_and_apply_daily(cfg, dry_run=dry_run)
+                if not dry_run and report.get("phase") in ("complete", "no_candidates", "no_qualified"):
+                    g.mark_scan_done()
+                _DAILY_APPLY_STATUS["last_report"] = report
+            else:
+                exec_res = daily_apply.execute_daily_plan(cfg, g, top_n=top_n)
+                if not dry_run and (exec_res.get("executed", 0) > 0 or not exec_res.get("error")):
+                    g.mark_scan_done()
+                _DAILY_APPLY_STATUS["last_report"] = exec_res
+        except Exception as ex:
+            _DAILY_APPLY_STATUS["last_error"] = str(ex)
+        finally:
+            _DAILY_APPLY_STATUS["running"] = False
+
+    if async_run:
+        if _DAILY_APPLY_STATUS["running"]:
+            return {"ok": False, "error": "任务正在运行中，请勿重复触发"}
+        import threading
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+        return {"ok": True, "status": "running", "async": True, "message": "自动投递任务已在后台启动"}
+
+    # 同步模式（向后兼容已有单元测试）
+    _worker()
     if mode == "full_scan":
-        report = daily_apply.scan_and_apply_daily(cfg, dry_run=dry_run)
-        if not dry_run and report.get("phase") == "complete":
-            g.mark_scan_done()
-        return {"ok": True, "mode": "full_scan", "report": report}
+        return {"ok": True, "mode": "full_scan", "report": _DAILY_APPLY_STATUS["last_report"], "error": _DAILY_APPLY_STATUS["last_error"]}
     else:
-        exec_res = daily_apply.execute_daily_plan(cfg, g, top_n=top_n)
-        if not dry_run and (exec_res.get("executed", 0) > 0 or not exec_res.get("error")):
-            g.mark_scan_done()
-        return {"ok": True, "mode": "execute_plan", "result": exec_res}
+        return {"ok": True, "mode": "execute_plan", "result": _DAILY_APPLY_STATUS["last_report"], "error": _DAILY_APPLY_STATUS["last_error"]}
 
 
 @app.post("/api/daemon/toggle")

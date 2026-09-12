@@ -97,8 +97,12 @@ def _last_action_dt(rows, who, action, status=None, exclude_dry_run=False):
     for r in rows:
         if r.get("action") != action or r.get("company") != who:
             continue
-        if status and r.get("status") != status:
-            continue
+        if status:
+            if isinstance(status, (list, tuple, set)):
+                if r.get("status") not in status:
+                    continue
+            elif r.get("status") != status:
+                continue
         if exclude_dry_run and r.get("dry_run"):
             continue
         try:
@@ -126,9 +130,9 @@ def _handled_since_hr_msg(rows, who, conv_time, action, status=None, exclude_dry
 
 
 def already_replied(rows, who, conv_time):
-    """防重发：该公司已有成功回复或动作(reply/send_resume/exchange_wechat/agree_wechat, status=ok)且发生在 HR 最后消息之后。"""
+    """防重发：该公司已有成功回复或动作(reply/send_resume/exchange_wechat/agree_wechat, status in ('ok', 'already_sent', 'already_agreed'))且发生在 HR 最后消息之后。"""
     for act in ("reply", "send_resume", "exchange_wechat", "agree_wechat"):
-        if _handled_since_hr_msg(rows, who, conv_time, act, status="ok"):
+        if _handled_since_hr_msg(rows, who, conv_time, act, status=("ok", "already_sent", "already_agreed")):
             return True
     return False
 
@@ -142,6 +146,14 @@ def already_skipped(rows, who, conv_time):
     """防重复决策：该会话已被 daemon 判定 skip(非dry-run)且 HR 未再回复——
     避免闸门内每轮对同一批低价值会话反复烧 LLM，也保证软收工能正常结束。"""
     return _handled_since_hr_msg(rows, who, conv_time, "daemon_skip", exclude_dry_run=True)
+
+
+def already_blocked(rows, who, conv_time):
+    """防门禁死循环：该公司动作(send_resume/exchange_wechat/agree_wechat)已被岗位门禁拦截(blocked_job_fit)且 HR 未再回复。"""
+    for act in ("send_resume", "exchange_wechat", "agree_wechat", "job_fit_gate"):
+        if _handled_since_hr_msg(rows, who, conv_time, act, status="blocked_job_fit"):
+            return True
+    return False
 
 
 def _parse_hhmm(s, default):
@@ -373,16 +385,18 @@ def run_cycle(cfg, engine, args, st=None):
     if auto_apply and in_active and not soft_close:
         g_apply = guardmod.Guard(cfg)
         if not g_apply.is_scan_done():
-            apply_window = str(daemon_cfg.get("apply_window", "10:00-14:00"))
+            apply_window = str(daemon_cfg.get("apply_window", "09:30-14:00"))
             try:
                 aw_start_s, aw_end_s = apply_window.split("-")
-                aw_start = _parse_hhmm(aw_start_s, datetime.time(10, 0))
+                aw_start = _parse_hhmm(aw_start_s, datetime.time(9, 30))
                 aw_end = _parse_hhmm(aw_end_s, datetime.time(14, 0))
                 in_apply_window = aw_start <= now.time() <= aw_end
             except Exception:
                 in_apply_window = True  # 解析失败默认允许
-            if in_apply_window:
-                print("  [🎯 每日自动投递] 进入投递扫描窗口，启动三阶段管线...")
+            should_run_apply = in_apply_window or (not g_apply.is_scan_done() and in_active)
+            if should_run_apply:
+                reason_tag = "窗口内巡检" if in_apply_window else "今日未执行补偿"
+                print(f"  [🎯 每日自动投递] 触发投递扫描管线 ({reason_tag})...")
                 try:
                     report = daily_apply.scan_and_apply_daily(cfg, dry_run=args.dry_run)
                     if not args.dry_run:
@@ -475,6 +489,9 @@ def run_cycle(cfg, engine, args, st=None):
             continue
         if already_skipped(ledger_rows, who, conv.get("time")):
             print(f"  [防重复] 该会话已被决策跳过且 HR 未再回复，不再重复决策。")
+            continue
+        if already_blocked(ledger_rows, who, conv.get("time")):
+            print(f"  [防死循环] 该会话此前已被岗位门禁拦截且 HR 未再发言，跳过冷却。")
             continue
 
         # 5.2 JD 上下文注入（补全项 a）：决策前先取会话关联岗位详情（只读，零发送）
@@ -641,6 +658,13 @@ def run_cycle(cfg, engine, args, st=None):
                     if not res_act.get("ok"):
                         print(f"  [动作异常] 发送简历失败: {res_act.get('error') or res_act.get('blocked')}")
                         act_ok = False
+                        ledger.append({
+                            "action": "daemon_skip",
+                            "company": who,
+                            "reason": f"动作send_resume未成功({res_act.get('attribution') or res_act.get('detail') or res_act.get('error') or res_act.get('blocked')})，进入冷却消单",
+                            "last_msg": (last_msg or "")[:60],
+                            "dry_run": args.dry_run,
+                        })
                     else:
                         print(f"  [动作成功] 附件简历已成功发送至 {who}！")
                         if reply_text and res_act.get("text_result"):
@@ -651,6 +675,13 @@ def run_cycle(cfg, engine, args, st=None):
                     if not res_act.get("ok"):
                         print(f"  [动作异常] 发起交换微信失败: {res_act.get('error') or res_act.get('blocked')}")
                         act_ok = False
+                        ledger.append({
+                            "action": "daemon_skip",
+                            "company": who,
+                            "reason": f"动作exchange_wechat未成功({res_act.get('attribution') or res_act.get('detail') or res_act.get('error') or res_act.get('blocked')})，进入冷却消单",
+                            "last_msg": (last_msg or "")[:60],
+                            "dry_run": args.dry_run,
+                        })
                     else:
                         print(f"  [动作成功] 交换微信官方申请已送达 {who}！")
                         if reply_text and res_act.get("text_result"):
@@ -661,6 +692,13 @@ def run_cycle(cfg, engine, args, st=None):
                     if not res_act.get("ok"):
                         print(f"  [动作异常] 同意交换微信失败: {res_act.get('error') or res_act.get('blocked')}")
                         act_ok = False
+                        ledger.append({
+                            "action": "daemon_skip",
+                            "company": who,
+                            "reason": f"动作agree_wechat未成功({res_act.get('attribution') or res_act.get('detail') or res_act.get('error') or res_act.get('blocked')})，进入冷却消单",
+                            "last_msg": (last_msg or "")[:60],
+                            "dry_run": args.dry_run,
+                        })
                     else:
                         print(f"  [动作成功] 已同意 {who} 的交换微信申请！")
                         if reply_text and res_act.get("text_result"):
