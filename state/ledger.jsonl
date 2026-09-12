@@ -1766,3 +1766,4 @@
 {"action": "daemon_gate_sleep", "current_time": "2026-09-13 02:01:26", "active_hours": "09:30-22:00", "wait_seconds": 26913, "ts": "2026-09-13 02:01:26"}
 {"action": "mark_handled", "company": "余女士智启星图互联网人事", "status": "stale_cleared", "reason": "人工一键核销历史待办", "ts": "2026-09-13 02:08:23"}
 {"action": "mark_handled", "company": "卢先生Wellcee唯心所寓招聘者", "status": "stale_cleared", "reason": "人工一键核销历史待办", "ts": "2026-09-13 02:08:23"}
+{"action": "daemon_gate_sleep", "current_time": "2026-09-13 02:31:26", "active_hours": "09:30-22:00", "wait_seconds": 25113, "ts": "2026-09-13 02:31:26"}
