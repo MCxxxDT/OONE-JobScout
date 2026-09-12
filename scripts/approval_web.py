@@ -6435,8 +6435,10 @@ async def api_daemon_toggle(request: Request, token: str = ""):
         cmd = [python_exe, "-u", daemon_script, "--loop"]
         CREATE_NEW_PROCESS_GROUP = 0x00000200
         DETACHED_PROCESS = 0x00000008
+        log_path = cfgmod.state_path("daemon.log")
+        log_file = open(log_path, "a", encoding="utf-8")
         p = subprocess.Popen(cmd, creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             stdin=subprocess.DEVNULL, stdout=log_file, stderr=subprocess.STDOUT)
         return {"ok": True, "message": f"已成功启动常驻守护进程 (PID {p.pid})", "pid": p.pid}
     elif action == "stop":
         pid = status.get("pid")
@@ -6555,17 +6557,17 @@ async def api_auth_clear_key(request: Request, token: str = ""):
 
 def main():
     parser = argparse.ArgumentParser(description="BOSS直聘求职守护审批台（局域网Web工作台）")
-    parser.add_argument("--host", default="127.0.0.1", help="绑定地址（手机局域网访问用 0.0.0.0，外网走 Tailscale）")
+    parser.add_argument("--host", default="0.0.0.0", help="绑定地址（默认 0.0.0.0 支持本机、局域网与 Tailscale 访问）")
     parser.add_argument("--port", type=int, default=8788)
     args = parser.parse_args()
     import uvicorn
     cfg = cfgmod.load()
     token = _web_cfg(cfg).get("token") or os.getenv("APPROVAL_TOKEN") or "boss-apply"
-    host_display = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
     print("=" * 62)
     print("  BOSS直聘求职守护 · 运营中枢 (Web工作台)")
-    print("  本机访问: http://%s:%d/?token=%s" % (host_display, args.port, token))
-    print("  手机/局域网: http://<本机IP>:%d/?token=%s" % (args.port, token))
+    print("  本机访问: http://127.0.0.1:%d/?token=%s" % (args.port, token))
+    print("  Tailscale 访问: http://100.113.16.104:%d/?token=%s" % (args.port, token))
+    print("  手机/局域网: http://192.168.1.226:%d/?token=%s" % (args.port, token))
     print("=" * 62)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
