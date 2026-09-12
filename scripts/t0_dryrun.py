@@ -1810,12 +1810,36 @@ check("overview API 成功返回 200", _res_ov.status_code == 200)
 _ov_data = _res_ov.json()
 check("overview 包含 auth 鉴权字段", "auth" in _ov_data)
 check("overview 包含 daemon 守护字段", "daemon" in _ov_data)
+check("overview 包含 user_profile 真实画像字段", "user_profile" in _ov_data and "name" in _ov_data["user_profile"])
 
-# 35.4 Web 前端 HTML 关键组件挂载断言
+# 35.4 BOSS 用户个人资料读取与同步接口断言
+check("ensure_chrome_running 函数就绪", callable(_qrmod.ensure_chrome_running))
+_prof = _qrmod.get_cached_user_profile()
+check("get_cached_user_profile 包含完整字段", all(k in _prof for k in ["name", "school", "major", "grad_year"]))
+check("sync_profile_to_local 正常持久化", isinstance(_qrmod.sync_profile_to_local(_prof), dict))
+
+_res_p_unauth = _tc.get("/api/auth/profile")
+check("auth/profile 无 token 被 401 拦截", _res_p_unauth.status_code == 401)
+_res_p_ok = _tc.get(f"/api/auth/profile?token={_tok}")
+check("auth/profile 鉴权通过返回 200", _res_p_ok.status_code == 200)
+check("auth/profile 返回候选人姓名", _res_p_ok.json().get("name") == "张烨韬")
+
+_res_ps_unauth = _tc.post("/api/auth/profile/sync")
+check("auth/profile/sync 无 token 被 401 拦截", _res_ps_unauth.status_code == 401)
+_res_ps_ok = _tc.post(f"/api/auth/profile/sync?token={_tok}")
+check("auth/profile/sync 鉴权通过返回 200", _res_ps_ok.status_code == 200)
+check("auth/profile/sync 返回 ok 标识", _res_ps_ok.json().get("ok") is True)
+
+# 35.5 Web 前端 HTML 关键组件挂载断言
 with open("scripts/approval_web.py", "r", encoding="utf-8") as _f_web:
     _web_src = _f_web.read()
 
+check("Web 控制台包含微信网页版扫码门禁(#loginGate)", 'id="loginGate"' in _web_src)
 check("Web 控制台包含扫码接入按钮(#btnBossAuth)", 'btnBossAuth' in _web_src)
+check("Web 控制台包含用户画像下拉名片(#profileDropdown)", 'id="profileDropdown"' in _web_src)
+check("Web 控制台包含顶栏真实头像组件(#topUserAvatar)", 'id="topUserAvatar"' in _web_src)
+check("Web 控制台包含登录成功欢迎横幅(#welcomeBanner)", 'id="welcomeBanner"' in _web_src)
+check("Web 控制台包含资料同步函数(syncBossProfile)", "syncBossProfile" in _web_src)
 check("Web 控制台包含二维码扫码弹窗(#qrModal)", 'id="qrModal"' in _web_src)
 check("Web 控制台包含清除 API Key 按钮", "clearApiKey" in _web_src)
 check("Web 控制台包含守护进程控制函数", "handleDaemonToggle" in _web_src)

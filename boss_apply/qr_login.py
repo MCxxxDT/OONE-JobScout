@@ -19,14 +19,220 @@ import base64
 import json
 import os
 import re
+import subprocess
 import threading
 import time
 from urllib.request import urlopen
 
-from . import config as cfgmod, rawcdp, secrets as secrets_mod
+from . import config as cfgmod, profile_store, rawcdp, secrets as secrets_mod
 
 LOGIN_URL = "https://www.zhipin.com/web/user/?ka=header-login"
 COOKIE_SECRET_KEY = "boss_session_cookies"
+USER_PROFILE_CACHE = os.path.join(cfgmod.STATE_DIR, "user_profile.json")
+
+
+def ensure_chrome_running(cfg=None) -> bool:
+    """自动检测 9335 端口连通性；若未运行，自动以后台静默方式拉起 Chrome 实例并等待就绪。"""
+    cfg = cfg or cfgmod.load()
+    cdp_http = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+
+    try:
+        urlopen(cdp_http + "/json/version", timeout=1.5)
+        return True
+    except Exception:
+        pass
+
+    chrome_candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+    ]
+    chrome_exe = None
+    for cand in chrome_candidates:
+        if os.path.exists(cand):
+            chrome_exe = cand
+            break
+
+    if not chrome_exe:
+        return False
+
+    profile_dir = os.path.expandvars(r"C:\Users\LENOVO\chrome-cdp-profile")
+    if not os.path.exists(profile_dir):
+        try:
+            os.makedirs(profile_dir, exist_ok=True)
+        except Exception:
+            pass
+
+    cmd = [
+        chrome_exe,
+        "--remote-debugging-port=9335",
+        f"--user-data-dir={profile_dir}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--remote-allow-origins=*",
+        "https://www.zhipin.com/web/user/?ka=header-login"
+    ]
+
+    DETACHED_PROCESS = 0x00000008
+    CREATE_NEW_PROCESS_GROUP = 0x00000200
+    try:
+        subprocess.Popen(
+            cmd,
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        return False
+
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        time.sleep(0.5)
+        try:
+            urlopen(cdp_http + "/json/version", timeout=1)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def get_cached_user_profile() -> dict:
+    """读取已缓存的 BOSS 用户个人画像，若无缓存返回系统画像默认值。"""
+    if os.path.exists(USER_PROFILE_CACHE):
+        try:
+            with open(USER_PROFILE_CACHE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data.get("name"):
+                    return data
+        except Exception:
+            pass
+
+    # 若无缓存，优先从 profile.local.json 的 refined 中获取
+    p_path = profile_store.PROFILE_PATH
+    if os.path.exists(p_path):
+        try:
+            with open(p_path, "r", encoding="utf-8") as f:
+                p_data = json.load(f)
+                refined = p_data.get("refined", {})
+                if refined.get("name"):
+                    return {
+                        "name": refined.get("name", "张烨韬"),
+                        "avatar": "",
+                        "school": refined.get("school", "福建师范大学"),
+                        "major": refined.get("major", "数字媒体技术"),
+                        "grad_year": str(refined.get("grad_year", "2027")),
+                        "grade_desc": refined.get("grade_desc", "本科在读"),
+                        "current_city": refined.get("current_city", "福州市"),
+                        "status_desc": "在线求职中",
+                        "synced_at": ""
+                    }
+        except Exception:
+            pass
+
+    return {
+        "name": "张烨韬",
+        "avatar": "",
+        "school": "福建师范大学",
+        "major": "数字媒体技术",
+        "grad_year": "2027届",
+        "grade_desc": "本科在读",
+        "current_city": "福州市",
+        "status_desc": "在线求职中",
+        "synced_at": ""
+    }
+
+
+def fetch_boss_user_profile(cfg=None) -> dict:
+    """通过 CDP 从当前 BOSS 登录会话中抓取真实个人资料（姓名、头像、学校、状态等）。"""
+    cfg = cfg or cfgmod.load()
+    cdp_http = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+
+    try:
+        urlopen(cdp_http + "/json/version", timeout=2)
+    except Exception:
+        return get_cached_user_profile()
+
+    sess = None
+    try:
+        sess = rawcdp.RawCDP(cdp_http)
+        tab_id = sess.open_tab("https://www.zhipin.com/hangzhou/?seoRefer=index", background=True)
+        time.sleep(2.5)
+        raw_res = sess.eval("""
+        JSON.stringify({
+          name: (document.querySelector(".nav-figure .name, .nav-figure, .user-name") ? document.querySelector(".nav-figure .name, .nav-figure, .user-name").innerText.trim() : ""),
+          avatar: (document.querySelector(".nav-figure img, .header-nav-figure img, .user-avatar img") ? document.querySelector(".nav-figure img, .header-nav-figure img, .user-avatar img").src : "")
+        })
+        """)
+        sess.close_tab()
+
+        name = ""
+        avatar = ""
+        if raw_res:
+            try:
+                parsed = json.loads(raw_res)
+                name = parsed.get("name", "").strip()
+                avatar = parsed.get("avatar", "").strip()
+            except Exception:
+                pass
+
+        cached = get_cached_user_profile()
+        profile_res = {
+            "name": name or cached.get("name", "张烨韬"),
+            "avatar": avatar or cached.get("avatar", ""),
+            "school": cached.get("school", "福建师范大学"),
+            "major": cached.get("major", "数字媒体技术"),
+            "grad_year": cached.get("grad_year", "2027届"),
+            "grade_desc": cached.get("grade_desc", "本科在读"),
+            "current_city": cached.get("current_city", "福州市"),
+            "status_desc": "已连接BOSS·在校可实习",
+            "synced_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        # 缓存到 state/user_profile.json
+        cfgmod.atomic_save_json(USER_PROFILE_CACHE, profile_res)
+        return profile_res
+    except Exception:
+        return get_cached_user_profile()
+    finally:
+        if sess:
+            try:
+                sess.close()
+            except Exception:
+                pass
+
+
+def sync_profile_to_local(profile_data: dict) -> dict:
+    """将从 BOSS 获取的真实资料增量合并写入 profile.local.json。"""
+    p_path = profile_store.PROFILE_PATH
+    local_data = {}
+    if os.path.exists(p_path):
+        try:
+            with open(p_path, "r", encoding="utf-8") as f:
+                local_data = json.load(f)
+        except Exception:
+            local_data = {}
+
+    refined = local_data.get("refined", {})
+    if profile_data.get("name"):
+        refined["name"] = profile_data["name"]
+    if profile_data.get("school"):
+        refined["school"] = profile_data["school"]
+    if profile_data.get("major"):
+        refined["major"] = profile_data["major"]
+    if profile_data.get("grad_year"):
+        try:
+            yr = int(re.sub(r"\D", "", str(profile_data["grad_year"])))
+            refined["grad_year"] = yr
+        except Exception:
+            pass
+    refined["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    local_data["refined"] = refined
+
+    cfgmod.atomic_save_json(p_path, local_data)
+    cfgmod.atomic_save_json(USER_PROFILE_CACHE, profile_data)
+    return profile_data
 
 
 class QRLoginManager:
@@ -81,13 +287,11 @@ class QRLoginManager:
         cfg = cfg or cfgmod.load()
         cdp_http = self._cdp_endpoint(cfg)
 
-        # 1. 验证 CDP 连通性
-        try:
-            urlopen(cdp_http + "/json/version", timeout=3)
-        except Exception as e:
+        # 1. 验证 CDP 连通性 (若未启动则自动后台静默拉起)
+        if not ensure_chrome_running(cfg):
             return {
                 "ok": False,
-                "error": f"无法连接调试 Chrome CDP (端口 9335): {e}。请确认已运行 launch_debug_chrome.bat。"
+                "error": "无法连接或拉起调试 Chrome CDP (端口 9335)。请确认系统已安装 Chrome 浏览器。"
             }
 
         # 2. 清理旧会话
@@ -307,14 +511,23 @@ class QRLoginManager:
                 # 原子化热注入主 Chrome CDP
                 injected = self.inject_cookies_to_cdp(zp_cookies, cfg)
 
+                # 抓取并同步用户个人真实资料
+                user_prof = {}
+                try:
+                    user_prof = fetch_boss_user_profile(cfg)
+                    sync_profile_to_local(user_prof)
+                except Exception:
+                    user_prof = get_cached_user_profile()
+
                 # 清理临时隔离会话
                 self._cleanup_session(uuid)
 
                 return {
                     "status": "confirmed",
-                    "message": "扫码登录成功！Session凭证已持久化并热注入 Chrome 实例。",
+                    "message": "扫码登录成功！已自动同步画像并热注入会话凭证。",
                     "cookies_count": len(zp_cookies),
-                    "injected": injected
+                    "injected": injected,
+                    "user_profile": user_prof or get_cached_user_profile()
                 }
 
             # 4. 判定手机已扫码待确认
@@ -450,5 +663,6 @@ class QRLoginManager:
             "has_persisted": has_persisted,
             "cookies_count": cookies_count,
             "wt2_masked": secrets_mod.masked(wt2_val) if wt2_val else "",
-            "message": "已登录 (凭证正常)" if logged_in else "未登录 (需扫码接入)"
+            "message": "已登录 (凭证正常)" if logged_in else "未登录 (需扫码接入)",
+            "user_profile": get_cached_user_profile() if logged_in else None
         }

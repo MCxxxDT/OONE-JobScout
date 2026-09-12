@@ -1592,6 +1592,271 @@ PAGE = """<!DOCTYPE html>
       font-size: 11px;
     }
   }
+
+  /* WeChat Web Style Centered Login Gate */
+  .login-gate-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    background: rgba(241, 245, 249, 0.92);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    transition: opacity 0.35s ease, visibility 0.35s ease;
+  }
+  .login-gate-card {
+    background: #ffffff;
+    width: 100%;
+    max-width: 460px;
+    border-radius: 28px;
+    padding: 36px 32px 28px;
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(0,0,0,0.04);
+    text-align: center;
+    border: 1.5px solid rgba(226, 232, 240, 0.9);
+    animation: gatePop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes gatePop {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .login-gate-header { margin-bottom: 20px; }
+  .login-gate-icon {
+    width: 52px; height: 52px; border-radius: 16px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
+  }
+  .login-gate-title { font-size: 20px; font-weight: 900; color: #0f172a; margin-bottom: 6px; letter-spacing: -0.3px; }
+  .login-gate-sub { font-size: 13px; color: #64748b; margin-bottom: 0; }
+  .login-qr-box {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    margin: 0 auto 16px auto;
+    background: #f8fafc;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #e2e8f0;
+    overflow: hidden;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.03);
+  }
+  .login-gate-qrcode { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+  .qr-gate-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; width: 100%; height: 100%; padding: 16px; text-align: center;
+  }
+  .qr-gate-mask {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(4px);
+  }
+  .login-gate-status {
+    font-size: 14px; font-weight: 700; color: #0284c7; margin-bottom: 6px; min-height: 22px;
+  }
+  .login-gate-meta {
+    font-size: 12px; color: #64748b; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 20px;
+  }
+  .login-gate-guide {
+    background: #f8fafc; border-radius: 14px; padding: 12px 14px;
+    display: flex; justify-content: space-between; gap: 8px; margin-bottom: 20px; border: 1px solid #edf2f7;
+  }
+  .guide-step { font-size: 11px; color: #475569; display: flex; align-items: center; gap: 5px; font-weight: 500; }
+  .step-num {
+    width: 16px; height: 16px; border-radius: 50%; background: #0f172a; color: #fff;
+    font-size: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+  }
+  .login-gate-footer { border-top: 1px solid #f1f5f9; padding-top: 14px; }
+  .btn-link-guest {
+    background: none; border: none; font-size: 12px; color: #64748b; cursor: pointer;
+    font-weight: 600; padding: 4px 10px; border-radius: 8px; transition: all 0.2s;
+  }
+  .btn-link-guest:hover { color: #0f172a; background: #f1f5f9; }
+
+  /* User Profile Pill & Dropdown */
+  .btn-user-profile {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 12px 4px 5px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  }
+  .btn-user-profile:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    transform: translateY(-0.5px);
+  }
+  .user-avatar-box {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+    color: #fff;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: visible;
+  }
+  .user-avatar-box .pulse-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 9px;
+    height: 9px;
+    border: 2px solid #fff;
+  }
+  .avatar-placeholder {
+    font-weight: 800;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .user-name-label {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+  }
+  .user-sub-label {
+    font-size: 10px;
+    color: #059669;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  .dropdown-chevron {
+    color: #94a3b8;
+    transition: transform 0.2s;
+  }
+  .profile-popover-card {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    width: 310px;
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1.5px solid #e2e8f0;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+    padding: 18px;
+    z-index: 1200;
+    animation: popoverFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes popoverFade {
+    0% { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .popover-avatar-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #3b82f6;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.2);
+  }
+  .profile-meta-list {
+    background: #f8fafc;
+    border-radius: 14px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid #edf2f7;
+  }
+  .profile-meta-item {
+    display: flex;
+    align-items: center;
+    font-size: 11.5px;
+  }
+  .meta-icon { width: 18px; flex-shrink: 0; font-size: 12px; }
+  .meta-label { color: #64748b; width: 64px; flex-shrink: 0; font-weight: 500; }
+  .meta-val { color: #0f172a; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Welcome Banner */
+  .welcome-banner {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #ffffff;
+    border-radius: 20px;
+    padding: 18px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    animation: bannerSlide 0.3s ease-out;
+  }
+  @keyframes bannerSlide {
+    0% { transform: translateY(-8px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  .btn-white-action {
+    background: #ffffff;
+    color: #0f172a;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.2s;
+  }
+  .btn-white-action:hover {
+    background: #f8fafc;
+    transform: translateY(-1px);
+  }
+  .btn-dark-pill {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+  }
+  .btn-dark-pill:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+  .btn-close-banner {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .btn-close-banner:hover {
+    color: #ffffff;
+    background: rgba(255,255,255,0.1);
+  }
 </style>
 </head>
 <body>
@@ -1609,6 +1874,54 @@ PAGE = """<!DOCTYPE html>
     <div class="d-flex gap-3">
       <button class="btn-action-light w-100 justify-content-center" style="padding:12px;border-radius:14px" onclick="closeConfirm()">取消</button>
       <button class="btn-black w-100 justify-content-center" style="padding:12px;border-radius:14px" id="confirmBtn" onclick="executeConfirm()">确定执行</button>
+    </div>
+  </div>
+</div>
+
+<!-- WeChat Web Style Centered Login Gate -->
+<div class="login-gate-overlay" id="loginGate" style="display:none">
+  <div class="login-gate-card">
+    <div class="login-gate-header">
+      <div class="login-gate-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <h2 class="login-gate-title">BOSS 直聘扫码登录</h2>
+      <p class="login-gate-sub">使用手机 App 扫码 · 自动提取真实画像 · 零重启热注入</p>
+    </div>
+
+    <!-- Centered QR Box -->
+    <div class="login-qr-box" id="gateQrContainer">
+      <div id="gateQrSpinner" class="qr-gate-state" style="display:flex">
+        <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem" role="status"></div>
+        <span style="font-size:12px;color:var(--mut);font-weight:500">正在与 Chrome CDP 同步原生二维码…</span>
+      </div>
+      <img id="gateQrImg" src="" alt="BOSS直聘登录二维码" class="login-gate-qrcode" style="display:none" />
+      <div id="gateQrMask" class="qr-gate-state qr-gate-mask" style="display:none">
+        <span style="font-size:32px">⌛</span>
+        <span style="font-size:13px;font-weight:700;color:#ef4444">二维码已失效</span>
+        <button class="btn-black" style="padding:6px 14px;font-size:12px;border-radius:10px;margin-top:4px" onclick="refreshGateQrCode()">点击刷新</button>
+      </div>
+    </div>
+
+    <!-- Status Text & Countdown -->
+    <div id="gateQrStatus" class="login-gate-status">
+      请打开手机 <strong>BOSS直聘 App</strong> 扫码
+    </div>
+    <div class="login-gate-meta">
+      <span>有效倒计时: <strong id="gateQrCountdown" style="color:#ef4444">180</strong> 秒</span>
+      <span>·</span>
+      <a href="javascript:void(0)" onclick="refreshGateQrCode()" style="color:#0ea5e9;text-decoration:none;font-weight:600">🔄 手动刷新</a>
+    </div>
+
+    <div class="login-gate-guide">
+      <div class="guide-step"><span class="step-num">1</span> 打开手机 BOSS 直聘</div>
+      <div class="guide-step"><span class="step-num">2</span> 点击【我的】>【扫一扫】</div>
+      <div class="guide-step"><span class="step-num">3</span> 扫码并在手机上确认</div>
+    </div>
+
+    <!-- Guest / Skip link -->
+    <div class="login-gate-footer">
+      <button class="btn-link-guest" onclick="dismissLoginGate()">暂不登录，以访客模式查看大盘 →</button>
     </div>
   </div>
 </div>
@@ -1732,11 +2045,70 @@ PAGE = """<!DOCTYPE html>
           </div>
         </div>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <button id="btnBossAuth" class="btn-action-light" style="padding:7px 14px;font-size:12px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.08);color:#059669;display:inline-flex;align-items:center;gap:5px;font-weight:600" onclick="openQrModal()" title="扫码接入 BOSS直聘 或查看凭证状态">
-          <span id="authDot" class="pulse-dot dot-green" style="width:7px;height:7px;margin-right:2px"></span>
-          <span id="authBtnText">⚡ 扫码接入 BOSS</span>
-        </button>
+        <!-- User Profile Pill & Dropdown -->
+        <div class="user-profile-wrap" id="userProfileWrap" style="position:relative">
+          <button id="btnBossAuth" class="btn-user-profile" onclick="toggleProfileDropdown()" title="个人画像与凭证状态">
+            <div class="user-avatar-box">
+              <img id="topUserAvatar" src="" alt="avatar" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%" />
+              <span id="topUserAvatarPlaceholder" class="avatar-placeholder">张</span>
+              <span id="authDot" class="pulse-dot dot-green"></span>
+            </div>
+            <div class="user-info-text d-none d-sm-flex flex-column text-start">
+              <span id="topUserName" class="user-name-label">张烨韬</span>
+              <span id="authBtnText" class="user-sub-label">⚡ 已接入 BOSS</span>
+            </div>
+            <svg class="dropdown-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          
+          <!-- Dropdown Popover Card -->
+          <div class="profile-popover-card" id="profileDropdown" style="display:none">
+            <div class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">
+              <div class="popover-avatar-box">
+                <img id="popoverAvatar" src="" alt="avatar" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%" />
+                <span id="popoverAvatarPlaceholder" class="avatar-placeholder" style="font-size:18px">张</span>
+              </div>
+              <div class="overflow-hidden">
+                <div class="d-flex align-items-center gap-2">
+                  <span id="popoverName" class="fw-bold" style="font-size:15px;color:#0f172a">张烨韬</span>
+                  <span id="popoverGrade" class="soft-badge badge-pub" style="font-size:10px;padding:1px 6px">2027届</span>
+                </div>
+                <div id="popoverStatus" class="text-muted" style="font-size:11px;margin-top:2px">已连接BOSS · 在校可实习</div>
+              </div>
+            </div>
+
+            <div class="profile-meta-list mb-3">
+              <div class="profile-meta-item">
+                <span class="meta-icon">🎓</span>
+                <span class="meta-label">就读院校:</span>
+                <span id="popoverSchool" class="meta-val">福建师范大学</span>
+              </div>
+              <div class="profile-meta-item">
+                <span class="meta-icon">📚</span>
+                <span class="meta-label">所学专业:</span>
+                <span id="popoverMajor" class="meta-val">数字媒体技术</span>
+              </div>
+              <div class="profile-meta-item">
+                <span class="meta-icon">📍</span>
+                <span class="meta-label">常驻城市:</span>
+                <span id="popoverCity" class="meta-val">福州市</span>
+              </div>
+              <div class="profile-meta-item">
+                <span class="meta-icon">🕒</span>
+                <span class="meta-label">同步时间:</span>
+                <span id="popoverSyncTime" class="meta-val">刚刚</span>
+              </div>
+            </div>
+
+            <div class="d-flex flex-column gap-2">
+              <button class="btn-action-light w-100 justify-content-center" style="padding:8px 12px;font-size:12px;border-radius:10px;font-weight:600;color:#0284c7" onclick="syncBossProfile()">
+                🔄 重新从 BOSS 同步资料
+              </button>
+              <button class="btn-action-light w-100 justify-content-center" style="padding:8px 12px;font-size:12px;border-radius:10px;color:#64748b" onclick="openQrModal()">
+                ⚡ 重新扫码切换账号
+              </button>
+            </div>
+          </div>
+        </div>
         <button class="btn-action-light" style="padding:7px 14px;font-size:12px;border-radius:10px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.08);color:#2563eb;display:inline-flex;align-items:center;gap:4px" onclick="triggerApplyNow()" title="执行今日候选岗位投递计划">
           <span>⚡</span>
           <span>今日投递</span>
@@ -1750,6 +2122,34 @@ PAGE = """<!DOCTYPE html>
 
     <!-- App Body Content -->
     <div class="app-body">
+      <!-- Welcome Banner for Login Success & Quick Action -->
+      <div id="welcomeBanner" class="welcome-banner" style="display:none">
+        <div class="d-flex align-items-center gap-3">
+          <div class="welcome-avatar-wrap">
+            <img id="welcomeAvatar" src="" alt="avatar" style="display:none;width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3)" />
+            <div id="welcomeAvatarPlaceholder" style="width:44px;height:44px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px">张</div>
+          </div>
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <span style="font-size:16px;font-weight:900" id="welcomeName">张烨韬</span>
+              <span class="badge bg-success" style="font-size:10px;font-weight:600">BOSS 登录成功</span>
+            </div>
+            <div style="font-size:12px;opacity:0.85;margin-top:2px" id="welcomeDetail">
+              福建师范大学 · 数字媒体技术 · 2027届 · 已与底座完成画像对齐
+            </div>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn-white-action" onclick="triggerApplyNow()">
+            ⚡ 立即投递今日候选 (Top 50)
+          </button>
+          <button class="btn-dark-pill" onclick="handleDaemonToggle('start')" id="welcomeDaemonBtn">
+            ▶️ 开启常驻守护
+          </button>
+          <button type="button" class="btn-close-banner" onclick="dismissWelcomeBanner()" title="关闭横幅">✕</button>
+        </div>
+      </div>
+
       <!-- Tab 1: 待办审批 (聚焦待处理决策与运营大盘，独占 KPI 卡片) -->
       <main id="tab-pending" class="tab-content active">
         <!-- KPI Statistics Grid (Only shown in Tab 1) -->
@@ -2792,7 +3192,8 @@ async function load(isManual) {
 
     // BOSS 鉴权状态联动
     const auth = d.auth || {};
-    updateAuthStatusUI(auth);
+    const userProfile = d.user_profile || (auth && auth.user_profile) || {};
+    updateAuthStatusUI(auth, userProfile);
 
     renderPending();
     renderResolved();
@@ -2804,29 +3205,111 @@ async function load(isManual) {
   }
 }
 
-function updateAuthStatusUI(auth) {
+let lastLoginState = null;
+let loginGateDismissed = false;
+
+function updateAuthStatusUI(auth, userProfile) {
   if (!auth) return;
   const btn = document.getElementById('btnBossAuth');
   const dot = document.getElementById('authDot');
   const txt = document.getElementById('authBtnText');
+  const topAvatar = document.getElementById('topUserAvatar');
+  const topAvatarPlaceholder = document.getElementById('topUserAvatarPlaceholder');
+  const topName = document.getElementById('topUserName');
+  const loginGate = document.getElementById('loginGate');
+  const welcomeBanner = document.getElementById('welcomeBanner');
+
+  const pName = (userProfile && userProfile.name) || '张烨韬';
+  const pAvatar = (userProfile && userProfile.avatar) || '';
+  const pSchool = (userProfile && userProfile.school) || '福建师范大学';
+  const pMajor = (userProfile && userProfile.major) || '数字媒体技术';
+  const pGrad = (userProfile && userProfile.grad_year) || '2027届';
+  const pCity = (userProfile && userProfile.current_city) || '福州市';
+  const pStatus = (userProfile && userProfile.status_desc) || '在校可实习';
+  const pSynced = (userProfile && userProfile.synced_at) || '已对齐底座';
 
   if (auth.logged_in) {
     if (dot) dot.className = 'pulse-dot dot-green';
-    if (txt) txt.textContent = '⚡ 已接入 BOSS';
+    if (txt) txt.textContent = '已接入 BOSS';
+    if (topName) topName.textContent = pName;
     if (btn) {
-      btn.style.borderColor = 'rgba(16,185,129,0.3)';
-      btn.style.background = 'rgba(16,185,129,0.08)';
-      btn.style.color = '#059669';
-      btn.title = `BOSS已登录 · wt2: ${auth.wt2_masked || '有效'} · 点击管理凭证`;
+      btn.style.borderColor = 'rgba(16,185,129,0.4)';
+      btn.title = `BOSS已登录 · 候选人: ${pName} · 点击管理画像`;
     }
+    if (pAvatar && topAvatar) {
+      topAvatar.src = pAvatar;
+      topAvatar.style.display = 'block';
+      if (topAvatarPlaceholder) topAvatarPlaceholder.style.display = 'none';
+    } else {
+      if (topAvatar) topAvatar.style.display = 'none';
+      if (topAvatarPlaceholder) {
+        topAvatarPlaceholder.textContent = pName ? pName.slice(0, 1) : '张';
+        topAvatarPlaceholder.style.display = 'inline-block';
+      }
+    }
+
+    // 关闭扫码门禁
+    if (loginGate) {
+      loginGate.style.display = 'none';
+    }
+
+    // 若此前处于未登录，现在转为已登录，展示欢迎横幅
+    if (lastLoginState === false && welcomeBanner) {
+      showWelcomeBanner(userProfile);
+    }
+    lastLoginState = true;
   } else {
     if (dot) dot.className = 'pulse-dot dot-red';
-    if (txt) txt.textContent = '⚡ 扫码接入 BOSS';
+    if (txt) txt.textContent = '未登录 BOSS';
+    if (topName) topName.textContent = '未连接';
     if (btn) {
       btn.style.borderColor = 'rgba(239,68,68,0.3)';
-      btn.style.background = 'rgba(239,68,68,0.08)';
-      btn.style.color = '#ef4444';
-      btn.title = '未检测到BOSS登录凭证 · 点击一键扫码登录';
+      btn.title = '未检测到BOSS登录凭证 · 点击扫码接入';
+    }
+    if (topAvatar) topAvatar.style.display = 'none';
+    if (topAvatarPlaceholder) {
+      topAvatarPlaceholder.textContent = '未';
+      topAvatarPlaceholder.style.display = 'inline-block';
+    }
+
+    // 未登录时，若未被手动跳过，展示居中全屏扫码门禁
+    if (loginGate && !loginGateDismissed) {
+      loginGate.style.display = 'flex';
+      if (!currentQrUuid && !qrPollTimer) {
+        refreshGateQrCode();
+      }
+    }
+    lastLoginState = false;
+  }
+
+  // 填充下拉卡片信息
+  const popName = document.getElementById('popoverName');
+  const popGrade = document.getElementById('popoverGrade');
+  const popStatus = document.getElementById('popoverStatus');
+  const popSchool = document.getElementById('popoverSchool');
+  const popMajor = document.getElementById('popoverMajor');
+  const popCity = document.getElementById('popoverCity');
+  const popSync = document.getElementById('popoverSyncTime');
+  const popAvatar = document.getElementById('popoverAvatar');
+  const popAvatarPlaceholder = document.getElementById('popoverAvatarPlaceholder');
+
+  if (popName) popName.textContent = pName;
+  if (popGrade) popGrade.textContent = pGrad;
+  if (popStatus) popStatus.textContent = auth.logged_in ? `已连接BOSS · ${pStatus}` : '未连接 · 点击下方扫码登录';
+  if (popSchool) popSchool.textContent = pSchool;
+  if (popMajor) popMajor.textContent = pMajor;
+  if (popCity) popCity.textContent = pCity;
+  if (popSync) popSync.textContent = pSynced || '刚刚';
+
+  if (pAvatar && popAvatar) {
+    popAvatar.src = pAvatar;
+    popAvatar.style.display = 'block';
+    if (popAvatarPlaceholder) popAvatarPlaceholder.style.display = 'none';
+  } else {
+    if (popAvatar) popAvatar.style.display = 'none';
+    if (popAvatarPlaceholder) {
+      popAvatarPlaceholder.textContent = pName ? pName.slice(0, 1) : '张';
+      popAvatarPlaceholder.style.display = 'inline-block';
     }
   }
 
@@ -2856,6 +3339,100 @@ function updateAuthStatusUI(auth) {
     authLive.textContent = auth.logged_in ? '已就绪' : '未登录';
     authLive.className = auth.logged_in ? 'soft-badge badge-pub' : 'soft-badge badge-rej';
   }
+}
+
+function showWelcomeBanner(userProfile) {
+  const wb = document.getElementById('welcomeBanner');
+  if (!wb) return;
+  const pName = (userProfile && userProfile.name) || '张烨韬';
+  const pAvatar = (userProfile && userProfile.avatar) || '';
+  const pSchool = (userProfile && userProfile.school) || '福建师范大学';
+  const pMajor = (userProfile && userProfile.major) || '数字媒体技术';
+  const pGrad = (userProfile && userProfile.grad_year) || '2027届';
+
+  const wName = document.getElementById('welcomeName');
+  const wDetail = document.getElementById('welcomeDetail');
+  const wAvatar = document.getElementById('welcomeAvatar');
+  const wPlaceholder = document.getElementById('welcomeAvatarPlaceholder');
+
+  if (wName) wName.textContent = pName;
+  if (wDetail) wDetail.textContent = `${pSchool} · ${pMajor} · ${pGrad} · 已与求职底座完成画像对齐`;
+
+  if (pAvatar && wAvatar) {
+    wAvatar.src = pAvatar;
+    wAvatar.style.display = 'block';
+    if (wPlaceholder) wPlaceholder.style.display = 'none';
+  } else {
+    if (wAvatar) wAvatar.style.display = 'none';
+    if (wPlaceholder) {
+      wPlaceholder.textContent = pName.slice(0, 1) || '张';
+      wPlaceholder.style.display = 'flex';
+    }
+  }
+  wb.style.display = 'flex';
+}
+
+function dismissWelcomeBanner() {
+  const wb = document.getElementById('welcomeBanner');
+  if (wb) wb.style.display = 'none';
+}
+
+function toggleProfileDropdown(e) {
+  if (e) e.stopPropagation();
+  const dd = document.getElementById('profileDropdown');
+  if (!dd) return;
+  dd.style.display = dd.style.display === 'none' || !dd.style.display ? 'block' : 'none';
+}
+
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('userProfileWrap');
+  const dd = document.getElementById('profileDropdown');
+  if (wrap && dd && !wrap.contains(e.target)) {
+    dd.style.display = 'none';
+  }
+});
+
+async function syncBossProfile() {
+  showToast('正在从 BOSS 直聘同步真实个人画像与头像…', 'info');
+  try {
+    const res = await fetch('/api/auth/profile/sync?token=' + encodeURIComponent(TOKEN), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'}
+    });
+    const d = await res.json();
+    if (d.ok && d.user_profile) {
+      showToast(`🎉 个人资料同步完成！候选人：${d.user_profile.name} (${d.user_profile.school})`, 'success');
+      load(false);
+    } else {
+      showToast('同步失败: ' + (d.error || '未能抓取到个人资料'), 'error');
+    }
+  } catch (e) {
+    showToast('网络请求失败: ' + e.message, 'error');
+  }
+}
+
+function dismissLoginGate() {
+  loginGateDismissed = true;
+  const gate = document.getElementById('loginGate');
+  if (gate) gate.style.display = 'none';
+  showToast('已进入访客预览模式，可随时点击右上角【扫码接入】登录', 'info');
+}
+
+async function refreshGateQrCode() {
+  const spinner = document.getElementById('gateQrSpinner');
+  const img = document.getElementById('gateQrImg');
+  const mask = document.getElementById('gateQrMask');
+  const statusText = document.getElementById('gateQrStatus');
+  const countdownEl = document.getElementById('gateQrCountdown');
+
+  if (spinner) spinner.style.display = 'flex';
+  if (img) img.style.display = 'none';
+  if (mask) mask.style.display = 'none';
+  if (statusText) {
+    statusText.innerHTML = '正在与 Chrome CDP 同步原生二维码…';
+    statusText.style.color = '#0284c7';
+  }
+  await refreshQrCode();
 }
 
 async function handleDaemonToggle(action) {
@@ -2942,12 +3519,26 @@ async function refreshQrCode() {
   const statusText = document.getElementById('qrStatusText');
   const countdownEl = document.getElementById('qrCountdown');
 
+  const gSpinner = document.getElementById('gateQrSpinner');
+  const gImg = document.getElementById('gateQrImg');
+  const gMask = document.getElementById('gateQrMask');
+  const gStatusText = document.getElementById('gateQrStatus');
+  const gCountdownEl = document.getElementById('gateQrCountdown');
+
   if (spinner) spinner.style.display = 'flex';
   if (img) img.style.display = 'none';
   if (mask) mask.style.display = 'none';
   if (statusText) {
-    statusText.textContent = '正在通过 CDP 9335 捕获原生二维码…';
+    statusText.textContent = '正在通过 Chrome CDP 捕获原生二维码…';
     statusText.style.color = '#2563eb';
+  }
+
+  if (gSpinner) gSpinner.style.display = 'flex';
+  if (gImg) gImg.style.display = 'none';
+  if (gMask) gMask.style.display = 'none';
+  if (gStatusText) {
+    gStatusText.textContent = '正在与 Chrome CDP 同步原生二维码…';
+    gStatusText.style.color = '#0284c7';
   }
 
   try {
@@ -2964,17 +3555,37 @@ async function refreshQrCode() {
         statusText.textContent = '请打开手机 BOSS直聘 App 扫描上方二维码';
         statusText.style.color = '#2563eb';
       }
+
+      if (gSpinner) gSpinner.style.display = 'none';
+      if (gImg) {
+        gImg.src = d.qrcode_base64;
+        gImg.style.display = 'block';
+      }
+      if (gStatusText) {
+        gStatusText.textContent = '请打开手机 BOSS直聘 App 扫码登录';
+        gStatusText.style.color = '#0284c7';
+      }
+
       let remain = d.expire_seconds || 180;
       if (countdownEl) countdownEl.textContent = remain;
+      if (gCountdownEl) gCountdownEl.textContent = remain;
+
       qrCountdownTimer = setInterval(() => {
         remain--;
-        if (countdownEl) countdownEl.textContent = Math.max(0, remain);
+        const val = Math.max(0, remain);
+        if (countdownEl) countdownEl.textContent = val;
+        if (gCountdownEl) gCountdownEl.textContent = val;
         if (remain <= 0) {
           stopQrPolling();
           if (mask) mask.style.display = 'flex';
+          if (gMask) gMask.style.display = 'flex';
           if (statusText) {
             statusText.textContent = '二维码已超时失效，请点击刷新';
             statusText.style.color = '#ef4444';
+          }
+          if (gStatusText) {
+            gStatusText.textContent = '二维码已超时失效，请点击刷新';
+            gStatusText.style.color = '#ef4444';
           }
         }
       }, 1000);
@@ -2982,19 +3593,33 @@ async function refreshQrCode() {
       startQrPolling(d.uuid);
     } else {
       if (spinner) spinner.style.display = 'none';
+      if (gSpinner) gSpinner.style.display = 'none';
+      const errMsg = '获取失败: ' + (d.error || '未能连接 Chrome');
       if (statusText) {
-        statusText.textContent = '获取失败: ' + (d.error || '未能连接 Chrome');
+        statusText.textContent = errMsg;
         statusText.style.color = '#ef4444';
       }
+      if (gStatusText) {
+        gStatusText.textContent = errMsg;
+        gStatusText.style.color = '#ef4444';
+      }
       if (mask) mask.style.display = 'flex';
+      if (gMask) gMask.style.display = 'flex';
     }
   } catch (e) {
     if (spinner) spinner.style.display = 'none';
+    if (gSpinner) gSpinner.style.display = 'none';
+    const errText = '网络错误: ' + e.message;
     if (statusText) {
-      statusText.textContent = '网络错误: ' + e.message;
+      statusText.textContent = errText;
       statusText.style.color = '#ef4444';
     }
+    if (gStatusText) {
+      gStatusText.textContent = errText;
+      gStatusText.style.color = '#ef4444';
+    }
     if (mask) mask.style.display = 'flex';
+    if (gMask) gMask.style.display = 'flex';
   }
 }
 
@@ -3005,29 +3630,56 @@ function startQrPolling(uuid) {
       const d = await res.json();
       const statusText = document.getElementById('qrStatusText');
       const mask = document.getElementById('qrMask');
+      const gStatusText = document.getElementById('gateQrStatus');
+      const gMask = document.getElementById('gateQrMask');
+      const gate = document.getElementById('loginGate');
 
       if (d.status === 'confirmed') {
         stopQrPolling();
+        loginGateDismissed = false;
+        const succMsg = '🎉 ' + (d.message || '扫码登录成功！已自动热生效');
         if (statusText) {
-          statusText.textContent = '🎉 ' + (d.message || '扫码登录成功！已自动热生效');
+          statusText.textContent = succMsg;
           statusText.style.color = '#10b981';
         }
+        if (gStatusText) {
+          gStatusText.textContent = succMsg;
+          gStatusText.style.color = '#10b981';
+        }
         showToast('🎉 BOSS 直聘扫码登录成功！凭证已热注入生效！', 'success');
+        if (gate) {
+          gate.style.opacity = '0';
+          setTimeout(() => { gate.style.display = 'none'; gate.style.opacity = '1'; }, 300);
+        }
         setTimeout(() => {
           closeQrModal();
           load(true);
-        }, 1200);
+          if (d.user_profile) {
+            showWelcomeBanner(d.user_profile);
+          }
+        }, 1000);
       } else if (d.status === 'scanned') {
+        const scanMsg = '📱 手机已扫描，请在 BOSS直聘 App 点击【确认登录】…';
         if (statusText) {
-          statusText.textContent = '📱 手机已扫描，请在 BOSS直聘 App 点击【确认登录】…';
+          statusText.textContent = scanMsg;
           statusText.style.color = '#f59e0b';
+        }
+        if (gStatusText) {
+          gStatusText.textContent = scanMsg;
+          gStatusText.style.color = '#f59e0b';
         }
       } else if (d.status === 'expired') {
         stopQrPolling();
         if (mask) mask.style.display = 'flex';
+        if (gMask) gMask.style.display = 'flex';
+        const expMsg = '二维码已失效，请重新刷新';
         if (statusText) {
-          statusText.textContent = '二维码已失效，请重新刷新';
+          statusText.textContent = expMsg;
           statusText.style.color = '#ef4444';
+        }
+        if (gStatusText) {
+          gStatusText.textContent = expMsg;
+          gStatusText.style.color = '#ef4444';
         }
       }
     } catch (e) {
@@ -4600,6 +5252,7 @@ def api_overview(token: str = ""):
         },
         "daemon": get_daemon_status(),
         "auth": qr_login.QRLoginManager().get_auth_status(cfg),
+        "user_profile": qr_login.get_cached_user_profile(),
         "pending": pending[:100],
         "resolved": resolved[:100],
         "ledger": enriched_ledger,
@@ -4760,6 +5413,26 @@ def api_auth_qrcode_status(uuid: str = "", token: str = ""):
     if not uuid:
         return JSONResponse({"ok": False, "error": "missing_uuid"}, status_code=400)
     return qr_login.QRLoginManager().check_scan_status(uuid, cfg)
+
+
+@app.get("/api/auth/profile")
+def api_auth_profile(token: str = ""):
+    """获取用户在 BOSS 直聘的个人真实资料（姓名、头像、学校、求职状态等）。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return qr_login.get_cached_user_profile()
+
+
+@app.post("/api/auth/profile/sync")
+async def api_auth_profile_sync(request: Request, token: str = ""):
+    """从 BOSS 直聘主动触发同步真实个人资料并合并写入 profile.local.json。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    prof = qr_login.fetch_boss_user_profile(cfg)
+    qr_login.sync_profile_to_local(prof)
+    return {"ok": True, "user_profile": prof}
 
 
 @app.post("/api/auth/clear_key")
