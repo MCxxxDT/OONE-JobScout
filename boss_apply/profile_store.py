@@ -7,6 +7,7 @@ AIReplyEngine / llm_match 优先使用提炼画像（降级硬编码 CANDIDATE_P
 import datetime
 import json
 import os
+import time
 
 from . import config as cfgmod
 
@@ -93,6 +94,71 @@ def get_resume():
     return _load().get("resume_text") or ""
 
 
+def clear_resume():
+    """彻底清空已存简历原文与提炼画像。"""
+    data = {
+        "resume_text": "",
+        "source": "",
+        "updated_at": "",
+        "refined": None,
+    }
+    _save(data)
+    return data
+
+
+def fetch_boss_online_resume(cfg=None):
+    """通过 CDP 从当前 BOSS 直聘会话中抓取在线完整简历文本。
+    返回 (resume_text, error)。
+    抓取成功后自动写入 save_resume(text, source='boss_online') 并尝试 refine_profile。
+    """
+    cfg = cfg or cfgmod.load()
+    cdp_http = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+    try:
+        from urllib.request import urlopen
+        urlopen(cdp_http + "/json/version", timeout=3)
+    except Exception as e:
+        return "", "无法连接 Chrome CDP 实例: %s" % str(e)[:100]
+
+    from . import rawcdp
+    sess = rawcdp.RawCDP(cdp_http)
+    resume_text = ""
+    try:
+        sess.open_tab("https://www.zhipin.com/web/geek/resume")
+        time.sleep(3.5)
+        js = """
+        (() => {
+            const content = document.querySelector('.resume-content') ||
+                            document.querySelector('.resume-box') ||
+                            document.querySelector('.main-content') ||
+                            document.querySelector('.resume-detail') ||
+                            document.body;
+            if (!content) return '';
+            const clone = content.cloneNode(true);
+            const removes = clone.querySelectorAll('.nav, .header, .footer, .btn, button, .dialog, script, style');
+            removes.forEach(el => el.remove());
+            return clone.innerText || '';
+        })()
+        """
+        raw_res = sess.eval(js) or ""
+        lines = [l.strip() for l in raw_res.splitlines() if l.strip()]
+        resume_text = "\n".join(lines)
+    except Exception as e:
+        return "", "CDP 抓取在线简历失败: %s" % str(e)[:150]
+    finally:
+        sess.close_tab()
+        sess.close()
+
+    if not resume_text or len(resume_text) < 30:
+        return "", "未能从 BOSS 在线简历页提取到有效文本（可能未登录或页面结构异常）"
+
+    save_resume(resume_text, source="boss_online")
+    try:
+        refine_profile(resume_text, cfg)
+    except Exception:
+        pass
+    return resume_text, None
+
+
 def load_profile():
     """返回提炼画像 dict（无则 None）。字段键与 CANDIDATE_PROFILE 对齐可直接覆盖。"""
     refined = _load().get("refined")
@@ -139,7 +205,7 @@ def refine_profile(text, cfg):
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
                                      headers={"Content-Type": "application/json",
                                               "Authorization": "Bearer " + llm["api_key"]})
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         content = (data["choices"][0]["message"].get("content") or "").strip()
         content = content.removeprefix("```json").removeprefix("```").removesuffix("```").strip()

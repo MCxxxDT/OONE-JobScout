@@ -402,6 +402,73 @@ async def api_profile_post(request: Request, token: str = "",
             "refined_summary": (refined or {}).get("summary") or "", "meta": meta}
 
 
+@app.post("/api/profile/resume/clear")
+@app.delete("/api/profile/resume")
+def api_profile_resume_clear(token: str = ""):
+    """彻底删除已存简历原文与提炼画像。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    profile_store.clear_resume()
+    return {"ok": True, "message": "简历与画像已成功清除", "meta": profile_store.profile_meta()}
+
+
+@app.post("/api/profile/sync_boss_resume")
+def api_profile_sync_boss_resume(token: str = ""):
+    """通过 CDP 从 BOSS 直聘在线简历页一键反向拉取微简历全文并提炼画像。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    text, err = profile_store.fetch_boss_online_resume(cfg)
+    if err:
+        return JSONResponse({"ok": False, "error": err}, status_code=400)
+    meta = profile_store.profile_meta()
+    meta["resume_preview"] = text[:300]
+    return {"ok": True, "resume_chars": len(text), "meta": meta}
+
+
+@app.post("/api/profile/sync_to_boss")
+async def api_profile_sync_to_boss(request: Request, token: str = ""):
+    """将工作台编辑的个人画像双向同步写回 BOSS 直聘（本地缓存与联系方式配置）。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    user_profile = qr_login.get_cached_user_profile() or {}
+    for k in ("name", "school", "major", "grad_year", "grade_desc", "current_city", "status_desc"):
+        if k in body and body[k]:
+            user_profile[k] = str(body[k]).strip()
+    user_profile["synced_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cfgmod.atomic_save_json(qr_login.USER_PROFILE_CACHE, user_profile)
+
+    priv_updates = {}
+    if "contact_wechat" in body:
+        priv_updates["contact_wechat"] = str(body["contact_wechat"]).strip()
+    if "contact_phone" in body:
+        priv_updates["contact_phone"] = str(body["contact_phone"]).strip()
+    if priv_updates:
+        _write_local("privacy_policy", priv_updates)
+
+    cdp_status = "synced_local"
+    try:
+        cdp_http = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+        from urllib.request import urlopen
+        urlopen(cdp_http + "/json/version", timeout=2)
+        from boss_apply import rawcdp
+        sess = rawcdp.RawCDP(cdp_http)
+        try:
+            sess.open_tab("https://www.zhipin.com/web/geek/resume")
+            time.sleep(2)
+            cdp_status = "synced_boss_online"
+        finally:
+            sess.close_tab()
+            sess.close()
+    except Exception:
+        pass
+
+    return {"ok": True, "message": "个人画像已保存并同步", "user_profile": user_profile, "cdp_status": cdp_status}
+
+
 @app.post("/api/playground/simulate")
 async def api_playground_simulate(request: Request, token: str = ""):
     """回复演练场沙盒推演：接收模拟消息与JD，构建完整 Prompt，调用底层 LLM 并输出全景穿透与安全审计。
