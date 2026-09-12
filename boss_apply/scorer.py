@@ -83,8 +83,13 @@ def score(job, detail, cfg):
 
     # boss_active: -1/None = 新版卡片无此字段（未知），放行；详情页会补验
     ba = job.get("boss_active", -1)
-    if ba is not None and ba >= 0 and ba > cfg.get("boss_active_max_days", 14):
-        return 0, "boss inactive > %d days" % cfg.get("boss_active_max_days", 14)
+    if ba is not None:
+        try:
+            ba_int = int(ba)
+            if ba_int >= 0 and ba_int > cfg.get("boss_active_max_days", 14):
+                return 0, "boss inactive > %d days" % cfg.get("boss_active_max_days", 14)
+        except (ValueError, TypeError):
+            pass
 
     lo, hi = salary_k(job.get("salary", ""))
     if lo is not None:
@@ -127,5 +132,30 @@ def score(job, detail, cfg):
     if "产品" in title:
         s += 2
         reasons.append("+2 pm")
+
+    # 校园与时令规格动态调优（转正机会 +2.0，出勤天数匹配 +1.0，立即到岗 +0.5）
+    specs = job.get("campus_specs")
+    if specs is None:
+        try:
+            from .campus_engine import InternSpecExtractor
+            specs = InternSpecExtractor.extract_specs(
+                jd_text=detail or "",
+                tags=job.get("tags") or "",
+                title=title or ""
+            )
+        except Exception:
+            specs = None
+
+    if specs:
+        if specs.get("has_conversion_chance") or specs.get("conversion_prob", 0) >= 0.7:
+            s += 2.0
+            reasons.append("+2.0 conversion")
+        days = specs.get("days_per_week")
+        if days is not None and days <= 5:
+            s += 1.0
+            reasons.append(f"+1.0 days_match:{days}d")
+        if specs.get("immediate_onboarding"):
+            s += 0.5
+            reasons.append("+0.5 immediate_onboarding")
 
     return round(s, 1), "; ".join(reasons)

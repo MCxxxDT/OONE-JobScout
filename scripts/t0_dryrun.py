@@ -1688,6 +1688,72 @@ check("get_stats 包含 total/healthy/circuit_broken/regions",
       all(k in _stats for k in ["total", "healthy", "circuit_broken", "regions"]))
 check("get_stats 统计数字正确", _stats["total"] == 4 and _stats["healthy"] == 4 and _stats["circuit_broken"] == 0)
 
+print("== 34. 招聘时令感知与实习/校招结构化提取及差异化打招呼断言 ==")
+import datetime as _dt_m2
+from boss_apply.campus_engine import HiringClock as _HC, InternSpecExtractor as _ISE, DifferentiatedGreeter as _DG
+
+# 34.1 招聘时钟时令潮汐与配比感知
+_d_sep = _dt_m2.date(2026, 9, 15)
+_d_nov = _dt_m2.date(2026, 11, 20)
+_d_feb = _dt_m2.date(2027, 2, 15)
+_d_mar = _dt_m2.date(2027, 3, 20)
+_d_jul = _dt_m2.date(2027, 7, 10)
+
+check("9月进入秋招正式批黄金期", _HC.get_current_stage(_d_sep) == _HC.AUTUMN_FORMAL)
+check("11月进入秋招补录期", _HC.get_current_stage(_d_nov) == _HC.AUTUMN_SUPPLEMENT)
+check("2月进入春招预热期", _HC.get_current_stage(_d_feb) == _HC.SPRING_ADVANCE)
+check("3月进入春招金三银四", _HC.get_current_stage(_d_mar) == _HC.SPRING_FORMAL)
+check("7月进入日常实习与提前批", _HC.get_current_stage(_d_jul) == _HC.DAILY_INTERN_ADVANCE)
+
+_p_sep = _HC.get_season_profile(_d_sep)
+check("9月推荐模态为mix", _p_sep["recommended_mode"] == "mix")
+check("9月推荐配比70%校招+30%实习", _p_sep["campus_ratio"] == 0.70 and _p_sep["intern_ratio"] == 0.30)
+check("9月具备时令紧迫感修饰符", "秋招" in _p_sep["urgency_modifier"])
+
+# 34.2 结构化规格抽取器 InternSpecExtractor
+_jd_sample = "负责AI Agent工作流设计，要求每周至少出勤4天，能够连续实习6个月以上，表现优异可转正。要求立即到岗。"
+_sp1 = _ISE.extract_specs(jd_text=_jd_sample, tags="4天/周,6个月,本科", title="AI产品经理实习生")
+check("出勤天数提取准确", _sp1["days_per_week"] == 4)
+check("实习月数提取准确", _sp1["duration_months"] == 6)
+check("立即到岗识别准确", _sp1["immediate_onboarding"] is True)
+check("转正机会识别准确", _sp1["has_conversion_chance"] is True)
+check("转正估分高潜力", _sp1["conversion_prob"] >= 0.8)
+
+_jd_neg = "日常实习生岗位，纯日常实习，不提供转正，暂无转正hc，出勤3-5天，实习3个月。"
+_sp_neg = _ISE.extract_specs(jd_text=_jd_neg, tags="日常实习", title="产品实习生")
+check("明确不转正排斥准确", _sp_neg["has_conversion_chance"] is False and _sp_neg["conversion_prob"] == 0.0)
+
+# 34.3 差异化打招呼 DifferentiatedGreeter
+_job_in = {"title": "AI产品经理实习生", "city": "杭州", "tags": "Agent,FastMCP", "campus_specs": _sp1}
+_txt_in = _DG.generate_greeting(_job_in, job_mode="intern")
+check("实习模式强调零课业与满勤", ("零课业负担" in _txt_in or "课业已全部修完零负担" in _txt_in) and "每周5天满勤" in _txt_in)
+check("实习模式强调稳定6个月与FastMCP即战力", "6个月" in _txt_in and "FastMCP" in _txt_in)
+
+_job_cp = {"title": "AI商业化产品经理", "city": "上海", "tags": "校招,商业化", "campus_specs": _sp1}
+_txt_cp = _DG.generate_greeting(_job_cp, job_mode="campus")
+check("校招模式强调2027届应届生", "2027届" in _txt_cp)
+check("校招模式强调200人团队10万+GMV战果", "200人" in _txt_cp and "10万+GMV" in _txt_cp)
+check("校招模式强调微内核智能体架构", "微内核智能体架构" in _txt_cp)
+check("差异化招呼无联系方式泄露", not _gr.privacy_blocked(_txt_in) and not _gr.privacy_blocked(_txt_cp))
+
+# 34.4 scorer 动态调优加分与活跃度严格否决
+_j_bon = {"title": "AI产品经理实习生", "company": "某科技", "salary": "200-300元/天", "tags": "4天/周,可转正", "boss_active": 0}
+_s_bon, _r_bon = scorer.score(_j_bon, "表现优异可转正，每周4天出勤", cfg)
+check("转正加分(+2.0)生效", "+2.0 conversion" in _r_bon)
+check("出勤匹配加分(+1.0)生效", "+1.0 days_match:4d" in _r_bon)
+
+_j_inact = {"title": "AI产品经理实习生", "company": "某科技", "salary": "200-300元/天", "boss_active": 15}
+_s_inact, _r_inact = scorer.score(_j_inact, "", cfg)
+check("boss_active > 14 严格一票否决", _s_inact == 0 and "inactive" in _r_inact)
+
+# 34.5 daily_plan 沉淀 campus_specs
+_plan_path = cfgmod.state_path("daily_plan.json")
+if os.path.exists(_plan_path):
+    with open(_plan_path, "r", encoding="utf-8") as _f_plan:
+        _d_plan = json.load(_f_plan)
+    if _d_plan:
+        check("daily_plan.json 沉淀 campus_specs", "campus_specs" in _d_plan[0])
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

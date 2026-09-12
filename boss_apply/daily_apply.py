@@ -102,9 +102,20 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                         job["job_mode"] = job_mode
                         job["experience"] = exp_code
                         job["city"] = city
+                        try:
+                            from .campus_engine import InternSpecExtractor
+                            specs = InternSpecExtractor.extract_specs(
+                                jd_text="",
+                                tags=job.get("tags") or "",
+                                title=job.get("title") or ""
+                            )
+                        except Exception:
+                            specs = {}
+                        job["campus_specs"] = specs
                         candidates.append({
                             "job": job, "detail": "", "kw": kw,
                             "city": city, "base_score": s, "base_reason": why,
+                            "campus_specs": specs,
                         })
                     browser.human_wait(cfg, "page")
         finally:
@@ -129,6 +140,21 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                     item["detail"] = detail or ""
                     if active is not None and active >= 0:
                         item["job"]["boss_active"] = active
+                    # Module 2: JD 精读后使用完整 JD 全文重抽 campus_specs 并重算打分
+                    try:
+                        from .campus_engine import InternSpecExtractor
+                        specs = InternSpecExtractor.extract_specs(
+                            jd_text=detail or "",
+                            tags=item["job"].get("tags") or "",
+                            title=item["job"].get("title") or ""
+                        )
+                    except Exception:
+                        specs = item.get("campus_specs") or {}
+                    item["campus_specs"] = specs
+                    item["job"]["campus_specs"] = specs
+                    new_s, new_why = scorer.score(item["job"], detail or "", cfg)
+                    item["base_score"] = new_s
+                    item["base_reason"] = new_why
                     stats["details_fetched"] += 1
                     if idx % 10 == 0 or idx == len(detail_targets):
                         print(f"    > JD 精读进度: [{idx}/{len(detail_targets)}] ({item['job'].get('company')})")
@@ -166,6 +192,17 @@ def rank_and_plan(candidates, cfg, top_n=None):
     plan = []
     for i, item in enumerate(candidates):
         job = item["job"]
+        specs = item.get("campus_specs") or job.get("campus_specs")
+        if not specs:
+            try:
+                from .campus_engine import InternSpecExtractor
+                specs = InternSpecExtractor.extract_specs(
+                    jd_text=item.get("detail") or "",
+                    tags=job.get("tags") or "",
+                    title=job.get("title") or ""
+                )
+            except Exception:
+                specs = {}
         entry = {
             "title": job.get("title") or "",
             "company": job.get("company") or "",
@@ -176,6 +213,7 @@ def rank_and_plan(candidates, cfg, top_n=None):
             "kw": item["kw"],
             "job_mode": job.get("job_mode") or "",
             "experience": job.get("experience") or "",
+            "campus_specs": specs,
             "detail_head": (item["detail"] or "")[:300],
         }
         if llm_res and i in llm_res:
@@ -200,10 +238,13 @@ def rank_and_plan(candidates, cfg, top_n=None):
     plan.sort(key=lambda x: -x["score"])
     plan = plan[:top_n]
 
-    # 写入 daily_plan.json
+    # 写入 daily_plan.json（优先使用原子落盘）
     plan_path = cfgmod.state_path("daily_plan.json")
-    with open(plan_path, "w", encoding="utf-8") as f:
-        json.dump(plan, f, ensure_ascii=False, indent=2)
+    if hasattr(cfgmod, "atomic_save_json"):
+        cfgmod.atomic_save_json(plan_path, plan, indent=2)
+    else:
+        with open(plan_path, "w", encoding="utf-8") as f:
+            json.dump(plan, f, ensure_ascii=False, indent=2)
 
     rank_stats = {
         "total_candidates": len(candidates),

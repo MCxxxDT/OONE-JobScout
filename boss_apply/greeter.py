@@ -61,7 +61,26 @@ def self_openers(cfg, head_len=14):
 
 
 def greeting_text(cfg, job):
-    # 1. 优先调用 AI 动态开场白引擎（看岗位下菜碟，结合岗位与画像生成定制化第一句）
+    # 1. 若为 test profile，严格使用中性模板，不含任何个人信息
+    if cfg.get("profile") == "test":
+        templates = (cfg.get("greeting", {}) or {}).get("test") or ["您好，我对该岗位很感兴趣，期待沟通！"]
+        t = random.choice(templates)
+        if privacy_blocked(t):
+            raise RuntimeError("greeting template contains contact info (privacy), profile='test'")
+        return t.replace("{job}", job.get("title") or "该岗位")
+
+    # 2. 优先调用差异化打招呼生成器（Module 2: 实习/校招双模定制）
+    try:
+        from .campus_engine import DifferentiatedGreeter
+        mode = job.get("job_mode") or cfg.get("job_mode")
+        if mode in ("intern", "campus", "mix"):
+            dyn_diff = DifferentiatedGreeter.generate_greeting(job, job_mode=mode, cfg=cfg)
+            if dyn_diff and not privacy_blocked(dyn_diff):
+                return dyn_diff
+    except Exception:
+        pass
+
+    # 3. 优先调用 AI 动态开场白引擎（看岗位下菜碟，结合岗位与画像生成定制化第一句）
     try:
         from . import ai_reply
         dyn = ai_reply.generate_dynamic_greeting(cfg, job)
@@ -70,9 +89,9 @@ def greeting_text(cfg, job):
     except Exception:
         pass
 
-    # 2. 保底降级：使用静态模板
-    profile = cfg.get("profile", "test")
-    templates = (cfg.get("greeting", {}) or {}).get(profile) or (cfg.get("greeting", {}) or {}).get("test") or ["您好，我对该岗位很感兴趣，期待沟通！"]
+    # 4. 保底降级：使用静态模板
+    profile = cfg.get("profile", "real")
+    templates = (cfg.get("greeting", {}) or {}).get(profile) or (cfg.get("greeting", {}) or {}).get("real") or ["您好，我对该岗位很感兴趣，期待沟通！"]
     t = random.choice(templates)
     if privacy_blocked(t):
         raise RuntimeError("greeting template contains contact info (privacy), profile=%r" % profile)
