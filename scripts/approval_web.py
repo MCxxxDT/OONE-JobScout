@@ -1008,6 +1008,49 @@ PAGE = """<!DOCTYPE html>
     gap: 16px;
     margin-bottom: 25px;
   }
+  @media (min-width: 1200px) {
+    .stats-grid {
+      grid-template-columns: repeat(5, 1fr);
+    }
+  }
+  .btn-help-icon {
+    background: rgba(2, 132, 199, 0.08);
+    border: 1px solid rgba(2, 132, 199, 0.2);
+    color: #0284c7;
+    padding: 3px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn-help-icon:hover {
+    background: #0284c7;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);
+  }
+  .btn-term-action {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #e2e8f0;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn-term-action:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+  }
   .stat-card {
     background: #ffffff;
     border: 1px solid rgba(0,0,0,0.03);
@@ -2146,6 +2189,24 @@ PAGE = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- Global Help & Mechanism Modal -->
+<div class="modal-overlay" id="helpModal" style="display:none">
+  <div class="modal-card" style="max-width:560px;position:relative;padding:28px 26px;text-align:left">
+    <button type="button" onclick="closeHelpModal()" style="position:absolute;top:16px;right:16px;border:none;background:rgba(0,0,0,0.05);width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#64748b">✕</button>
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div id="helpModalIcon" style="width:40px;height:40px;border-radius:12px;background:rgba(14,165,233,0.1);color:#0284c7;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">💡</div>
+      <div>
+        <h5 class="fw-bold mb-0" id="helpModalTitle" style="font-size:17px;color:#0f172a">说明指南</h5>
+        <div class="text-muted" id="helpModalSub" style="font-size:12px">系统机制与使用提示</div>
+      </div>
+    </div>
+    <div id="helpModalBody" style="font-size:13px;line-height:1.7;color:#334155;background:#f8fafc;border-radius:14px;padding:16px;border:1px solid #e2e8f0;max-height:400px;overflow-y:auto"></div>
+    <div class="d-flex justify-content-end mt-3">
+      <button class="btn-black" style="padding:8px 20px;border-radius:10px;font-size:13px" onclick="closeHelpModal()">我知道了</button>
+    </div>
+  </div>
+</div>
+
 <div class="app-layout" id="appLayout">
   <!-- 1. Left Sidebar Navigation (Docked on Desktop, Drawer on Mobile) -->
   <aside class="app-sidebar" id="appSidebar">
@@ -2222,6 +2283,7 @@ PAGE = """<!DOCTYPE html>
           </div>
         </div>
       </div>
+      <div class="d-flex align-items-center gap-2">
         <!-- User Profile Pill & Dropdown -->
         <div class="user-profile-wrap" id="userProfileWrap" style="position:relative">
           <button id="btnBossAuth" class="btn-user-profile" onclick="toggleProfileDropdown()" title="个人画像与凭证状态">
@@ -2369,7 +2431,7 @@ PAGE = """<!DOCTYPE html>
               <svg class="title-icon red" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
               待人工决策（needs_human）
             </h5>
-            <span class="text-muted" style="font-size:12px;font-weight:500">优先处理触发安全门禁与高意向邀约的会话</span>
+            <button type="button" class="btn-help-icon" onclick="openHelpModal('pending')" title="查看人机协同与安全决策说明">ⓘ 规则说明</button>
           </div>
           <div id="pending">加载中…</div>
         </div>
@@ -2391,7 +2453,10 @@ PAGE = """<!DOCTYPE html>
                   <svg class="title-icon green" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                   后台常驻守护进程
                 </h5>
-                <span id="daemonLiveBadge" class="soft-badge badge-rej">检测中</span>
+                <div class="d-flex align-items-center gap-2">
+                  <span id="daemonLiveBadge" class="soft-badge badge-rej">检测中</span>
+                  <button type="button" class="btn-help-icon" onclick="openHelpModal('daemon')" title="查看守护进程常驻说明">ⓘ 机制说明</button>
+                </div>
               </div>
               
               <div class="p-3 mb-3" style="background:#f8fafc;border-radius:16px;border:1.5px solid #e2e8f0">
@@ -2421,9 +2486,6 @@ PAGE = """<!DOCTYPE html>
                   🔄 刷新状态
                 </button>
               </div>
-              <div style="font-size:11px;color:var(--mut);margin-top:12px">
-                提示：启动后将在 Windows 后台以守护进程常驻运行，定时轮询新消息、自动拟人回复并按时段投递。
-              </div>
             </div>
           </div>
 
@@ -2435,7 +2497,10 @@ PAGE = """<!DOCTYPE html>
                   <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                   Chrome CDP & BOSS 鉴权状态
                 </h5>
-                <span id="authLiveBadge" class="soft-badge badge-pub">已就绪</span>
+                <div class="d-flex align-items-center gap-2">
+                  <span id="authLiveBadge" class="soft-badge badge-pub">已就绪</span>
+                  <button type="button" class="btn-help-icon" onclick="openHelpModal('auth')" title="查看CDP与凭证加密说明">ⓘ 鉴权安全</button>
+                </div>
               </div>
 
               <div class="p-3 mb-3" style="background:#f8fafc;border-radius:16px;border:1.5px solid #e2e8f0">
@@ -2465,8 +2530,43 @@ PAGE = """<!DOCTYPE html>
                   🔍 探测鉴权
                 </button>
               </div>
-              <div style="font-size:11px;color:var(--mut);margin-top:12px">
-                若会话失效或需更换账号，可点击【扫码更新凭证】重新扫码，凭证将自动加密持久化并热注入。
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Execution & Logs Monitor (Row 2) -->
+        <div class="row mt-4">
+          <div class="col-12">
+            <div class="panel-card" style="padding:20px 24px;border-radius:18px;background:#0f172a;color:#f8fafc;border:1px solid #1e293b;box-shadow:0 10px 25px -5px rgba(0,0,0,0.3)">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 pb-3 border-bottom" style="border-color:#334155 !important">
+                <div class="d-flex align-items-center gap-2">
+                  <div class="terminal-dots d-flex align-items-center gap-1 me-2">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>
+                    <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
+                    <span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block"></span>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  <span style="font-size:14px;font-weight:700;letter-spacing:0.3px;color:#e2e8f0">守护进程实时运行终端 (Live Terminal Stream)</span>
+                  <span id="termStatusBadge" class="badge" style="background:rgba(16,185,129,0.2);color:#34d399;font-size:11px;font-family:monospace;padding:3px 8px;border-radius:6px">● ONLINE</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <button type="button" class="btn-term-action" id="btnTermFollow" onclick="toggleTermFollow()" title="切换自动追踪">
+                    <span id="termFollowIcon">⏬</span> 自动追踪
+                  </button>
+                  <button type="button" class="btn-term-action" onclick="fetchDaemonLogs()" title="手动刷新最新日志">
+                    🔄 刷新日志
+                  </button>
+                  <button type="button" class="btn-term-action" onclick="clearTermDisplay()" title="清屏当前日志">
+                    🗑️ 清屏
+                  </button>
+                </div>
+              </div>
+              <div class="terminal-body" id="termLogsContainer" style="margin-top:14px;height:320px;overflow-y:auto;font-family:'JetBrains Mono', Consolas, Monaco, monospace;font-size:12px;line-height:1.6;color:#94a3b8;background:#090d16;border-radius:12px;padding:16px;border:1px solid #1e293b;white-space:pre-wrap;word-break:break-all">
+                <div style="color:#64748b">// 正在连接并拉取守护进程执行日志…</div>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-2 px-1" style="font-size:11px;color:#64748b;font-family:monospace">
+                <span>日志来源: state/daemon.log</span>
+                <span id="termLastUpdate">最后更新: 刚刚</span>
               </div>
             </div>
           </div>
@@ -2499,12 +2599,12 @@ PAGE = """<!DOCTYPE html>
 
         <div class="panel-card">
           <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
-            <div>
-              <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-3">
+              <h5 class="fw-bold mb-0 d-flex align-items-center gap-2">
                 <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-                实时智能台账 · 运行流水与自学习闭环
+                实时智能台账 · 运行流水与自学习
               </h5>
-              <div class="text-muted" style="font-size:12px">流水与对话完整合一：直观查看每条业务流水的双向对话与动作成效，直接打分与输入真人金句实现自学习</div>
+              <button type="button" class="btn-help-icon" onclick="openHelpModal('ledger')" title="查看台账与自学习说明">ⓘ 机制指南</button>
             </div>
             <div class="admin-search-group" style="max-width:320px;width:100%">
               <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -3240,9 +3340,106 @@ function toggleMobileSidebar(force) {
   const sidebar = document.getElementById('appSidebar');
   const backdrop = document.getElementById('sidebarBackdrop');
   if (!sidebar) return;
-  const willShow = (typeof force === 'boolean') ? force : !sidebar.classList.contains('show-mobile');
-  sidebar.classList.toggle('show-mobile', willShow);
-  if (backdrop) backdrop.classList.toggle('show-mobile', willShow);
+  const show = (typeof force === 'boolean') ? force : !sidebar.classList.contains('show-mobile');
+  sidebar.classList.toggle('show-mobile', show);
+  if (backdrop) backdrop.classList.toggle('show-mobile', show);
+}
+
+// Help Modal
+function openHelpModal(type) {
+  const configs = {
+    'pending': {
+      icon: '🛡️',
+      title: '待人工决策（needs_human）机制',
+      sub: '智能安全风控与人机协同边界',
+      body: '<p><strong>触发机制：</strong>当求职守护引擎在巡检与会话分析中检测到以下场景时，将严格拦截自动化动作并转交人工裁决：</p><ul style=\"padding-left:20px;margin:8px 0\"><li>触碰敏感红线（微信/电话/简历交换涉及外部风险）；</li><li>HR 表达高意向（面试邀约、Offer 意向、急聘关键问题）；</li><li>大模型置信度不足或决策边界模糊。</li></ul><p><strong>处理方式：</strong>您可以点击“同意发预设”、“不处理”或“自定义回复”。所有动作将记入智能台账并用于自学习增强。</p>'
+    },
+    'daemon': {
+      icon: '⚡',
+      title: '后台常驻守护进程说明',
+      sub: '持续巡检与自动化调度机制',
+      body: '<p><strong>常驻职责：</strong>启动后系统将在后台以独立守护进程（daemon_auto_reply.py）常驻运行，具备如下能力：</p><ul style=\"padding-left:20px;margin:8px 0\"><li><strong>定时巡检雷达：</strong>定期探测 BOSS 消息中心未读会话与最新动态；</li><li><strong>智能拟人回复：</strong>结合高斯随机延迟（拟人打字与阅读时长）自动响应常规咨询；</li><li><strong>自动时段投递：</strong>在设定的黄金招聘时段自动执行岗位扫描与全局择优打分投递；</li><li><strong>心跳自愈：</strong>内置自动重连与健康巡检，异常断开时安全隔离。</li></ul>'
+    },
+    'auth': {
+      icon: '🔒',
+      title: 'Chrome CDP & BOSS 鉴权体系',
+      sub: '无感知接管与本地加密保护',
+      body: '<p><strong>连接模式：</strong>系统通过本地 Chrome DevTools Protocol（端口 9335）安全接管浏览器真实已登录会话，无需输入账号密码。</p><ul style=\"padding-left:20px;margin:8px 0\"><li><strong>Session Cookie 动态对齐：</strong>自动提取真实求职会话凭证，与 BOSS 直聘平台毫秒级同步；</li><li><strong>Windows DPAPI 硬件加密：</strong>关键凭证使用 Windows 原生数据保护 API 落盘，非本机系统无法解密；</li><li><strong>多账号随时切换：</strong>随时可点击“扫码更新凭证”无缝接入新求职者画像。</li></ul>'
+    },
+    'ledger': {
+      icon: '📊',
+      title: '实时智能台账与自学习体系',
+      sub: '全链路执行留痕与反馈增强',
+      body: '<p><strong>流水合一：</strong>记录守护引擎执行的每一步业务动作（智能回复、交换微信、投递打招呼、告警干预等）。</p><ul style=\"padding-left:20px;margin:8px 0\"><li>支持对 AI 回复进行<strong>五星评分</strong>与<strong>标记优秀/需改进</strong>；</li><li>可直接在历史记录中输入<strong>真人金句</strong>，系统将沉淀为业务经验记忆，在后续决策中优先参考。</li></ul>'
+    }
+  };
+  const c = configs[type] || configs['pending'];
+  const modal = document.getElementById('helpModal');
+  if (!modal) return;
+  document.getElementById('helpModalIcon').textContent = c.icon;
+  document.getElementById('helpModalTitle').textContent = c.title;
+  document.getElementById('helpModalSub').textContent = c.sub;
+  document.getElementById('helpModalBody').innerHTML = c.body;
+  modal.style.display = 'flex';
+}
+
+function closeHelpModal() {
+  const modal = document.getElementById('helpModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Live Terminal Logs
+let termFollow = true;
+function toggleTermFollow() {
+  termFollow = !termFollow;
+  const btn = document.getElementById('btnTermFollow');
+  const icon = document.getElementById('termFollowIcon');
+  if (btn && icon) {
+    btn.style.opacity = termFollow ? '1' : '0.6';
+    icon.textContent = termFollow ? '⏬' : '⏸️';
+  }
+}
+
+function clearTermDisplay() {
+  const c = document.getElementById('termLogsContainer');
+  if (c) c.innerHTML = '<div style="color:#64748b">// 控制台已清屏，等待新日志…</div>';
+}
+
+async function fetchDaemonLogs() {
+  const container = document.getElementById('termLogsContainer');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/daemon/logs?lines=150&token=' + encodeURIComponent(TOKEN));
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.logs)) {
+      if (data.logs.length === 0) {
+        container.innerHTML = '<div style="color:#64748b">// 暂无日志输出</div>';
+      } else {
+        const coloredHtml = data.logs.map(line => {
+          let escLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          if (/error|failed|exception/i.test(line)) {
+            return `<span style="color:#f87171">${escLine}</span>`;
+          } else if (/warn|alert|needs_human/i.test(line)) {
+            return `<span style="color:#fbbf24">${escLine}</span>`;
+          } else if (/success|ok|connected|login|\[PASS\]/i.test(line)) {
+            return `<span style="color:#34d399">${escLine}</span>`;
+          } else if (/\[.+?\]/.test(line)) {
+            return `<span style="color:#38bdf8">${escLine}</span>`;
+          }
+          return `<span style="color:#94a3b8">${escLine}</span>`;
+        }).join('\\n');
+        container.innerHTML = coloredHtml;
+        if (termFollow) {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+      const upd = document.getElementById('termLastUpdate');
+      if (upd) upd.textContent = '最后更新: ' + new Date().toLocaleTimeString();
+    }
+  } catch (e) {
+    console.warn('fetchDaemonLogs error:', e);
+  }
 }
 
 function toggleSidebarCollapse() {
@@ -3272,6 +3469,9 @@ function switchTab(name) {
   const titleEl = document.getElementById('topbarTitle');
   if (titleEl && titles[name]) titleEl.textContent = titles[name];
   toggleMobileSidebar(false);
+  if (name === 'monitor') {
+    fetchDaemonLogs();
+  }
   if (name === 'ledger') {
     renderResolved();
     renderLedger();
@@ -3537,6 +3737,9 @@ async function load(isManual) {
     renderResolved();
     renderLedger();
     loadSettings();
+    if (currentTab === 'monitor') {
+      fetchDaemonLogs();
+    }
     if (isManual) showToast('工作台数据已更新！', 'success');
   } catch(e) {
     console.error(e);
@@ -5793,6 +5996,24 @@ async def api_daemon_toggle(request: Request, token: str = ""):
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
     return JSONResponse({"error": "invalid_action"}, status_code=400)
+
+
+@app.get("/api/daemon/logs")
+def api_daemon_logs(token: str = "", lines: int = 150):
+    """读取并返回 state/daemon.log 的最后 N 行日志。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    log_path = os.path.join(cfgmod.STATE_DIR, "daemon.log")
+    if not os.path.exists(log_path):
+        return {"ok": True, "logs": ["[System] state/daemon.log 暂无日志输出，守护进程尚未产生日志。"], "count": 0}
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+            tail_lines = [l.rstrip() for l in all_lines[-lines:]]
+            return {"ok": True, "logs": tail_lines, "count": len(tail_lines)}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "logs": []}
 
 
 @app.get("/api/auth/status")
