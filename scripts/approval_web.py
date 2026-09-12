@@ -1677,10 +1677,46 @@ PAGE = """<!DOCTYPE html>
   }
   .prompt-tab-pill.active { background: #111; color: #fff; }
 
+  /* Topbar Action Buttons (Default Desktop) */
+  .btn-apply-topbar {
+    padding: 7px 14px;
+    font-size: 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(59,130,246,0.3);
+    background: rgba(59,130,246,0.08);
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-apply-topbar:hover {
+    background: rgba(59,130,246,0.15);
+    color: #1d4ed8;
+  }
+  .btn-refresh-topbar {
+    padding: 7px 16px;
+    font-size: 12px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    cursor: pointer;
+  }
+  .mobile-bottom-bar { display: none; }
+
   /* ============================================================
      Unified Mobile & Responsive Breakpoints (iPhone / Android)
      ============================================================ */
   @media (max-width: 991px) {
+    body {
+      padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+    }
     .hamburger-btn { display: flex !important; }
     .sidebar-toggle-btn { display: none !important; }
     
@@ -1706,7 +1742,7 @@ PAGE = """<!DOCTYPE html>
       background: rgba(15, 23, 42, 0.45);
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
-      z-index: 1040;
+      z-index: 1045;
     }
     .sidebar-backdrop.show-mobile {
       display: block;
@@ -1715,48 +1751,67 @@ PAGE = """<!DOCTYPE html>
     /* Top Sticky Header */
     .app-topbar, .admin-header {
       padding: 0 16px;
-      height: 56px;
+      height: 58px;
     }
     .topbar-title {
-      font-size: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* Body & Panels */
     .app-body {
-      padding: 12px 10px;
+      padding: 14px 12px;
     }
     .panel-card {
-      padding: 16px 12px;
-      border-radius: 16px;
+      padding: 16px 14px;
+      border-radius: 18px;
     }
 
-    /* KPI Stats: Compact 2-column Grid */
+    /* KPI Stats: Elegant 2x2 + 1 Grid Layout */
     .stats-grid {
       grid-template-columns: repeat(2, 1fr) !important;
-      gap: 8px !important;
-      margin-bottom: 12px !important;
-    }
-    .stat-card {
-      padding: 10px 12px !important;
-      border-radius: 14px !important;
+      gap: 10px !important;
+      margin-bottom: 16px !important;
     }
     .stats-grid .stat-card:last-child:nth-child(odd) {
-      grid-column: span 2;
+      grid-column: span 2 !important;
     }
-    .stat-card .val, .stat-card .stat-val {
-      font-size: 18px !important;
-      margin-top: 2px !important;
+    .stat-card {
+      padding: 12px 14px !important;
+      border-radius: 16px !important;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.03) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
     }
     .stat-card .label, .stat-card .stat-label {
-      font-size: 11px !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      gap: 6px !important;
+    }
+    .stat-card .val, .stat-card .stat-val {
+      font-size: 22px !important;
+      font-weight: 900 !important;
+      margin-top: 4px !important;
+      line-height: 1.15 !important;
+      letter-spacing: -0.5px !important;
     }
     .stat-card .hint, .stat-card .stat-hint {
-      font-size: 10px !important;
-      margin-top: 2px !important;
+      font-size: 11px !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      margin-top: 3px !important;
     }
     .quota-track {
-      margin-top: 4px;
-      height: 3px;
+      margin-top: 5px;
+      height: 4px;
     }
 
     /* Top Sub-nav Bar */
@@ -1765,16 +1820,118 @@ PAGE = """<!DOCTYPE html>
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       display: flex;
+      scrollbar-width: none;
     }
+    .sub-nav-bar::-webkit-scrollbar { display: none; }
     .sub-nav-pill {
       font-size: 12px;
       padding: 6px 12px;
       flex-shrink: 0;
     }
 
-    /* Gemini Chat Arena on Mobile */
+    /* Tab 1 Conv Card: Touch targets >= 44px */
+    .conv-card {
+      padding: 16px 14px !important;
+      border-radius: 18px !important;
+      margin-bottom: 14px !important;
+    }
+    .conv-card .btn-black,
+    .conv-card .btn-action-wechat,
+    .conv-card .btn-action-resume,
+    .conv-card .btn-action-light,
+    .conv-card .btn-action-nuke {
+      min-height: 44px !important;
+      padding: 10px 14px !important;
+      font-size: 13px !important;
+      border-radius: 12px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      touch-action: manipulation;
+      flex: 1 1 auto;
+    }
+    .chip-btn {
+      min-height: 36px !important;
+      padding: 6px 12px !important;
+      font-size: 12px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+    }
+
+    /* Tab 2 Monitor: Terminal Stream */
+    #termLogsContainer {
+      height: 260px !important;
+      font-size: 11px !important;
+      line-height: 1.5 !important;
+      padding: 12px !important;
+      overflow-x: hidden !important;
+      word-break: break-all !important;
+      border-radius: 10px !important;
+    }
+    .btn-term-action {
+      padding: 6px 10px !important;
+      font-size: 11px !important;
+      min-height: 36px !important;
+    }
+
+    /* Tab 3 Ledger: Full-width search & cards */
+    .admin-search-group {
+      max-width: 100% !important;
+      width: 100% !important;
+      margin-top: 4px;
+    }
+    .ledger-event-card {
+      padding: 14px 14px !important;
+      border-radius: 16px !important;
+      margin-bottom: 12px !important;
+    }
+
+    /* Tab 4 Setting Hub Grid: Single Column */
+    .setting-hub-grid {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+    .setting-hub-card {
+      padding: 18px 16px !important;
+      border-radius: 18px !important;
+    }
+
+    /* Setting Modals: Bottom Sheet or 94vw Centered Card with 85vh max-height */
+    .setting-modal-card {
+      width: 94vw !important;
+      max-width: 94vw !important;
+      max-height: 85vh !important;
+      padding: 20px 16px !important;
+      border-radius: 22px !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+      margin: auto !important;
+    }
+    .modal-card {
+      width: 92vw !important;
+      max-width: 92vw !important;
+      padding: 24px 18px !important;
+      border-radius: 20px !important;
+      max-height: 85vh !important;
+      overflow-y: auto !important;
+    }
+    .setting-modal-footer {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+      margin-top: 18px !important;
+      padding-top: 14px !important;
+    }
+    .setting-modal-footer button {
+      flex: 1 1 auto !important;
+      min-height: 42px !important;
+      font-size: 12px !important;
+      justify-content: center !important;
+    }
+
+    /* Tab 5 Gemini Chat Arena on Mobile */
     .chat-arena-card {
-      height: 560px;
+      height: 540px;
       border-radius: 18px;
     }
     .chat-arena-header {
@@ -1782,15 +1939,15 @@ PAGE = """<!DOCTYPE html>
     }
     .chat-flow-container {
       padding: 14px 12px;
-      gap: 14px;
+      gap: 12px;
     }
     .chat-msg-row {
-      max-width: 95%;
+      max-width: 88% !important;
     }
     .chat-bubble {
-      padding: 10px 14px;
-      font-size: 13px;
-      border-radius: 16px;
+      padding: 10px 14px !important;
+      font-size: 13px !important;
+      border-radius: 16px !important;
     }
     .chat-input-wrapper {
       padding: 10px 12px;
@@ -1798,6 +1955,11 @@ PAGE = """<!DOCTYPE html>
     .chat-input-box {
       padding: 10px 12px;
       border-radius: 16px;
+    }
+    .chat-send-btn {
+      min-height: 40px;
+      padding: 8px 16px;
+      font-size: 12px;
     }
 
     /* Filter pills & search */
@@ -1810,6 +1972,241 @@ PAGE = """<!DOCTYPE html>
       white-space: nowrap;
       padding: 5px 12px;
       font-size: 11px;
+    }
+
+    /* Native Bottom Tab Bar */
+    .mobile-bottom-bar {
+      display: flex !important;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(56px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-top: 1px solid rgba(0, 0, 0, 0.07);
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.04);
+      z-index: 1040;
+      align-items: center;
+      justify-content: space-around;
+    }
+    .mobile-nav-item {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      color: #64748b;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+    .mobile-nav-item:active {
+      transform: scale(0.93);
+    }
+    .mobile-nav-item.active {
+      color: #0284c7;
+    }
+    .mobile-nav-icon-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 24px;
+    }
+    .mobile-nav-icon {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      transition: transform 0.2s;
+    }
+    .mobile-nav-item.active .mobile-nav-icon {
+      transform: translateY(-1px);
+      stroke-width: 2.5;
+    }
+    .mobile-nav-label {
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.1px;
+    }
+    .mobile-nav-badge {
+      position: absolute;
+      top: -2px;
+      right: -4px;
+      background: #ef4444;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      min-width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      border: 1.5px solid #fff;
+      line-height: 1;
+    }
+    .mobile-nav-dot {
+      position: absolute;
+      top: 0px;
+      right: 0px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 1.5px solid #fff;
+    }
+  }
+
+  /* Specific Fine-tuning for Narrow Mobile Screens (<768px) */
+  @media (max-width: 768px) {
+    .app-topbar, .admin-header {
+      padding: 0 12px !important;
+      height: 54px !important;
+      gap: 6px;
+    }
+    .topbar-left {
+      gap: 8px !important;
+      min-width: 0;
+      flex: 1;
+    }
+    .topbar-brand-wrap {
+      min-width: 0;
+    }
+    .topbar-title {
+      font-size: 14px !important;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+    }
+    .status-line {
+      font-size: 10px !important;
+      gap: 4px !important;
+      margin-top: 1px !important;
+      white-space: nowrap;
+    }
+    #guardPill {
+      padding: 1px 6px !important;
+      font-size: 10px !important;
+      border-radius: 6px !important;
+    }
+    .topbar-right {
+      gap: 6px !important;
+      flex-shrink: 0;
+    }
+    .btn-user-profile {
+      padding: 2px 5px 2px 2px !important;
+      border: 1px solid #e2e8f0 !important;
+      background: #ffffff !important;
+      gap: 0 !important;
+    }
+    .user-avatar-box {
+      width: 28px !important;
+      height: 28px !important;
+    }
+    .user-avatar-box .pulse-dot {
+      width: 7px !important;
+      height: 7px !important;
+      border-width: 1.5px !important;
+    }
+    .profile-popover-card {
+      width: min(310px, calc(100vw - 24px)) !important;
+      right: -8px !important;
+    }
+    .btn-apply-topbar {
+      padding: 6px 10px !important;
+      font-size: 11px !important;
+      border-radius: 9px !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+    }
+    .btn-refresh-topbar {
+      padding: 6px 8px !important;
+      width: 32px !important;
+      height: 32px !important;
+      border-radius: 9px !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+    }
+
+    /* Panel Card Heading on Mobile */
+    .panel-card h5, .panel-card-title {
+      font-size: 14.5px !important;
+      font-weight: 800 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      gap: 6px !important;
+    }
+    .panel-card .title-icon {
+      width: 16px !important;
+      height: 16px !important;
+    }
+    .btn-help-icon {
+      padding: 3px 8px !important;
+      font-size: 10.5px !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+    }
+  }
+
+  /* Ultra Narrow Screen (<480px / <420px) */
+  @media (max-width: 480px) {
+    .app-topbar, .admin-header {
+      padding: 0 10px !important;
+    }
+    .hamburger-btn {
+      width: 32px !important;
+      height: 32px !important;
+      border-radius: 8px !important;
+    }
+    .topbar-title {
+      font-size: 13.5px !important;
+      max-width: 100px;
+    }
+    .stats-grid {
+      gap: 8px !important;
+    }
+    .stat-card {
+      padding: 10px 10px !important;
+    }
+    .stat-card .val, .stat-card .stat-val {
+      font-size: 19px !important;
+    }
+    .stat-card .label, .stat-card .stat-label {
+      font-size: 11px !important;
+    }
+    .stat-card .hint, .stat-card .stat-hint {
+      font-size: 10px !important;
+    }
+    .btn-apply-topbar {
+      padding: 5px 8px !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .btn-apply-topbar .apply-label-mini {
+      display: none !important; /* on ultra narrow phone <380px, show ⚡ icon only */
+    }
+    .btn-apply-topbar {
+      width: 32px !important;
+      height: 32px !important;
+      padding: 0 !important;
+      justify-content: center !important;
     }
   }
 
@@ -2270,20 +2667,20 @@ PAGE = """<!DOCTYPE html>
   <div class="app-main">
     <!-- Top Sticky Bar -->
     <header class="app-topbar admin-header">
-      <div class="d-flex align-items-center gap-3">
+      <div class="topbar-left d-flex align-items-center gap-2 gap-sm-3">
         <button type="button" class="hamburger-btn" onclick="toggleMobileSidebar()" title="展开/收起主导航">
           <svg width="18" height="18" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
-        <div>
-          <div class="topbar-title" id="topbarTitle">待办审批</div>
+        <div class="topbar-brand-wrap">
+          <div class="topbar-title" id="topbarTitle"><span class="title-primary">待办审批</span><span class="title-secondary d-none d-md-inline"> · 决策处理</span></div>
           <div class="status-line" style="font-size:11px;color:var(--mut);display:flex;align-items:center;gap:6px">
             <span id="guardPill" class="soft-badge badge-rej" style="padding:2px 8px;font-size:10px"><span class="pulse-dot dot-red" style="width:6px;height:6px"></span> 正在检测…</span>
-            <span>·</span>
-            <span id="sub">正在同步…</span>
+            <span class="status-sep d-none d-sm-inline">·</span>
+            <span id="sub" class="status-sync-time d-none d-sm-inline">正在同步…</span>
           </div>
         </div>
       </div>
-      <div class="d-flex align-items-center gap-2">
+      <div class="topbar-right d-flex align-items-center gap-2">
         <!-- User Profile Pill & Dropdown -->
         <div class="user-profile-wrap" id="userProfileWrap" style="position:relative">
           <button id="btnBossAuth" class="btn-user-profile" onclick="toggleProfileDropdown()" title="个人画像与凭证状态">
@@ -2296,7 +2693,7 @@ PAGE = """<!DOCTYPE html>
               <span id="topUserName" class="user-name-label">--</span>
               <span id="authBtnText" class="user-sub-label">⚡ 已接入 BOSS</span>
             </div>
-            <svg class="dropdown-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <svg class="dropdown-chevron d-none d-sm-inline" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
           
           <!-- Dropdown Popover Card -->
@@ -2348,11 +2745,12 @@ PAGE = """<!DOCTYPE html>
             </div>
           </div>
         </div>
-        <button class="btn-action-light" style="padding:7px 14px;font-size:12px;border-radius:10px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.08);color:#2563eb;display:inline-flex;align-items:center;gap:4px" onclick="triggerApplyNow()" title="执行今日候选岗位投递计划">
+        <button class="btn-action-light btn-apply-topbar" onclick="triggerApplyNow()" title="执行今日候选岗位投递计划">
           <span>⚡</span>
-          <span>今日投递</span>
+          <span class="apply-label-full d-none d-sm-inline">今日投递</span>
+          <span class="apply-label-mini d-inline d-sm-none">投递</span>
         </button>
-        <button class="btn-black" style="padding:7px 16px;font-size:12px;border-radius:10px" onclick="load(true)">
+        <button class="btn-black btn-refresh-topbar" onclick="load(true)" title="刷新大盘数据">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
           <span class="d-none d-sm-inline ms-1">刷新数据</span>
         </button>
@@ -2378,7 +2776,7 @@ PAGE = """<!DOCTYPE html>
             </div>
           </div>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
           <button class="btn-white-action" onclick="triggerApplyNow()">
             ⚡ 立即投递今日候选 (Top 50)
           </button>
@@ -2427,9 +2825,10 @@ PAGE = """<!DOCTYPE html>
         </div>
         <div class="panel-card mb-4">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold mb-0 d-flex align-items-center">
+            <h5 class="fw-bold mb-0 d-flex align-items-center panel-card-title">
               <svg class="title-icon red" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-              待人工决策（needs_human）
+              <span>待人工决策</span>
+              <span class="text-muted fw-normal d-none d-sm-inline ms-1" style="font-size:12px">（needs_human）</span>
             </h5>
             <button type="button" class="btn-help-icon" onclick="openHelpModal('pending')" title="查看人机协同与安全决策说明">ⓘ 规则说明</button>
           </div>
@@ -2606,7 +3005,7 @@ PAGE = """<!DOCTYPE html>
               </h5>
               <button type="button" class="btn-help-icon" onclick="openHelpModal('ledger')" title="查看台账与自学习说明">ⓘ 机制指南</button>
             </div>
-            <div class="admin-search-group" style="max-width:320px;width:100%">
+            <div class="admin-search-group" style="width:100%">
               <svg class="spotlight-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               <input type="text" id="ledgerFilter" class="admin-search-input" placeholder="搜索公司、动作或关键词…" oninput="renderLedger(); toggleSearchClear()">
               <div class="admin-search-clear" id="ledgerFilterClear" onclick="clearLedgerSearch()" title="清空搜索">✕</div>
@@ -3291,6 +3690,42 @@ PAGE = """<!DOCTYPE html>
   </div><!-- app-main -->
 </div><!-- app-layout -->
 
+<!-- Native Mobile Bottom Tab Bar (d-lg-none) -->
+<nav class="mobile-bottom-bar d-lg-none" id="mobileBottomBar">
+  <div class="mobile-nav-item active" data-tab="pending" onclick="switchTab('pending')">
+    <div class="mobile-nav-icon-wrap">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"></path></svg>
+      <span class="mobile-nav-badge" id="mobileNavBadgePending" style="display:none">0</span>
+    </div>
+    <span class="mobile-nav-label">待办审批</span>
+  </div>
+  <div class="mobile-nav-item" data-tab="monitor" onclick="switchTab('monitor')">
+    <div class="mobile-nav-icon-wrap">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      <span class="mobile-nav-dot" id="mobileNavBadgeMonitor" style="display:none"></span>
+    </div>
+    <span class="mobile-nav-label">运行监控</span>
+  </div>
+  <div class="mobile-nav-item" data-tab="ledger" onclick="switchTab('ledger')">
+    <div class="mobile-nav-icon-wrap">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+    </div>
+    <span class="mobile-nav-label">执行台账</span>
+  </div>
+  <div class="mobile-nav-item" data-tab="settings" onclick="switchTab('settings')">
+    <div class="mobile-nav-icon-wrap">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </div>
+    <span class="mobile-nav-label">偏好设置</span>
+  </div>
+  <div class="mobile-nav-item" data-tab="playground" onclick="switchTab('playground')">
+    <div class="mobile-nav-icon-wrap">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24"><path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
+    </div>
+    <span class="mobile-nav-label">推演沙盒</span>
+  </div>
+</nav>
+
 <script>
 let TOKEN = new URLSearchParams(location.search).get('token') || '';
 if (!TOKEN) {
@@ -3462,18 +3897,25 @@ function switchTab(name) {
   document.querySelectorAll('.island-capsule').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
   });
+  document.querySelectorAll('.mobile-nav-item').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === name);
+  });
   document.querySelectorAll('.tab-content').forEach(c => {
     c.classList.toggle('active', c.id === 'tab-' + name);
   });
   const titles = {
-    pending: '待办审批 · 决策处理',
-    monitor: '运行监控 · 守护进程与环境感知',
-    ledger: '实时台账 · 运行流水与自学习',
-    settings: '系统设置 · 参数与风控',
-    playground: '回复演练场 · 真实沙盒推演'
+    pending: { short: '待办审批', full: '待办审批 · 决策处理' },
+    monitor: { short: '运行监控', full: '运行监控 · 守护进程与环境感知' },
+    ledger: { short: '实时台账', full: '实时台账 · 运行流水与自学习' },
+    settings: { short: '系统设置', full: '系统设置 · 参数与风控' },
+    playground: { short: '回复演练场', full: '回复演练场 · 真实沙盒推演' }
   };
   const titleEl = document.getElementById('topbarTitle');
-  if (titleEl && titles[name]) titleEl.textContent = titles[name];
+  if (titleEl && titles[name]) {
+    const item = titles[name];
+    const sub = item.full.includes(' · ') ? (' · ' + item.full.split(' · ')[1]) : '';
+    titleEl.innerHTML = `<span class="title-primary">${esc(item.short)}</span><span class="title-secondary d-none d-md-inline">${esc(sub)}</span>`;
+  }
   toggleMobileSidebar(false);
   if (name === 'monitor') {
     fetchDaemonLogs();
@@ -3642,7 +4084,7 @@ async function load(isManual) {
     if (guard.paused) {
       if (gp) {
         gp.className = 'soft-badge badge-rej';
-        gp.innerHTML = '<span class="pulse-dot dot-red"></span> ⛔ 风控熔断: ' + esc(guard.paused);
+        gp.innerHTML = '<span class="pulse-dot dot-red"></span> <span class="d-none d-sm-inline">⛔ 风控熔断: ' + esc(guard.paused) + '</span><span class="d-inline d-sm-none">风控熔断</span>';
       }
       if (sideDot) sideDot.className = 'pulse-dot dot-red';
       if (sideText) sideText.textContent = '风控熔断停摆';
@@ -3650,7 +4092,7 @@ async function load(isManual) {
     } else if (!daemon.running) {
       if (gp) {
         gp.className = 'soft-badge badge-rej';
-        gp.innerHTML = '<span class="pulse-dot dot-red"></span> 🔴 守护未运行 (后台进程离线)';
+        gp.innerHTML = '<span class="pulse-dot dot-red"></span> <span class="d-none d-sm-inline">🔴 守护未运行 (后台进程离线)</span><span class="d-inline d-sm-none">守护未运行</span>';
       }
       if (sideDot) sideDot.className = 'pulse-dot dot-red';
       if (sideText) sideText.textContent = '守护进程离线';
@@ -3659,7 +4101,7 @@ async function load(isManual) {
       if (gp) {
         gp.className = 'soft-badge badge-pub';
         const stText = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
-        gp.innerHTML = `<span class="pulse-dot dot-green"></span> 🟢 ${stText} (PID ${daemon.pid || '已就绪'})`;
+        gp.innerHTML = `<span class="pulse-dot dot-green"></span> <span class="d-none d-sm-inline">🟢 ${stText} (PID ${daemon.pid || '已就绪'})</span><span class="d-inline d-sm-none">${stText}</span>`;
       }
       if (sideDot) sideDot.className = 'pulse-dot dot-green';
       if (sideText) sideText.textContent = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
@@ -3671,6 +4113,15 @@ async function load(isManual) {
     const badge = document.getElementById('pendingBadge');
     badge.textContent = d.counts.pending || 0;
     badge.style.display = d.counts.pending > 0 ? 'inline-block' : 'none';
+    const mNavBadge = document.getElementById('mobileNavBadgePending');
+    if (mNavBadge) {
+      mNavBadge.textContent = d.counts.pending || 0;
+      mNavBadge.style.display = d.counts.pending > 0 ? 'inline-flex' : 'none';
+    }
+    const mNavMonitor = document.getElementById('mobileNavBadgeMonitor');
+    if (mNavMonitor) {
+      mNavMonitor.style.display = daemon.running ? 'inline-block' : 'none';
+    }
     document.getElementById('statRepliedTotal').textContent = d.counts.replied_total || 0;
     document.getElementById('statTodayReplied').textContent = d.today.replied || 0;
     document.getElementById('statTodayScanned').textContent = d.today.scanned || 0;
