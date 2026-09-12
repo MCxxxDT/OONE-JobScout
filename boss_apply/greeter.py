@@ -398,10 +398,10 @@ def _send_verified(sess, tries=3, expect_text=""):
             # 双重核验：若消息流中已包含该文本片段，判定成功（应对异步清零延迟与送达即时刷新）
             if expect_text and len(expect_text) >= 6:
                 clean_snippet = re.sub(r"[\s\xa0\u3000\-_·•,，.()（）\[\]【】！!？?]", "", expect_text[:16])
-                msg_check = sess.eval("""(() => {
+                msg_check = sess.eval(r"""(() => {
                     const list = document.querySelector('.chat-message, .chat-conversation, .im-list, .chat-main');
                     if (!list) return false;
-                    const text = (list.innerText || '').replace(/[\s\\xa0\\u3000\\-_·•,，.()（）\\[\\]【】！!？?]/g, '');
+                    const text = (list.innerText || '').replace(/[\s\xa0\u3000\-_·•,，.()（）\[\]【】！!？?]/g, '');
                     return text.includes(%s);
                 })()""" % json.dumps(clean_snippet, ensure_ascii=False))
                 if msg_check is True or msg_check == "true":
