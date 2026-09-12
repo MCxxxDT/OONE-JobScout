@@ -33,7 +33,7 @@ def effective_cities(cfg):
     want_cities 非空：经 citycodes 解析替换默认城市集（未知城市名入 unknown 供 Web 提示；
     quota 沿用 config.json 已配置城市的值，未配置默认 15）；avoid_cities 一律剔除。"""
     prefs = _prefs(cfg)
-    avoid = set(prefs["avoid_cities"])
+    avoid = set(citycodes.expand_provinces(prefs["avoid_cities"]))
     cm = {c["name"]: c for c in cfg.get("cities") or []}
     if prefs["want_cities"]:
         resolved, unknown = citycodes.resolve_cities(prefs["want_cities"], cfg)

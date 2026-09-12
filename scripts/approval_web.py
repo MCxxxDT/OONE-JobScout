@@ -77,13 +77,26 @@ def _write_local(section_key, section_updates):
 
 
 def _split_list(text):
-    """逗号/顿号/换行分隔的文本 → 去空列表。"""
+    """逗号/顿号/换行分隔的文本或列表 → 去空去重列表。"""
     if not text:
         return []
+    if isinstance(text, list):
+        out = []
+        for x in text:
+            if isinstance(x, str):
+                for part in x.replace("，", ",").replace("、", ",").replace("\n", ",").split(","):
+                    p = part.strip().strip("'\"")
+                    if p and p not in out:
+                        out.append(p)
+            elif x:
+                s = str(x).strip()
+                if s and s not in out:
+                    out.append(s)
+        return out
     out = []
     for part in str(text).replace("，", ",").replace("、", ",").replace("\n", ",").split(","):
-        p = part.strip()
-        if p:
+        p = part.strip().strip("'\"")
+        if p and p not in out:
             out.append(p)
     return out
 
@@ -2282,9 +2295,9 @@ PAGE = """<!DOCTYPE html>
     position: fixed;
     inset: 0;
     z-index: 2100;
-    background: rgba(241, 245, 249, 0.92);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2541,6 +2554,71 @@ PAGE = """<!DOCTYPE html>
     color: #ffffff;
     background: rgba(255,255,255,0.1);
   }
+
+  /* City Tree Hierarchical Picker Styles */
+  .city-check-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    margin: 0;
+  }
+  .city-check-pill:hover { background: #f1f5f9; border-color: #94a3b8; }
+  .city-check-pill.checked {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+    font-weight: 700;
+  }
+  .city-check-pill.checked-avoid {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #b91c1c;
+    font-weight: 700;
+  }
+  .city-selected-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .city-selected-chip.want { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+  .city-selected-chip.avoid { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+  .city-chip-remove {
+    cursor: pointer;
+    font-weight: 800;
+    color: inherit;
+    opacity: 0.7;
+  }
+  .city-chip-remove:hover { opacity: 1; }
+  .province-group {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #ffffff;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .province-header {
+    background: #f8fafc;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .province-header:hover { background: #f1f5f9; }
 </style>
 </head>
 <body>
@@ -2806,6 +2884,9 @@ PAGE = """<!DOCTYPE html>
               <button class="btn-action-light w-100 justify-content-center" style="padding:8px 12px;font-size:12px;border-radius:10px;font-weight:600;color:#0284c7" onclick="syncBossProfile()">
                 🔄 重新从 BOSS 同步资料
               </button>
+              <button class="btn-action-light w-100 justify-content-center" style="padding:8px 12px;font-size:12px;border-radius:10px;font-weight:600;color:#10b981" onclick="syncProfileToBoss()">
+                💾 保存并写回 BOSS 直聘
+              </button>
               <button class="btn-action-light w-100 justify-content-center" style="padding:8px 12px;font-size:12px;border-radius:10px;color:#64748b" onclick="openQrModal()">
                 ⚡ 重新扫码切换账号
               </button>
@@ -2897,7 +2978,12 @@ PAGE = """<!DOCTYPE html>
               <span>待人工决策</span>
               <span class="text-muted fw-normal d-none d-sm-inline ms-1" style="font-size:12px">（needs_human）</span>
             </h5>
-            <button type="button" class="btn-help-icon" onclick="openHelpModal('pending')" title="查看人机协同与安全决策说明">ⓘ 规则说明</button>
+            <div class="d-flex align-items-center gap-2">
+              <button type="button" class="btn-action-light" style="padding:4px 10px;font-size:11px;border-radius:10px" onclick="clearStaleAlerts()" title="批量核销由于历史超时或偶发BUG残留的历史脏待办卡片">
+                🧹 一键核销历史异常
+              </button>
+              <button type="button" class="btn-help-icon" onclick="openHelpModal('pending')" title="查看人机协同与安全决策说明">ⓘ 规则说明</button>
+            </div>
           </div>
           <div id="pending">加载中…</div>
         </div>
@@ -3301,14 +3387,54 @@ PAGE = """<!DOCTYPE html>
         <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">排斥岗位（黑名单关键词，直接跳过不耗 Token）</label>
         <textarea id="inAvoidJobs" class="form-control" rows="2" style="border-radius:12px;font-size:13px"></textarea>
       </div>
-      <div class="row g-3 mb-2">
-        <div class="col-6">
-          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">向往城市</label>
-          <textarea id="inWantCities" class="form-control" rows="2" style="border-radius:12px;font-size:13px"></textarea>
+      <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <label style="font-size:13px;font-weight:700;margin:0">🏙️ 城市偏好层级勾选（全国省市二级树）</label>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-primary btn-sm py-1 px-3 active" id="btnCityTabWant" onclick="switchCityPickerTab('want')">📍 向往城市</button>
+            <button type="button" class="btn btn-outline-danger btn-sm py-1 px-3" id="btnCityTabAvoid" onclick="switchCityPickerTab('avoid')">🚫 排斥城市</button>
+          </div>
         </div>
-        <div class="col-6">
-          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">排斥城市</label>
-          <textarea id="inAvoidCities" class="form-control" rows="2" style="border-radius:12px;font-size:13px"></textarea>
+
+        <!-- City Tree Picker Box -->
+        <div class="p-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
+          <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
+            <input type="text" id="cityTreeSearch" class="form-control form-control-sm" placeholder="🔍 搜索省份或城市…" style="font-size:12px;border-radius:10px" oninput="filterCityTree(this.value)">
+            <button type="button" class="btn-action-light" style="font-size:11px;padding:4px 8px;white-space:nowrap" onclick="toggleAllProvincesExpand()">📂 展开/折叠</button>
+            <button type="button" class="btn-action-light text-danger" style="font-size:11px;padding:4px 8px;white-space:nowrap" onclick="clearCurrentCitySelection()">🗑️ 清空当前</button>
+          </div>
+
+          <!-- Current Selected Chips -->
+          <div class="mb-2 p-2" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;min-height:36px">
+            <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px" id="citySelectionTitle">
+              已选向往城市:
+            </div>
+            <div id="citySelectedChips" style="display:flex;flex-wrap:wrap;gap:4px">
+              <span style="font-size:11px;color:var(--mut-dark)">未选择（默认沿用底座城市）</span>
+            </div>
+          </div>
+
+          <!-- Province Accordion Tree -->
+          <div id="provinceTreeList" style="max-height:220px;overflow-y:auto;padding-right:4px">
+            <div class="text-center py-3 text-muted" style="font-size:12px">正在加载全国省市层级数据…</div>
+          </div>
+        </div>
+
+        <!-- Collapsible Raw Inputs (For Backward Compatibility / Manual Edits) -->
+        <div class="mt-2 text-end">
+          <a href="javascript:void(0)" onclick="const el=document.getElementById('rawCityInputs'); el.style.display=el.style.display==='none'?'flex':'none'" style="font-size:11px;color:var(--mut);text-decoration:none">
+            ✏️ 手动输入城市文本框 (展开/收起)
+          </a>
+        </div>
+        <div class="row g-3 mt-1" id="rawCityInputs" style="display:none">
+          <div class="col-6">
+            <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block">向往城市文本</label>
+            <textarea id="inWantCities" class="form-control" rows="2" style="border-radius:10px;font-size:12px" oninput="syncFromCityTextarea('want')"></textarea>
+          </div>
+          <div class="col-6">
+            <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block">排斥城市文本</label>
+            <textarea id="inAvoidCities" class="form-control" rows="2" style="border-radius:10px;font-size:12px" oninput="syncFromCityTextarea('avoid')"></textarea>
+          </div>
         </div>
       </div>
       <div id="effInfo" style="font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5"></div>
@@ -3498,6 +3624,14 @@ PAGE = """<!DOCTYPE html>
       <div class="setting-help-box info" id="profMeta">
         正在加载个人画像信息…
       </div>
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <button type="button" class="btn-action-light" onclick="syncBossOnlineResume()">
+          📥 从 BOSS 直聘一键拉取在线微简历
+        </button>
+        <button type="button" class="btn-action-light text-danger" onclick="clearSavedResume()">
+          🗑️ 清空已存简历与画像
+        </button>
+      </div>
       <div class="mb-3">
         <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">上传简历文件（支持 .pdf / .docx / .txt / .md，≤5MB）</label>
         <input type="file" id="inFile" accept=".pdf,.docx,.txt,.md" class="form-control" style="font-size:12px;padding:8px;border-radius:12px">
@@ -3524,17 +3658,17 @@ PAGE = """<!DOCTYPE html>
     </div>
 
     <div class="row g-4">
-      <!-- Left Col: Gemini-style Chat Arena (会话聊天流) -->
-      <div class="col-lg-7" id="pgChatCol">
+      <!-- Full-Width Immersive Chat Arena (全宽沉浸式会话流) -->
+      <div class="col-12" id="pgChatCol">
         <div class="chat-arena-card">
           <!-- Chat Header -->
           <div class="chat-arena-header">
             <div class="d-flex align-items-center gap-3">
-              <div class="chat-avatar hr" id="chatTargetAvatar">HR</div>
+              <div class="chat-avatar hr" id="chatTargetAvatar" style="cursor:pointer;position:relative" onclick="openSettingModal('modalPgSettings')" title="点击修改目标岗位与JD描述">HR</div>
               <div>
-                <div style="font-size:15px;font-weight:800;color:var(--txt)">
+                <div style="font-size:15px;font-weight:800;color:var(--txt);display:flex;align-items:center;gap:6px">
                   <span id="chatTargetCompany">收钱吧</span>
-                  <span style="color:var(--mut-dark);margin:0 4px">·</span>
+                  <span style="color:var(--mut-dark);margin:0 2px">·</span>
                   <span id="chatTargetJob" style="color:var(--mut);font-weight:600;font-size:13px">Ai产品经理（J11304）</span>
                 </div>
                 <div style="font-size:11px;color:var(--ok);font-weight:600;display:flex;align-items:center;gap:4px">
@@ -3544,7 +3678,13 @@ PAGE = """<!DOCTYPE html>
               </div>
             </div>
             <div class="d-flex align-items-center gap-2">
-              <div class="d-none d-sm-flex align-items-center gap-1 me-2 p-1" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;font-size:11px;font-weight:700">
+              <button type="button" class="btn-action-light d-flex align-items-center gap-1" style="padding:4px 10px;font-size:11px;border-radius:12px;font-weight:600" onclick="openSettingModal('modalPgSettings')">
+                <span>🎯 目标岗位/JD设定</span>
+              </button>
+              <button type="button" class="btn-action-light d-flex align-items-center gap-1" style="padding:4px 10px;font-size:11px;border-radius:12px;font-weight:600" onclick="openSettingModal('modalPgInspect')">
+                <span>🔍 决策与安全审查</span>
+              </button>
+              <div class="d-none d-sm-flex align-items-center gap-1 me-1 p-1" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;font-size:11px;font-weight:700">
                 <label class="d-inline-flex align-items-center gap-1 px-2 py-1" style="cursor:pointer;border-radius:8px;background:#fff;color:#0f172a;box-shadow:0 1px 3px rgba(0,0,0,0.05)" id="lblModeSingle">
                   <input type="radio" name="pgMode" id="pgModeSingleTurn" value="single" checked onchange="onPgModeChange()" style="display:none">
                   <span>✨ 首句沟通 (单轮)</span>
@@ -3570,7 +3710,7 @@ PAGE = """<!DOCTYPE html>
                 在此模拟 HR 与候选人的真实对话。大模型将根据您设定的候选人画像、目标岗位 JD 与防套话铁律，实时推演并生成真人口语化回复。
               </div>
               <div style="font-size:12px;color:var(--txt);font-weight:600;margin-top:14px;background:#f1f5f9;padding:8px 14px;border-radius:10px;display:inline-block">
-                💡 右侧已预设各行各业名企真实岗位与真实JD（支持自由切换与自定义）。在下方输入模拟 HR 消息即可开始推演！
+                💡 点击上方 HR 头像或【🎯 目标岗位/JD设定】可随时切换行业预设或微调JD要求。在下方输入消息即可开始推演！
               </div>
             </div>
           </div>
@@ -3591,168 +3731,166 @@ PAGE = """<!DOCTYPE html>
           </div>
         </div>
       </div>
+      <div id="pgRightCol" style="display:none"></div>
+    </div>
+  </main>
 
-      <!-- Right Col: 当前设定调整面板 + 推演透视与安全审查 -->
-      <div class="col-lg-5" id="pgRightCol">
-        <!-- Panel 1: 当前沟通背景与岗位设定 (可查看与调整) -->
-        <div id="pgSettingsCol">
-          <div class="panel-card mb-3" style="padding:20px">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
-                <svg class="title-icon blue" style="width:16px;height:16px" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                目标岗位与背景设定
-              </h6>
-              <span style="font-size:11px;color:var(--mut);cursor:pointer" onclick="togglePlaygroundSettings()">
-                <span id="pgSettingsArrow">▼ 折叠/展开</span>
-              </span>
-            </div>
-            <div style="font-size:11px;color:var(--mut);margin-bottom:10px">
-              实时设定影响大模型对 JD 契合度与沟通语气的决策，修改后下一条推演立即生效：
-            </div>
-            <div id="pgSettingsBlock" style="display:block">
-              <!-- Presets -->
-              <div class="mb-3">
-                <label style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:4px;display:block">
-                  🎯 行业名企真实岗位预设（一键切换各行业）：
-                </label>
-                <select id="pgIndustrySelect" class="form-select form-select-sm" style="font-size:12px;border-radius:10px" onchange="onSelectIndustryPreset(this.value)">
-                  <option value="ai_product" selected>🤖 人工智能 · 收钱吧 · Ai产品经理 (20-35K·14薪)</option>
-                  <option value="ev_auto">🚗 智能制造/新能源 · 广志信息 · 智能座舱稳定性测试-沃尔沃 (10-12K)</option>
-                  <option value="java_dev">💻 计算机软件/IT · 某大厂 · Java开发工程师 (15-30K·14薪)</option>
-                  <option value="fin_quant">📈 金融证券/量化 · 某基金公司 · 期权量化研究员 (15-30K)</option>
-                  <option value="cross_border">🌍 跨境电商/出海 · 睿联 · 跨境电商运营27届校招 (11-18K·14薪)</option>
-                  <option value="robotics">🦾 具身智能/硬件 · 某知名AI企业 · 机器人运控算法 (100-200K·14薪)</option>
-                  <option value="biomed">🧬 生物医药/医疗 · 吃货妞妞 · 生物信息工程师 (5-8K)</option>
-                  <option value="custom">✏️ 自定义岗位与JD (手动输入)</option>
-                </select>
-              </div>
+  <!-- Modal: 演练场目标岗位与背景设定 -->
+  <div class="modal-overlay" id="modalPgSettings" onclick="if(event.target === this) closeSettingModal('modalPgSettings')">
+    <div class="setting-modal-card" style="max-width:680px">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">🎯 目标岗位与背景设定</div>
+          <div class="setting-modal-subtitle">设定影响大模型对 JD 契合度与沟通语气的决策，下一条推演立即生效</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalPgSettings')">✕</button>
+      </div>
+      <div id="pgSettingsCol">
+        <!-- Presets -->
+        <div class="mb-3">
+          <label style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:4px;display:block">
+            🎯 行业名企真实岗位预设（一键切换各行业）：
+          </label>
+          <select id="pgIndustrySelect" class="form-select form-select-sm" style="font-size:12px;border-radius:10px" onchange="onSelectIndustryPreset(this.value)">
+            <option value="ai_product" selected>🤖 人工智能 · 收钱吧 · Ai产品经理 (20-35K·14薪)</option>
+            <option value="ev_auto">🚗 智能制造/新能源 · 广志信息 · 智能座舱稳定性测试-沃尔沃 (10-12K)</option>
+            <option value="java_dev">💻 计算机软件/IT · 某大厂 · Java开发工程师 (15-30K·14薪)</option>
+            <option value="fin_quant">📈 金融证券/量化 · 某基金公司 · 期权量化研究员 (15-30K)</option>
+            <option value="cross_border">🌍 跨境电商/出海 · 睿联 · 跨境电商运营27届校招 (11-18K·14薪)</option>
+            <option value="robotics">🦾 具身智能/硬件 · 某知名AI企业 · 机器人运控算法 (100-200K·14薪)</option>
+            <option value="biomed">🧬 生物医药/医疗 · 吃货妞妞 · 生物信息工程师 (5-8K)</option>
+            <option value="custom">✏️ 自定义岗位与JD (手动输入)</option>
+          </select>
+        </div>
 
-              <div class="row g-2 mb-2">
-                <div class="col-6">
-                  <label style="margin:0 0 2px">公司名称</label>
-                  <input type="text" id="pgCompany" value="收钱吧" style="height:32px;font-size:12px" oninput="syncChatHeader()">
-                </div>
-                <div class="col-6">
-                  <label style="margin:0 0 2px">岗位名称</label>
-                  <input type="text" id="pgJobTitle" value="Ai产品经理（J11304）" style="height:32px;font-size:12px" oninput="syncChatHeader()">
-                </div>
-              </div>
-              <div class="row g-2 mb-2">
-                <div class="col-6">
-                  <label style="margin:0 0 2px">薪资范围</label>
-                  <input type="text" id="pgSalary" value="20-35K·14薪" style="height:32px;font-size:12px">
-                </div>
-                <div class="col-6">
-                  <label style="margin:0 0 2px">工作地点</label>
-                  <input type="text" id="pgCity" value="上海" style="height:32px;font-size:12px">
-                </div>
-              </div>
-              <div class="mb-2">
-                <label style="margin:0 0 2px">岗位 JD 详细描述（来自BOSS直聘真实抓取）</label>
-                <textarea id="pgJd" style="height:85px;font-size:11px" placeholder="在此粘贴目标岗位JD…">【岗位职责】
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label style="margin:0 0 2px">公司名称</label>
+            <input type="text" id="pgCompany" value="收钱吧" style="height:32px;font-size:12px" oninput="syncChatHeader()">
+          </div>
+          <div class="col-6">
+            <label style="margin:0 0 2px">岗位名称</label>
+            <input type="text" id="pgJobTitle" value="Ai产品经理（J11304）" style="height:32px;font-size:12px" oninput="syncChatHeader()">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label style="margin:0 0 2px">薪资范围</label>
+            <input type="text" id="pgSalary" value="20-35K·14薪" style="height:32px;font-size:12px">
+          </div>
+          <div class="col-6">
+            <label style="margin:0 0 2px">工作地点</label>
+            <input type="text" id="pgCity" value="上海" style="height:32px;font-size:12px">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label style="margin:0 0 2px">岗位 JD 详细描述（来自BOSS直聘真实抓取）</label>
+          <textarea id="pgJd" style="height:95px;font-size:11px" placeholder="在此粘贴目标岗位JD…">【岗位职责】
 1. AI 应用从 0 到 1 落地：围绕真实业务场景，负责 AI 应用的需求调研、方案设计、技术可行性判断、上线验证与持续迭代；可涉及上下文工程、RAG、Agent 等技术在产品中的应用。
 2. 快速验证与产品打磨：能够运用 AI Coding 等方式，亲自完成原型、工作流或 Demo 的快速搭建与调试，验证方案可行性，并与研发团队共同推进正式落地。
 3. 跨团队协同与流程建设：熟悉 AI 产品从需求评审、研发排期、测试验收至上线复盘的协作过程，协调产品、研发、算法、设计及业务等角色，高效推动项目交付。
 4. 持续探索：持续关注大模型及 AI 应用的新能力，将技术边界转化为可验证、可落地的业务产品方案。
 【任职资格】
 1. 统招本科及以上学历，具备真实 AI 项目落地能力；了解大模型、RAG、上下文工程、Agent 等常见应用方式。</textarea>
-              </div>
-              <div class="mb-2">
-                <div class="d-flex justify-content-between align-items-center">
-                  <label style="margin:0 0 2px">前序对话历史（格式：我方:... 或 HR:...）</label>
-                  <button type="button" class="btn-action-light" style="font-size:10px;padding:1px 6px" onclick="document.getElementById('pgHistory').value='';pgConversationHistory=[];">清空历史</button>
-                </div>
-                <textarea id="pgHistory" style="height:60px;font-size:11px" placeholder="空 = 首轮沟通。多轮沟通示例：&#10;HR: 在吗？&#10;我方: 您好，在的！"></textarea>
-              </div>
+        </div>
+        <div class="mb-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <label style="margin:0 0 2px">前序对话历史（格式：我方:... 或 HR:...）</label>
+            <button type="button" class="btn-action-light" style="font-size:10px;padding:1px 6px" onclick="document.getElementById('pgHistory').value='';pgConversationHistory=[];">清空历史</button>
+          </div>
+          <textarea id="pgHistory" style="height:60px;font-size:11px" placeholder="空 = 首轮沟通。多轮沟通示例：&#10;HR: 在吗？&#10;我方: 您好，在的！"></textarea>
+        </div>
 
-              <!-- Collapsible Advanced Settings (Prompt overrides) -->
-              <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px dashed #e2e8f0;cursor:pointer" onclick="togglePlaygroundAdv()">
-                <span style="font-size:11px;font-weight:700;color:var(--mut)">⚙️ 高级人设与 Prompt 自定义</span>
-                <span style="font-size:11px;color:var(--mut)" id="pgAdvArrow">▼ 展开</span>
+        <!-- Collapsible Advanced Settings (Prompt overrides) -->
+        <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px dashed #e2e8f0;cursor:pointer" onclick="togglePlaygroundAdv()">
+          <span style="font-size:11px;font-weight:700;color:var(--mut)">⚙️ 高级人设与 Prompt 自定义</span>
+          <span style="font-size:11px;color:var(--mut)" id="pgAdvArrow">▼ 展开</span>
+        </div>
+        <div id="pgAdvBlock" style="display:none;margin-top:8px">
+          <label style="margin:2px 0 3px">自定义 System Prompt（留空使用默认人设约束）</label>
+          <textarea id="pgCustomSys" style="height:50px;font-size:11px" placeholder="留空使用系统默认人设与三不原则"></textarea>
+          <label style="margin:4px 0 3px">自定义 User Prompt 覆盖（留空根据画像与JD组装）</label>
+          <textarea id="pgCustomUser" style="height:60px;font-size:11px" placeholder="留空自动由系统画像与上下文动态组装"></textarea>
+        </div>
+      </div>
+      <div class="setting-modal-footer">
+        <button type="button" class="btn-black" onclick="closeSettingModal('modalPgSettings')">完成并返回推演</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 演练场推演全景透视与安全审查 -->
+  <div class="modal-overlay" id="modalPgInspect" onclick="if(event.target === this) closeSettingModal('modalPgInspect')">
+    <div class="setting-modal-card" style="max-width:760px">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">🔍 推演全景透视与安全审查</div>
+          <div class="setting-modal-subtitle">决策动作归因、4重物理安全门禁审查与完整上下文穿透</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalPgInspect')">✕</button>
+      </div>
+      <div id="pgInspectCol">
+        <div id="pgResultBox">
+          <!-- Action & Decision Block -->
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <span style="font-size:12px;font-weight:800;color:var(--txt)">🎯 决策动作:</span>
+                <span id="pgActionBadge" class="soft-badge badge-blue">待推演</span>
               </div>
-              <div id="pgAdvBlock" style="display:none;margin-top:8px">
-                <label style="margin:2px 0 3px">自定义 System Prompt（留空使用默认人设约束）</label>
-                <textarea id="pgCustomSys" style="height:50px;font-size:11px" placeholder="留空使用系统默认人设与三不原则"></textarea>
-                <label style="margin:4px 0 3px">自定义 User Prompt 覆盖（留空根据画像与JD组装）</label>
-                <textarea id="pgCustomUser" style="height:60px;font-size:11px" placeholder="留空自动由系统画像与上下文动态组装"></textarea>
+              <div style="font-size:11px;color:var(--mut);font-weight:600" id="pgLatency">耗时: -</div>
+            </div>
+            <div style="font-size:12px;color:var(--mut);line-height:1.5">
+              <strong style="color:var(--txt)">决策归因：</strong><span id="pgReasonText">请在推演视窗发送消息进行推演</span>
+            </div>
+          </div>
+
+          <!-- Safety Inspection Gates -->
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px;font-size:12px">
+            <div style="font-weight:800;color:var(--txt);margin-bottom:10px">🛡️ 4 重物理安全门禁审查清单</div>
+            <div class="d-flex flex-column gap-2">
+              <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                <span>1. 隐私泄露门禁 (防套手机/微信)</span>
+                <span id="pgGatePrivacy" class="soft-badge badge-pub">安全通过</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                <span>2. 时窗门禁 (00:00-09:30 夜间静默)</span>
+                <span id="pgGateHours" class="soft-badge badge-pub">时窗开放</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                <span>3. 动作授权策略 (policy_actions)</span>
+                <span id="pgGatePolicy" class="soft-badge badge-pub">允许执行</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
+                <span>4. 线上发送状态 (沙盒安全隔离)</span>
+                <span id="pgGateOnline" class="soft-badge badge-rej">🛡️ 物理拦截 (零外发)</span>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Panel 2: 推演全景透视与安全审查 -->
-        <div id="pgInspectCol">
-          <div class="panel-card mb-3" style="padding:20px">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <h6 class="fw-bold mb-0 d-flex align-items-center" style="font-size:14px">
-                <svg class="title-icon green" style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                决策透视与安全门禁
-              </h6>
-              <div id="pgHeaderBadges" class="d-flex gap-2">
-                <span class="soft-badge badge-pub">沙盒拦截锁死</span>
+          <!-- Deep Prompt & Raw LLM Inspector -->
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div style="font-size:12px;font-weight:800;color:var(--txt)">🔍 完整上下文穿透查看</div>
+              <div class="d-flex gap-1">
+                <span class="prompt-tab-pill active" id="pillTabUser" onclick="switchPromptInspectorTab('user')">User Prompt</span>
+                <span class="prompt-tab-pill" id="pillTabSys" onclick="switchPromptInspectorTab('sys')">System Prompt</span>
+                <span class="prompt-tab-pill" id="pillTabRaw" onclick="switchPromptInspectorTab('raw')">LLM 原生 JSON</span>
+                <span class="prompt-tab-pill" id="pillTabThink" onclick="switchPromptInspectorTab('think')" style="display:none">思考过程</span>
               </div>
             </div>
-
-            <div id="pgResultBox">
-              <!-- Action & Decision Block -->
-              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <div class="d-flex align-items-center gap-2">
-                    <span style="font-size:12px;font-weight:800;color:var(--txt)">🎯 决策动作:</span>
-                    <span id="pgActionBadge" class="soft-badge badge-blue">待推演</span>
-                  </div>
-                  <div style="font-size:11px;color:var(--mut);font-weight:600" id="pgLatency">耗时: -</div>
-                </div>
-                <div style="font-size:12px;color:var(--mut);line-height:1.5">
-                  <strong style="color:var(--txt)">决策归因：</strong><span id="pgReasonText">请在左侧发送消息进行推演</span>
-                </div>
-              </div>
-
-              <!-- Safety Inspection Gates -->
-              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px;font-size:12px">
-                <div style="font-weight:800;color:var(--txt);margin-bottom:10px">🛡️ 4 重物理安全门禁审查清单</div>
-                <div class="d-flex flex-column gap-2">
-                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                    <span>1. 隐私泄露门禁 (防套手机/微信)</span>
-                    <span id="pgGatePrivacy" class="soft-badge badge-pub">安全通过</span>
-                  </div>
-                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                    <span>2. 时窗门禁 (00:00-09:30 夜间静默)</span>
-                    <span id="pgGateHours" class="soft-badge badge-pub">时窗开放</span>
-                  </div>
-                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                    <span>3. 动作授权策略 (policy_actions)</span>
-                    <span id="pgGatePolicy" class="soft-badge badge-pub">允许执行</span>
-                  </div>
-                  <div class="d-flex justify-content-between align-items-center p-2" style="background:#fff;border-radius:8px">
-                    <span>4. 线上发送状态 (沙盒安全隔离)</span>
-                    <span id="pgGateOnline" class="soft-badge badge-rej">🛡️ 物理拦截 (零外发)</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Deep Prompt & Raw LLM Inspector -->
-              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <div style="font-size:12px;font-weight:800;color:var(--txt)">🔍 完整上下文穿透查看</div>
-                  <div class="d-flex gap-1">
-                    <span class="prompt-tab-pill active" id="pillTabUser" onclick="switchPromptInspectorTab('user')">User Prompt</span>
-                    <span class="prompt-tab-pill" id="pillTabSys" onclick="switchPromptInspectorTab('sys')">System Prompt</span>
-                    <span class="prompt-tab-pill" id="pillTabRaw" onclick="switchPromptInspectorTab('raw')">LLM 原生 JSON</span>
-                    <span class="prompt-tab-pill" id="pillTabThink" onclick="switchPromptInspectorTab('think')" style="display:none">思考过程</span>
-                  </div>
-                </div>
-                <div class="d-flex justify-content-end mb-2">
-                  <button class="btn-action-light" style="padding:2px 8px;font-size:11px" onclick="copyCurrentPromptInspector()">📋 复制当前代码</button>
-                </div>
-                <pre id="pgPromptCode" class="prompt-view-code" style="max-height:260px">// 推演后在此穿透查看完整 Prompt 与大模型原生输出</pre>
-              </div>
+            <div class="d-flex justify-content-end mb-2">
+              <button class="btn-action-light" style="padding:2px 8px;font-size:11px" onclick="copyCurrentPromptInspector()">📋 复制当前代码</button>
             </div>
+            <pre id="pgPromptCode" class="prompt-view-code" style="max-height:260px">// 推演后在此穿透查看完整 Prompt 与大模型原生输出</pre>
           </div>
         </div>
       </div>
+      <div class="setting-modal-footer">
+        <button type="button" class="btn-black" onclick="closeSettingModal('modalPgInspect')">完成并返回推演</button>
+      </div>
     </div>
-  </main>
+  </div>
     </div><!-- app-body -->
   </div><!-- app-main -->
 </div><!-- app-layout -->
@@ -4020,36 +4158,48 @@ function switchPgSubTab(sub) {
     const btn = document.getElementById('pgSubTab' + name);
     if (btn) btn.classList.toggle('active', name.toLowerCase() === sub);
   });
-  const chatCol = document.getElementById('pgChatCol');
-  const rightCol = document.getElementById('pgRightCol');
-  const settingsCol = document.getElementById('pgSettingsCol');
-  const inspectCol = document.getElementById('pgInspectCol');
-
-  if (window.innerWidth < 992) {
-    if (sub === 'chat') {
-      if (chatCol) chatCol.style.display = 'block';
-      if (rightCol) rightCol.style.display = 'none';
-    } else if (sub === 'settings') {
-      if (chatCol) chatCol.style.display = 'none';
-      if (rightCol) rightCol.style.display = 'block';
-      if (settingsCol) settingsCol.style.display = 'block';
-      if (inspectCol) inspectCol.style.display = 'none';
-    } else if (sub === 'inspect') {
-      if (chatCol) chatCol.style.display = 'none';
-      if (rightCol) rightCol.style.display = 'block';
-      if (settingsCol) settingsCol.style.display = 'none';
-      if (inspectCol) inspectCol.style.display = 'block';
-    }
-  } else {
-    if (chatCol) chatCol.style.display = '';
-    if (rightCol) rightCol.style.display = '';
-    if (settingsCol) settingsCol.style.display = '';
-    if (inspectCol) inspectCol.style.display = '';
+  if (sub === 'settings') {
+    openSettingModal('modalPgSettings');
+  } else if (sub === 'inspect') {
+    openSettingModal('modalPgInspect');
   }
 }
 window.addEventListener('resize', () => {
-  if (currentTab === 'playground') switchPgSubTab(currentPgSubTab);
+  // Mobile/desktop layout auto adapts with full-width chat and modals
 });
+
+let lastSyncTimestamp = Date.now();
+function updateRealtimeClock() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString();
+  const elapsed = Math.max(0, Math.floor((Date.now() - lastSyncTimestamp) / 1000));
+  const syncStr = elapsed < 4 ? '刚刚' : (elapsed + '秒前');
+  const subEl = document.getElementById('sub');
+  if (subEl) subEl.textContent = `${timeStr} · 已同步 (${syncStr})`;
+  const sideSync = document.getElementById('sidebarSync');
+  if (sideSync) sideSync.textContent = `${timeStr} (${syncStr})`;
+  if (window.__currentDaemon && window.__currentDaemon.running && window.__currentDaemon.last_seen_seconds !== undefined) {
+    const liveSec = window.__currentDaemon.last_seen_seconds + elapsed;
+    const dLast = document.getElementById('daemonLastSeen');
+    if (dLast) dLast.textContent = `${liveSec} 秒前 (${window.__currentDaemon.time || ''})`;
+  }
+}
+setInterval(updateRealtimeClock, 1000);
+
+function updatePendingBadges(count) {
+  const badge = document.getElementById('pendingBadge');
+  if (badge) {
+    badge.textContent = count || 0;
+    badge.style.display = count > 0 ? 'inline-block' : 'none';
+  }
+  const sPending = document.getElementById('statPending');
+  if (sPending) sPending.textContent = count || 0;
+  const mNavBadge = document.getElementById('mobileNavBadgePending');
+  if (mNavBadge) {
+    mNavBadge.textContent = count || 0;
+    mNavBadge.style.display = count > 0 ? 'inline-flex' : 'none';
+  }
+}
 
 function onPgModeChange() {
   const isSingle = document.getElementById('pgModeSingleTurn') && document.getElementById('pgModeSingleTurn').checked;
@@ -4137,7 +4287,8 @@ async function load(isManual) {
   if (isManual) showToast('正在刷新工作台数据…', 'info');
   try {
     const d = await api('/api/overview');
-    document.getElementById('sub').textContent = '已同步: ' + new Date().toLocaleTimeString();
+    lastSyncTimestamp = Date.now();
+    updateRealtimeClock();
 
     // 真实进程与心跳探测
     const gp = document.getElementById('guardPill');
@@ -4316,6 +4467,7 @@ function updateAuthStatusUI(auth, userProfile) {
     // 关闭扫码门禁
     if (loginGate) {
       loginGate.style.display = 'none';
+      document.body.style.overflow = '';
     }
 
     // 若此前处于未登录，现在转为已登录，展示欢迎横幅
@@ -4337,9 +4489,10 @@ function updateAuthStatusUI(auth, userProfile) {
       topAvatarPlaceholder.style.display = 'inline-block';
     }
 
-    // 未登录时，若未被手动跳过，展示居中全屏扫码门禁
+    // 未登录时，若未被手动跳过，展示居中全屏毛玻璃扫码门禁并锁定滚动
     if (loginGate && !loginGateDismissed) {
       loginGate.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
       if (!currentQrUuid && !qrPollTimer) {
         refreshGateQrCode();
       }
@@ -4481,6 +4634,7 @@ function dismissLoginGate() {
   loginGateDismissed = true;
   const gate = document.getElementById('loginGate');
   if (gate) gate.style.display = 'none';
+  document.body.style.overflow = '';
   showToast('已进入访客预览模式，可随时点击右上角【扫码接入】登录', 'info');
 }
 
@@ -4871,74 +5025,105 @@ function renderPending() {
 }
 
 function renderResolved() {
-  // 渲染近期已处理会话（点评打分 1-10 与真人优化示范自学习闭环）
+  // 渲染近期已处理真实会话（点评打分 1-10 与真人优化示范自学习闭环）
   const rb = document.getElementById('resolvedList');
-  if (rb) {
-    if (!resolvedData.length) {
-      rb.innerHTML = '<div style="color:var(--mut-dark);font-size:12px;padding:4px 0">暂无近期处理记录</div>';
-    } else {
-      rb.innerHTML = resolvedData.map((r, i) => {
-        const curScore = r.score || 8;
-        const hrText = r.last_msg || '（历史会话未记录到单句正文，记录已完成归档）';
-        const hrSection = `
-          <div class="quote-box py-2 px-3 mb-2" style="background:#f1f5f9;border-left:4px solid #64748b;border-radius:8px;font-size:12.5px">
-            <div style="font-size:11px;font-weight:800;color:#475569;margin-bottom:3px;display:flex;align-items:center;gap:4px">
-              💬 对方发送内容 (HR)
-            </div>
-            <div style="color:#1e293b;line-height:1.5;white-space:pre-wrap">${esc(hrText)}</div>
-          </div>`;
-        const aiText = r.suggested || ('【系统动作】已执行平台动作（' + (r.resolved_action || '完成') + '）');
-        const aiSection = `
-          <div class="quote-box py-2 px-3 mb-3" style="background:#ecfdf5;border-left:4px solid #10b981;border-radius:8px;font-size:12.5px">
-            <div style="font-size:11px;font-weight:800;color:#047857;margin-bottom:3px;display:flex;align-items:center;gap:4px">
-              🤖 Agent 实际回复内容
-            </div>
-            <div style="color:#064e3b;font-weight:500;line-height:1.5;white-space:pre-wrap">${esc(aiText)}</div>
-          </div>`;
-        const pills = [1,2,3,4,5,6,7,8,9,10].map(num => `
-          <button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectResolvedScore(${i}, ${num})">${num}</button>
-        `).join('');
+  if (!rb) return;
 
-        return `
-          <div class="resolved-card p-3 mb-3">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <div>
-                <strong style="font-size:14px;color:var(--txt)">${esc(r.company)}</strong>
-                <span class="soft-badge badge-pub ms-2" style="font-size:11px">${esc(r.resolved_action || 'handled')}</span>
-              </div>
-              <div style="font-size:12px;color:var(--mut-dark)">${esc(r.resolved_time || r.time || '')}</div>
-            </div>
-            ${hrSection}
-            ${aiSection}
-            <div class="pt-2" style="border-top:1px dashed rgba(0,0,0,0.06)">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <div style="font-size:12px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:6px">
-                  ⭐ 回答点评打分（满分10分，未打分按默认8分计算）:
-                  <span id="scoreBadge_${i}" class="soft-badge badge-ai" style="font-size:11px;font-weight:800">${curScore}分</span>
-                </div>
-                <div style="font-size:11px;color:var(--mut)">点击数字切换评分</div>
-              </div>
-              <div class="d-flex flex-wrap gap-1 mb-3" id="scorePills_${i}">
-                ${pills}
-              </div>
-              <div class="mb-2">
-                <label style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px;display:block">
-                  ✍️ 人工输入优化内容（真人示范金句，自动沉淀至经验库实现自学习进化）：
-                </label>
-                <textarea id="optText_${i}" class="form-control" style="font-size:12px;border-radius:10px;resize:vertical;min-height:56px" placeholder="输入你认为更自然、更高情商的真人回复（例如：“真人在的，刚才回复太板正了哈哈…”），大模型在后续会话中将自动检索参考此黄金样本。">${esc(r.optimized_text || '')}</textarea>
-              </div>
-              <div class="d-flex justify-content-between align-items-center mt-2">
-                <span id="fbStatus_${i}" style="font-size:12px;color:var(--mut)">${r.has_feedback ? '✅ 已有历史评价记录' : '未手动点评（默认8分）'}</span>
-                <button class="btn-black btn-sm" style="padding:6px 14px;border-radius:10px;font-size:12px" onclick="saveResolvedFeedback(${i})">
-                  💾 保存点评与优化
-                </button>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
+  if (!resolvedData.length) {
+    rb.innerHTML = '<div style="color:var(--mut-dark);font-size:12px;padding:4px 0">暂无近期真实对话处理记录</div>';
+    return;
   }
+
+  // 给每条记录绑定唯一索引
+  resolvedData.forEach((r, idx) => { r._idx = idx; });
+
+  // 严格区分：未点评优化（高亮展示在前台） vs 已点评优化（折叠收拢归档）
+  const unrated = resolvedData.filter(r => !r.has_feedback);
+  const rated = resolvedData.filter(r => r.has_feedback);
+
+  function renderCard(r, rawIdx, isArchive) {
+    const curScore = r.score || 8;
+    const hrText = r.last_msg || '（历史会话未记录到单句正文，记录已完成归档）';
+    const hrSection = `
+      <div class="quote-box py-2 px-3 mb-2" style="background:#f1f5f9;border-left:4px solid #64748b;border-radius:8px;font-size:12.5px">
+        <div style="font-size:11px;font-weight:800;color:#475569;margin-bottom:3px;display:flex;align-items:center;gap:4px">
+          💬 对方发送内容 (HR)
+        </div>
+        <div style="color:#1e293b;line-height:1.5;white-space:pre-wrap">${esc(hrText)}</div>
+      </div>`;
+    const aiText = r.suggested || '';
+    const aiSection = `
+      <div class="quote-box py-2 px-3 mb-3" style="background:#ecfdf5;border-left:4px solid #10b981;border-radius:8px;font-size:12.5px">
+        <div style="font-size:11px;font-weight:800;color:#047857;margin-bottom:3px;display:flex;align-items:center;gap:4px">
+          🤖 Agent 实际回复内容
+        </div>
+        <div style="color:#064e3b;font-weight:500;line-height:1.5;white-space:pre-wrap">${esc(aiText)}</div>
+      </div>`;
+    const pills = [1,2,3,4,5,6,7,8,9,10].map(num => `
+      <button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectResolvedScore(${rawIdx}, ${num})">${num}</button>
+    `).join('');
+
+    return `
+      <div class="resolved-card p-3 mb-3" style="${isArchive ? 'background:#f8fafc;border-color:#e2e8f0;opacity:0.92' : ''}">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <strong style="font-size:14px;color:var(--txt)">${esc(r.company)}</strong>
+            <span class="soft-badge ${isArchive ? 'badge-ai' : 'badge-pub'} ms-2" style="font-size:11px">${isArchive ? '📦 已沉淀经验' : esc(r.resolved_action || '待点评')}</span>
+          </div>
+          <div style="font-size:12px;color:var(--mut-dark)">${esc(r.resolved_time || r.time || '')}</div>
+        </div>
+        ${hrSection}
+        ${aiSection}
+        <div class="pt-2" style="border-top:1px dashed rgba(0,0,0,0.06)">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div style="font-size:12px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:6px">
+              ⭐ 回答点评打分（满分10分）:
+              <span id="scoreBadge_${rawIdx}" class="soft-badge badge-ai" style="font-size:11px;font-weight:800">${curScore}分</span>
+            </div>
+            <div style="font-size:11px;color:var(--mut)">点击数字评分</div>
+          </div>
+          <div class="d-flex flex-wrap gap-1 mb-3" id="scorePills_${rawIdx}">
+            ${pills}
+          </div>
+          <div class="mb-2">
+            <label style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px;display:block">
+              ✍️ 人工示范优化（真人示范金句，自动沉淀至经验库实现自学习进化）：
+            </label>
+            <textarea id="optText_${rawIdx}" class="form-control" style="font-size:12px;border-radius:10px;resize:vertical;min-height:54px" placeholder="输入你认为更自然、更高情商的真人回复，大模型后续会话将自学习参考。">${esc(r.optimized_text || '')}</textarea>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <span id="fbStatus_${rawIdx}" style="font-size:12px;color:var(--mut)">${r.has_feedback ? '✅ 已归档入库（' + curScore + '分）' : '未手动点评（默认8分）'}</span>
+            <button class="btn-black btn-sm" style="padding:5px 14px;border-radius:10px;font-size:12px" onclick="saveResolvedFeedback(${rawIdx})">
+              ${isArchive ? '💾 更新点评' : '💾 保存点评并归档'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  let html = '';
+  if (unrated.length) {
+    html += unrated.map(r => renderCard(r, r._idx, false)).join('');
+  } else {
+    html += '<div style="color:var(--ok);font-size:12.5px;padding:8px 0;font-weight:600">🎉 所有近期真实回复已完成人工点评与优化归档！</div>';
+  }
+
+  if (rated.length) {
+    html += `
+      <details class="mt-3" style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:14px;padding:12px 16px">
+        <summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--mut);display:flex;align-items:center;justify-content:space-between">
+          <span>📦 已评价与优化沉淀归档 (${rated.length})</span>
+          <span style="font-size:11px;color:var(--mut-dark);font-weight:500">点击展开/折叠历史</span>
+        </summary>
+        <div class="mt-3">
+          ${rated.map(r => renderCard(r, r._idx, true)).join('')}
+        </div>
+      </details>
+    `;
+  }
+
+  rb.innerHTML = html;
 }
 
 function selectResolvedScore(idx, score) {
@@ -4985,7 +5170,8 @@ async function saveResolvedFeedback(idx) {
       showToast('点评与优化已存入经验库！大模型后续会话将自学习参考', 'success');
       item.has_feedback = true;
       item.optimized_text = optText;
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--ok)">✅ 点评已入库（' + score + '分）</span>';
+      item.score = score;
+      renderResolved();
     } else {
       showToast('保存失败: ' + (data.error || '未知错误'), 'error');
       if (statusEl) statusEl.textContent = '❌ 保存失败';
@@ -5015,6 +5201,10 @@ async function actReply(i) {
     if (d.ok) {
       showToast('回复消息已送达 ' + c.company + '！', 'success');
       if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已成功发送'; }
+      pendingData = pendingData.filter(item => item.company !== c.company);
+      window._pending = pendingData;
+      renderPending();
+      updatePendingBadges(pendingData.length);
     } else {
       showToast('发送失败: ' + (d.error || '未知错误'), 'error');
       if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + (d.error || '失败'); }
@@ -5045,11 +5235,14 @@ async function actWithText(i, action) {
     if (d.ok) {
       if (st === 'already_sent' || st === 'already_agreed') {
         showToast('之前已向对方发起过' + label + '，无需重复发送（已标记完成）', 'info');
-        if (el) { el.style.color = 'var(--acc)'; el.textContent = 'ℹ️ 之前已发起过，已为您标记完成'; }
       } else {
         showToast('【' + label + '】动作已在 BOSS 成功执行！', 'success');
-        if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已执行成功'; }
       }
+      if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已执行完成'; }
+      pendingData = pendingData.filter(item => item.company !== c.company);
+      window._pending = pendingData;
+      renderPending();
+      updatePendingBadges(pendingData.length);
     } else {
       showToast('执行失败: ' + (d.error || '未知错误'), 'error');
       if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + (d.error || '失败'); }
@@ -5075,11 +5268,14 @@ async function act(i, action) {
     if (d.ok) {
       if (action === 'mark_handled') {
         showToast('已将该会话标记为已处理！', 'success');
-        if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已标记完成'; }
       } else {
         showToast('已完成忽略操作', 'info');
-        if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已忽略'; }
       }
+      if (el) { el.style.color = 'var(--ok)'; el.textContent = '✅ 已完成'; }
+      pendingData = pendingData.filter(item => item.company !== c.company);
+      window._pending = pendingData;
+      renderPending();
+      updatePendingBadges(pendingData.length);
     } else {
       showToast('操作失败: ' + (d.error || '未知'), 'error');
       if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + (d.error || '失败'); }
@@ -5089,6 +5285,23 @@ async function act(i, action) {
   } finally {
     setTimeout(() => load(false), 1000);
   }
+}
+
+async function clearStaleAlerts() {
+  showConfirm('🧹 一键核销历史异常待办', '是否一键核销所有历史超时或系统异常产生的待办卡片？核销后将立即从待办列表移除并写入台账。', async () => {
+    showToast('正在核销历史待办…', 'info');
+    try {
+      const res = await api('/api/alerts/clear_stale', { method: 'POST' });
+      if (res.ok) {
+        showToast(`已成功核销 ${res.cleared_count || 0} 条历史待办！`, 'success');
+        load(true);
+      } else {
+        showToast('核销失败: ' + (res.error || '未知错误'), 'danger');
+      }
+    } catch(e) {
+      showToast('网络错误: ' + e.message, 'danger');
+    }
+  });
 }
 
 function filterLedgerChip(filterVal) {
@@ -5143,7 +5356,8 @@ async function saveLedgerFeedback(idx) {
       showToast('点评与优化已存入经验库！大模型后续会话将自学习参考', 'success');
       item.has_feedback = true;
       item.optimized_text = optText;
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--ok);font-weight:700">✅ 点评已入库（' + score + '分）</span>';
+      item.score = score;
+      renderLedger();
     } else {
       showToast('保存失败: ' + (data.error || '未知错误'), 'error');
       if (statusEl) statusEl.textContent = '❌ 保存失败';
@@ -5422,39 +5636,63 @@ function renderLedger() {
         <div style="color:#064e3b;font-weight:500;line-height:1.5;white-space:pre-wrap">${esc(aiText)}</div>
       </div>`;
 
-    // 只有真正的 AI 对话回复才展示回答打分与真人金句优化自学习输入框！
+    // 只有真正的 AI 对话回复才展示回答打分与真人金句优化自学习输入框！严禁对【系统动作】或非对话进行打分
+    const isGenuineDialog = isReply && r.last_msg && r.suggested && !r.suggested.startsWith('【系统动作】') && !r.suggested.includes('【系统动作】') && !r.last_msg.startsWith('（历史');
     let interactiveLayer = '';
-    if (isReply) {
-      const pills = [1,2,3,4,5,6,7,8,9,10].map(num => `
-        <button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectLedgerScore(${rawIdx}, ${num})">${num}</button>
-      `).join('');
-
-      interactiveLayer = `
-        <div class="pt-2" style="border-top:1px dashed rgba(0,0,0,0.06)">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <div style="font-size:12px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:6px">
-              ⭐ 回答点评打分（1-10分）:
-              <span id="ledgerScoreBadge_${rawIdx}" class="soft-badge badge-ai" style="font-size:11px;font-weight:800">${curScore}分</span>
+    if (isGenuineDialog) {
+      if (r.has_feedback) {
+        // 已有人工评价：展示紧凑状态标签与折叠修改面板，默认不占据前台视觉空间
+        interactiveLayer = `
+          <div class="pt-2" style="border-top:1px dashed rgba(0,0,0,0.06)">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="soft-badge badge-pub" style="font-size:11px;font-weight:700">⭐ 已点评归档（${curScore}分）${r.optimized_text ? ' · 已沉淀优化金句' : ''}</span>
+              <a href="javascript:void(0)" onclick="const f=document.getElementById('ledgerOptWrap_${rawIdx}');f.style.display=f.style.display==='none'?'block':'none';" style="font-size:11px;color:var(--acc);text-decoration:none;font-weight:600">
+                ✏️ 修改评价与金句
+              </a>
             </div>
-            <div style="font-size:11px;color:var(--mut)">点击数字评分</div>
+            <div id="ledgerOptWrap_${rawIdx}" style="display:none;margin-top:8px">
+              <div class="d-flex flex-wrap gap-1 mb-2" id="ledgerScorePills_${rawIdx}">
+                ${[1,2,3,4,5,6,7,8,9,10].map(num => `<button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectLedgerScore(${rawIdx}, ${num})">${num}</button>`).join('')}
+              </div>
+              <textarea id="ledgerOptText_${rawIdx}" class="form-control" style="font-size:12px;border-radius:10px;resize:vertical;min-height:50px">${esc(r.optimized_text || '')}</textarea>
+              <div class="d-flex justify-content-end mt-2">
+                <button class="btn-black btn-sm" style="padding:4px 12px;border-radius:8px;font-size:11px" onclick="saveLedgerFeedback(${rawIdx})">💾 更新保存</button>
+              </div>
+            </div>
           </div>
-          <div class="d-flex flex-wrap gap-1 mb-2" id="ledgerScorePills_${rawIdx}">
-            ${pills}
+        `;
+      } else {
+        const pills = [1,2,3,4,5,6,7,8,9,10].map(num => `
+          <button type="button" class="btn-score-pill ${curScore === num ? 'active' : ''}" onclick="selectLedgerScore(${rawIdx}, ${num})">${num}</button>
+        `).join('');
+
+        interactiveLayer = `
+          <div class="pt-2" style="border-top:1px dashed rgba(0,0,0,0.06)">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div style="font-size:12px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:6px">
+                ⭐ 回答点评打分（1-10分）:
+                <span id="ledgerScoreBadge_${rawIdx}" class="soft-badge badge-ai" style="font-size:11px;font-weight:800">${curScore}分</span>
+              </div>
+              <div style="font-size:11px;color:var(--mut)">点击数字评分</div>
+            </div>
+            <div class="d-flex flex-wrap gap-1 mb-2" id="ledgerScorePills_${rawIdx}">
+              ${pills}
+            </div>
+            <div class="mb-2">
+              <label style="font-size:11.5px;font-weight:700;color:var(--txt);margin-bottom:3px;display:block">
+                ✍️ 真人示范优化输入（输入更高情商金句，大模型自动存入经验库自学习进化）：
+              </label>
+              <textarea id="ledgerOptText_${rawIdx}" class="form-control" style="font-size:12px;border-radius:10px;resize:vertical;min-height:50px" placeholder="输入你认为更自然、更高情商的真人回复（例如：“真人在的，刚才回复太正式了哈哈…”）。">${esc(r.optimized_text || '')}</textarea>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <span id="ledgerFbStatus_${rawIdx}" style="font-size:11.5px;color:var(--mut)">未手动点评（默认8分）</span>
+              <button class="btn-black btn-sm" style="padding:5px 14px;border-radius:10px;font-size:12px" onclick="saveLedgerFeedback(${rawIdx})">
+                💾 保存点评与优化
+              </button>
+            </div>
           </div>
-          <div class="mb-2">
-            <label style="font-size:11.5px;font-weight:700;color:var(--txt);margin-bottom:3px;display:block">
-              ✍️ 真人示范优化输入（输入更高情商金句，大模型自动存入经验库自学习进化）：
-            </label>
-            <textarea id="ledgerOptText_${rawIdx}" class="form-control" style="font-size:12px;border-radius:10px;resize:vertical;min-height:50px" placeholder="输入你认为更自然、更高情商的真人回复（例如：“真人在的，刚才回复太正式了哈哈…”）。">${esc(r.optimized_text || '')}</textarea>
-          </div>
-          <div class="d-flex justify-content-between align-items-center mt-2">
-            <span id="ledgerFbStatus_${rawIdx}" style="font-size:11.5px;color:var(--mut)">${r.has_feedback ? '✅ 已有历史评价记录' : '未手动点评（默认8分）'}</span>
-            <button class="btn-black btn-sm" style="padding:5px 14px;border-radius:10px;font-size:12px" onclick="saveLedgerFeedback(${rawIdx})">
-              💾 保存点评与优化
-            </button>
-          </div>
-        </div>
-      `;
+        `;
+      }
     }
 
     return `
@@ -5475,6 +5713,217 @@ function renderLedger() {
   }).join('');
 }
 
+// 城市偏好层级树状态与方法
+let cityTreeData = [];
+let cityPickerActiveTab = 'want';
+let selectedWantCities = [];
+let selectedAvoidCities = [];
+
+async function initCityTree() {
+  if (cityTreeData && cityTreeData.length) {
+    renderCityTree(document.getElementById('cityTreeSearch')?.value || '');
+    return;
+  }
+  try {
+    const res = await api('/api/city_tree');
+    if (res.ok && Array.isArray(res.tree)) {
+      cityTreeData = res.tree;
+      renderCityTree();
+      renderCitySelectedChips();
+    }
+  } catch(e) {
+    console.warn('initCityTree error:', e);
+  }
+}
+
+function switchCityPickerTab(tab) {
+  cityPickerActiveTab = tab;
+  const btnWant = document.getElementById('btnCityTabWant');
+  const btnAvoid = document.getElementById('btnCityTabAvoid');
+  const title = document.getElementById('citySelectionTitle');
+  if (btnWant) btnWant.className = 'btn btn-sm py-1 px-3 ' + (tab === 'want' ? 'btn-primary active' : 'btn-outline-primary');
+  if (btnAvoid) btnAvoid.className = 'btn btn-sm py-1 px-3 ' + (tab === 'avoid' ? 'btn-danger active' : 'btn-outline-danger');
+  if (title) title.textContent = tab === 'want' ? '已选向往城市:' : '已选排斥城市:';
+  renderCitySelectedChips();
+  renderCityTree(document.getElementById('cityTreeSearch')?.value || '');
+}
+
+function getActiveCityList() {
+  return cityPickerActiveTab === 'want' ? selectedWantCities : selectedAvoidCities;
+}
+
+function syncCityInputs() {
+  const inWant = document.getElementById('inWantCities');
+  const inAvoid = document.getElementById('inAvoidCities');
+  if (inWant) inWant.value = selectedWantCities.join('，');
+  if (inAvoid) inAvoid.value = selectedAvoidCities.join('，');
+  renderCitySelectedChips();
+}
+
+function renderCitySelectedChips() {
+  const container = document.getElementById('citySelectedChips');
+  if (!container) return;
+  const list = getActiveCityList();
+  if (!list.length) {
+    container.innerHTML = `<span style="font-size:11px;color:var(--mut-dark)">未选择（${cityPickerActiveTab === 'want' ? '默认沿用底座城市集' : '无排斥城市'}）</span>`;
+    return;
+  }
+  const isAvoid = cityPickerActiveTab === 'avoid';
+  container.innerHTML = list.map(c => `
+    <span class="city-selected-chip ${isAvoid ? 'avoid' : ''}">
+      <span>${esc(c)}</span>
+      <span class="remove-btn" onclick="removeSelectedCity('${esc(c)}')">✕</span>
+    </span>
+  `).join('');
+}
+
+function renderCityTree(kw = '') {
+  const treeEl = document.getElementById('provinceTreeList');
+  if (!treeEl) return;
+  if (!cityTreeData || !cityTreeData.length) {
+    treeEl.innerHTML = '<div class="text-center py-3 text-muted" style="font-size:12px">正在加载全国省市层级数据…</div>';
+    return;
+  }
+  const filterKw = (kw || '').trim().toLowerCase();
+  const currentList = getActiveCityList();
+  const currentSet = new Set(currentList);
+  const isAvoid = cityPickerActiveTab === 'avoid';
+
+  let html = '';
+  cityTreeData.forEach((prov, pIdx) => {
+    const pName = prov.province;
+    const cities = prov.cities || [];
+    const pMatch = pName.toLowerCase().includes(filterKw);
+    const matchedCities = cities.filter(c => pMatch || c.toLowerCase().includes(filterKw));
+    if (filterKw && !pMatch && !matchedCities.length) return;
+
+    const selCount = cities.filter(c => currentSet.has(c)).length;
+    const allChecked = cities.length > 0 && selCount === cities.length;
+
+    html += `
+      <div class="province-group mb-2" id="provGroup_${pIdx}">
+        <div class="province-header d-flex justify-content-between align-items-center p-2" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer">
+          <label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer;font-size:12px;font-weight:700;color:var(--txt)">
+            <input type="checkbox" class="form-check-input mt-0 prov-checkbox" id="provChk_${pIdx}" ${allChecked ? 'checked' : ''} onchange="toggleProvinceAll(${pIdx}, this.checked)">
+            <span>${esc(pName)}</span>
+            <span class="badge bg-light text-secondary ms-1" style="font-size:10px">${selCount}/${cities.length}</span>
+          </label>
+          <span style="font-size:11px;color:var(--mut)" onclick="toggleProvinceCollapse(${pIdx})">
+            <span id="provArrow_${pIdx}">▼</span>
+          </span>
+        </div>
+        <div class="cities-container p-2 pt-1" id="provCities_${pIdx}" style="display:flex;flex-wrap:wrap;gap:4px">
+          ${(filterKw ? matchedCities : cities).map(c => {
+            const checked = currentSet.has(c);
+            return `
+              <label class="city-check-pill ${checked ? (isAvoid ? 'active-avoid' : 'active') : ''}">
+                <input type="checkbox" style="display:none" ${checked ? 'checked' : ''} onchange="toggleCity('${esc(c)}', this.checked)">
+                <span>${esc(c)}</span>
+              </label>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  });
+
+  treeEl.innerHTML = html || '<div class="text-center py-3 text-muted" style="font-size:12px">未找到匹配的省份或城市</div>';
+
+  cityTreeData.forEach((prov, pIdx) => {
+    const chk = document.getElementById('provChk_' + pIdx);
+    if (chk) {
+      const cities = prov.cities || [];
+      const selCount = cities.filter(c => currentSet.has(c)).length;
+      chk.indeterminate = (selCount > 0 && selCount < cities.length);
+    }
+  });
+}
+
+function toggleProvinceCollapse(pIdx) {
+  const box = document.getElementById('provCities_' + pIdx);
+  const arrow = document.getElementById('provArrow_' + pIdx);
+  if (!box) return;
+  const isHide = box.style.display === 'none';
+  box.style.display = isHide ? 'flex' : 'none';
+  if (arrow) arrow.textContent = isHide ? '▼' : '▶';
+}
+
+function toggleAllProvincesExpand() {
+  const groups = document.querySelectorAll('.cities-container');
+  if (!groups.length) return;
+  const firstHide = groups[0].style.display === 'none';
+  groups.forEach(g => { g.style.display = firstHide ? 'flex' : 'none'; });
+  document.querySelectorAll('[id^=provArrow_]').forEach(a => { a.textContent = firstHide ? '▼' : '▶'; });
+}
+
+function filterCityTree(val) {
+  renderCityTree(val);
+}
+
+function toggleCity(cityName, isChecked) {
+  const list = getActiveCityList();
+  const idx = list.indexOf(cityName);
+  if (isChecked && idx === -1) {
+    list.push(cityName);
+  } else if (!isChecked && idx !== -1) {
+    list.splice(idx, 1);
+  }
+  syncCityInputs();
+  renderCityTree(document.getElementById('cityTreeSearch')?.value || '');
+}
+
+function removeSelectedCity(cityName) {
+  const list = getActiveCityList();
+  const idx = list.indexOf(cityName);
+  if (idx !== -1) {
+    list.splice(idx, 1);
+    syncCityInputs();
+    renderCityTree(document.getElementById('cityTreeSearch')?.value || '');
+  }
+}
+
+function clearCurrentCitySelection() {
+  if (cityPickerActiveTab === 'want') {
+    selectedWantCities = [];
+  } else {
+    selectedAvoidCities = [];
+  }
+  syncCityInputs();
+  renderCityTree(document.getElementById('cityTreeSearch')?.value || '');
+  showToast(`已清空当前${cityPickerActiveTab === 'want' ? '向往' : '排斥'}城市选择`, 'info');
+}
+
+function toggleProvinceAll(pIdx, isChecked) {
+  if (!cityTreeData || !cityTreeData[pIdx]) return;
+  const cities = cityTreeData[pIdx].cities || [];
+  const list = getActiveCityList();
+  const set = new Set(list);
+  if (isChecked) {
+    cities.forEach(c => set.add(c));
+  } else {
+    cities.forEach(c => set.delete(c));
+  }
+  if (cityPickerActiveTab === 'want') {
+    selectedWantCities = Array.from(set);
+  } else {
+    selectedAvoidCities = Array.from(set);
+  }
+  syncCityInputs();
+  renderCityTree(document.getElementById('cityTreeSearch')?.value || '');
+}
+
+function syncFromCityTextarea(type) {
+  const val = (document.getElementById(type === 'want' ? 'inWantCities' : 'inAvoidCities')?.value || '').trim();
+  const parts = val ? val.split(/[,，\\s\\n]+/).filter(Boolean) : [];
+  if (type === 'want') {
+    selectedWantCities = parts;
+  } else {
+    selectedAvoidCities = parts;
+  }
+  renderCitySelectedChips();
+  renderCityTree(document.getElementById('cityTreeSearch')?.value || '');
+}
+
 async function loadSettings() {
   const s = await api('/api/settings');
   window.__cachedSettings = s;
@@ -5486,6 +5935,10 @@ async function loadSettings() {
   document.getElementById('inAvoidJobs').value = (s.prefs.avoid_jobs || []).join('，');
   document.getElementById('inWantCities').value = (s.prefs.want_cities || []).join('，');
   document.getElementById('inAvoidCities').value = (s.prefs.avoid_cities || []).join('，');
+  selectedWantCities = [...(s.prefs.want_cities || [])];
+  selectedAvoidCities = [...(s.prefs.avoid_cities || [])];
+  initCityTree();
+  renderCitySelectedChips();
   if (document.getElementById('inJobMode')) document.getElementById('inJobMode').value = s.job_mode || 'intern';
 
   const priv = s.privacy_policy || {};
@@ -5601,11 +6054,13 @@ async function testLLM() {
 
 async function savePrefs() {
   const el = document.getElementById('resPrefs');
+  const wantCitiesVal = selectedWantCities.length ? selectedWantCities.join('，') : document.getElementById('inWantCities').value;
+  const avoidCitiesVal = selectedAvoidCities.length ? selectedAvoidCities.join('，') : document.getElementById('inAvoidCities').value;
   const body = {
     want_jobs: document.getElementById('inWantJobs').value,
     avoid_jobs: document.getElementById('inAvoidJobs').value,
-    want_cities: document.getElementById('inWantCities').value,
-    avoid_cities: document.getElementById('inAvoidCities').value,
+    want_cities: wantCitiesVal,
+    avoid_cities: avoidCitiesVal,
     job_mode: document.getElementById('inJobMode') ? document.getElementById('inJobMode').value : 'intern'
   };
   const d = await api('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -5654,6 +6109,83 @@ async function saveProfile() {
     if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + e; }
     showToast('保存异常: ' + e, 'error');
   }
+}
+
+async function syncBossOnlineResume() {
+  showToast('正在通过 Chrome CDP 从 BOSS 直聘拉取在线微简历…', 'info');
+  try {
+    const res = await api('/api/profile/sync_boss_resume', { method: 'POST' });
+    if (res.ok) {
+      showToast(`在线微简历拉取成功（共 ${res.resume_chars || 0} 字），画像已自动提炼！`, 'success');
+      const inResume = document.getElementById('inResume');
+      if (inResume && res.meta && res.meta.resume_preview) {
+        inResume.value = res.meta.resume_preview;
+      }
+      loadSettings();
+    } else {
+      showToast('拉取失败: ' + (res.error || '未能读取微简历，请确保 Chrome 已登录 BOSS'), 'error');
+    }
+  } catch(e) {
+    showToast('请求异常: ' + e.message, 'error');
+  }
+}
+
+async function clearSavedResume() {
+  showConfirm('🗑️ 清空已存简历与画像', '确定清空已存的所有简历文本、简历附件与提炼画像吗？清空后求职匹配将恢复默认无简历状态。', async () => {
+    showToast('正在清空简历与画像…', 'info');
+    try {
+      const res = await api('/api/profile/resume/clear', { method: 'POST' });
+      if (res.ok) {
+        showToast('简历与画像已清空！', 'success');
+        const inResume = document.getElementById('inResume');
+        if (inResume) inResume.value = '';
+        const inFile = document.getElementById('inFile');
+        if (inFile) inFile.value = '';
+        loadSettings();
+      } else {
+        showToast('清空失败: ' + (res.error || '未知错误'), 'error');
+      }
+    } catch(e) {
+      showToast('网络错误: ' + e.message, 'error');
+    }
+  });
+}
+
+async function syncProfileToBoss() {
+  const prof = window.__cachedUserProfile || {};
+  const priv = (window.__cachedSettings && window.__cachedSettings.privacy_policy) || {};
+  showConfirm(
+    '💾 将当前画像双向同步写回 BOSS',
+    `确定将工作台当前求职画像（${prof.name || '候选人'} · ${prof.school || ''} ${prof.major || ''}）及联系方式写回系统底座与 BOSS 会话凭证？`,
+    async () => {
+      showToast('正在写回 BOSS 直聘…', 'info');
+      try {
+        const body = {
+          name: prof.name || '',
+          school: prof.school || '',
+          major: prof.major || '',
+          grad_year: prof.grad_year || '',
+          current_city: prof.current_city || '',
+          status_desc: prof.status_desc || '',
+          contact_wechat: priv.contact_wechat || '',
+          contact_phone: priv.contact_phone || ''
+        };
+        const res = await api('/api/profile/sync_to_boss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          showToast('画像与联系方式已成功写回底座与 BOSS 直聘！', 'success');
+          load(false);
+        } else {
+          showToast('写回失败: ' + (res.error || '未知错误'), 'error');
+        }
+      } catch(e) {
+        showToast('网络错误: ' + e.message, 'error');
+      }
+    }
+  );
 }
 
 async function savePrivacyPolicy() {
@@ -6388,8 +6920,33 @@ def api_overview(token: str = ""):
     pending = []
     resolved = []
     seen_companies = set()
+    now_dt = datetime.datetime.now()
+
     for c, a in seen.items():
+        a_ts = a.get("ts") or ""
+        reason = (a.get("reason") or "").lower()
+        detail = (a.get("detail") or "").lower()
+        err_msg = (a.get("error") or "").lower()
+
+        # 智能识别历史超时或偶发BUG产生的僵尸待办
+        is_bug_or_stale = False
+        if a_ts:
+            try:
+                dt = datetime.datetime.strptime(a_ts[:19], "%Y-%m-%d %H:%M:%S")
+                age_hours = (now_dt - dt).total_seconds() / 3600.0
+                if age_hours > 24:
+                    is_bug_or_stale = True
+                elif age_hours > 1.0 and any(w in (reason + detail + err_msg) for w in ("timeout", "超时", "cdp", "exception", "异常", "target closed", "sessionclosed", "fail", "失败")):
+                    is_bug_or_stale = True
+            except Exception:
+                pass
+
         is_res, act, ts, st, r_res = _is_alert_resolved(a.get("ts") or "", c, rows)
+        if is_bug_or_stale and not is_res:
+            is_res = True
+            act = "stale_cleared"
+            st = "stale_cleared"
+
         hr_text, ai_text = _extract_dialog_texts(a, r_res)
         fb = feedbacks.get(f"{c}_{hr_text[:40]}") or feedbacks.get(c) or {}
         item = {
@@ -6407,25 +6964,29 @@ def api_overview(token: str = ""):
             "has_feedback": bool(fb),
         }
         if is_res:
-            resolved.append(item)
+            # 只有真实的对话且非系统物理动作才放入 resolved 供打分与优化自学习
+            if act == "reply" and ai_text and not ai_text.startswith("【系统动作】") and not hr_text.startswith("（历史对话未抓取"):
+                resolved.append(item)
             seen_companies.add(c)
         else:
             pending.append(item)
 
-    # 扩展已处理记录：纳入台账中实际成功的直接回复、换微信与发简历记录（扩大数据源，供点评与自学习）
+    # 扩展已处理记录：仅纳入台账中实际成功的直接回复（真实对话），严禁纳入非对话物理动作（换微信/发简历等）
     for r in reversed(rows[-150:]):
         act = r.get("action")
         st = r.get("status")
         comp = r.get("company")
         if not comp or comp in seen_companies:
             continue
-        if act in ("reply", "exchange_wechat", "send_resume", "agree_wechat") and st in ("ok", "already_sent", "already_agreed"):
+        if act == "reply" and st == "ok":
             hr_text, ai_text = _extract_dialog_texts(r, None)
+            if not ai_text or ai_text.startswith("【系统动作】") or hr_text.startswith("（历史对话未抓取"):
+                continue
             fb = feedbacks.get(f"{comp}_{hr_text[:40]}") or feedbacks.get(comp) or {}
             resolved.append({
                 "company": comp,
                 "last_msg": hr_text[:500],
-                "reason": "常规会话交互",
+                "reason": "常规真实对话回复",
                 "suggested": ai_text,
                 "time": r.get("ts") or "",
                 "high_intent": False,
@@ -6584,6 +7145,43 @@ async def api_feedback(request: Request, token: str = ""):
         return {"ok": True, "record": record}
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/city_tree")
+def api_city_tree(token: str = ""):
+    """获取全国省市两级层级树（直辖市 + 23省 + 5自治区）。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from boss_apply import citycodes
+    return {"ok": True, "tree": citycodes.PROVINCE_CITY_TREE}
+
+
+@app.post("/api/alerts/clear_stale")
+def api_alerts_clear_stale(token: str = ""):
+    """一键清理/核销历史超时或系统异常产生的僵尸待办卡片。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    rows = ledger.load_all()
+    alerts = [r for r in rows if r.get("action") == "human_alert_card"]
+    cleared = []
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for a in alerts:
+        c = a.get("company") or ""
+        if not c or c in cleared:
+            continue
+        is_res, _, _, _, _ = _is_alert_resolved(a.get("ts") or "", c, rows)
+        if not is_res:
+            ledger.append({
+                "action": "mark_handled",
+                "company": c,
+                "status": "stale_cleared",
+                "reason": "人工一键核销历史待办",
+                "ts": now_str,
+            })
+            cleared.append(c)
+    return {"ok": True, "cleared_count": len(cleared), "cleared_companies": cleared}
 
 
 _DAILY_APPLY_STATUS = {
