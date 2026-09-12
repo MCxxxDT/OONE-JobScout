@@ -36,7 +36,7 @@ from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from boss_apply import ai_reply as air, config as cfgmod, feishu_bot, flows, \
-    greeter, guard as guardmod, ledger, profile_store, secrets as secrets_mod
+    greeter, guard as guardmod, ledger, profile_store, qr_login, secrets as secrets_mod
 
 app = FastAPI(title="boss-apply 审批台")
 
@@ -545,7 +545,11 @@ async def api_playground_simulate(request: Request, token: str = ""):
     cleaned_reply = air.sanitize_and_clean_reply(raw_suggested, max_chars=150)
     parsed_decision["reply_text"] = cleaned_reply
 
-    privacy_blocked = greeter.privacy_blocked(cleaned_reply)
+    # 隐私泄密检测（挂接配置的 contact_phone 与 contact_wechat，100% 对齐线上 detect_privacy_leak 门禁）
+    is_leak, leak_detail = air.detect_privacy_leak(cleaned_reply, cfg)
+    privacy_blocked = is_leak or greeter.privacy_blocked(cleaned_reply)
+    if not leak_detail and privacy_blocked:
+        leak_detail = "文案中疑似含有联系方式意图或号码"
 
     # 隐私策略审查
     from scripts.daemon_auto_reply import check_privacy_permission
@@ -565,7 +569,10 @@ async def api_playground_simulate(request: Request, token: str = ""):
         "cleaned_reply": cleaned_reply,
         "safety_audit": {
             "privacy_blocked": privacy_blocked,
-            "privacy_note": "🚨 拦截！文案中疑似含有明文电话或微信号，物理阻断发送" if privacy_blocked else "✅ 安全通过（未检测到明文联系方式泄露）",
+            "privacy_note": f"🚨 拦截！{leak_detail}，物理阻断发送" if privacy_blocked else "✅ 安全通过（已通过 contact_phone / contact_wechat 与关键词严密安全门禁）",
+            "leak_detail": leak_detail,
+            "contact_phone_checked": bool((cfg.get("privacy_policy") or {}).get("contact_phone")),
+            "contact_wechat_checked": bool((cfg.get("privacy_policy") or {}).get("contact_wechat")),
             "high_intent": hi_flag,
             "high_intent_reason": hi_why or "常规沟通",
             "policy_allow": allow_policy,
@@ -1606,6 +1613,49 @@ PAGE = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- QR Code Scan Modal -->
+<div class="modal-overlay" id="qrModal">
+  <div class="modal-card" style="max-width:440px;position:relative;padding:32px 28px">
+    <button type="button" onclick="closeQrModal()" style="position:absolute;top:16px;right:16px;border:none;background:rgba(0,0,0,0.05);width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#666">✕</button>
+    <div style="width:48px;height:48px;background:rgba(16,185,129,0.1);color:#10b981;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:24px">
+      ⚡
+    </div>
+    <div style="font-size:18px;font-weight:900;margin-bottom:4px;color:#111">扫码接入 BOSS直聘</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:16px">安全热注入 Session Cookie · 零重启即刻生效</div>
+
+    <div id="qrBoxContainer" style="position:relative;width:230px;height:230px;margin:0 auto 14px auto;background:#f8fafc;border-radius:18px;display:flex;align-items:center;justify-content:center;border:1.5px solid #e2e8f0;overflow:hidden">
+      <!-- Spinner when loading -->
+      <div id="qrSpinner" style="display:none;flex-direction:column;align-items:center;gap:10px">
+        <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem" role="status"></div>
+        <span style="font-size:12px;color:var(--mut)">正在捕获原生二维码…</span>
+      </div>
+      <!-- Real QR Image -->
+      <img id="qrImg" src="" alt="BOSS登录二维码" style="display:none;width:100%;height:100%;object-fit:contain;padding:10px">
+      <!-- Expired Mask -->
+      <div id="qrMask" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,0.92);backdrop-filter:blur(3px);flex-direction:column;align-items:center;justify-content:center;gap:10px">
+        <span style="font-size:32px">⌛</span>
+        <span style="font-size:13px;font-weight:700;color:#ef4444">二维码已失效</span>
+        <button class="btn-black" style="padding:6px 14px;font-size:12px;border-radius:10px" onclick="refreshQrCode()">点击刷新</button>
+      </div>
+    </div>
+
+    <div id="qrStatusText" style="font-size:13px;font-weight:600;color:#2563eb;margin-bottom:8px;min-height:20px">
+      请打开手机 BOSS直聘 App 扫码
+    </div>
+
+    <div class="d-flex align-items-center justify-content-center gap-2 mb-3" style="font-size:11px;color:var(--mut)">
+      <span>⏱️ 倒计时:</span>
+      <strong id="qrCountdown" style="color:#ef4444;font-size:12px">180</strong>
+      <span>秒</span>
+    </div>
+
+    <div class="d-flex gap-3">
+      <button class="btn-action-light w-100 justify-content-center" style="padding:10px;border-radius:12px;font-size:13px" onclick="refreshQrCode()">🔄 刷新二维码</button>
+      <button class="btn-black w-100 justify-content-center" style="padding:10px;border-radius:12px;font-size:13px" onclick="closeQrModal()">完成 / 关闭</button>
+    </div>
+  </div>
+</div>
+
 <div class="app-layout" id="appLayout">
   <!-- 1. Left Sidebar Navigation (Docked on Desktop, Drawer on Mobile) -->
   <aside class="app-sidebar" id="appSidebar">
@@ -1631,6 +1681,11 @@ PAGE = """<!DOCTYPE html>
         <svg class="island-svg" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"></path></svg>
         <span class="capsule-text">待办审批</span>
         <span id="pendingBadge" class="capsule-badge" style="display:none">0</span>
+      </div>
+      <div class="island-capsule" data-tab="monitor" onclick="switchTab('monitor')">
+        <svg class="island-svg" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span class="capsule-text">运行监控</span>
+        <span id="sideDaemonBadge" class="capsule-badge" style="background:#10b981;color:#fff;display:none">ON</span>
       </div>
       <div class="island-capsule" data-tab="ledger" onclick="switchTab('ledger')">
         <svg class="island-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -1678,6 +1733,10 @@ PAGE = """<!DOCTYPE html>
         </div>
       </div>
       <div class="d-flex align-items-center gap-2">
+        <button id="btnBossAuth" class="btn-action-light" style="padding:7px 14px;font-size:12px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.08);color:#059669;display:inline-flex;align-items:center;gap:5px;font-weight:600" onclick="openQrModal()" title="扫码接入 BOSS直聘 或查看凭证状态">
+          <span id="authDot" class="pulse-dot dot-green" style="width:7px;height:7px;margin-right:2px"></span>
+          <span id="authBtnText">⚡ 扫码接入 BOSS</span>
+        </button>
         <button class="btn-action-light" style="padding:7px 14px;font-size:12px;border-radius:10px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.08);color:#2563eb;display:inline-flex;align-items:center;gap:4px" onclick="triggerApplyNow()" title="执行今日候选岗位投递计划">
           <span>⚡</span>
           <span>今日投递</span>
@@ -1736,6 +1795,104 @@ PAGE = """<!DOCTYPE html>
             <span class="text-muted" style="font-size:12px;font-weight:500">优先处理触发安全门禁与高意向邀约的会话</span>
           </div>
           <div id="pending">加载中…</div>
+        </div>
+      </main>
+
+      <!-- Tab: 运行监控 (守护进程一键启停与实时运行状态) -->
+      <main id="tab-monitor" class="tab-content">
+        <!-- Top Sub-nav -->
+        <div class="sub-nav-bar mb-3">
+          <div class="sub-nav-pill active">⚡ 守护进程实时控制与环境感知</div>
+        </div>
+
+        <div class="row g-4">
+          <!-- Col 1: 守护进程一键启停 -->
+          <div class="col-lg-6">
+            <div class="panel-card h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 d-flex align-items-center">
+                  <svg class="title-icon green" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  后台常驻守护进程
+                </h5>
+                <span id="daemonLiveBadge" class="soft-badge badge-rej">检测中</span>
+              </div>
+              
+              <div class="p-3 mb-3" style="background:#f8fafc;border-radius:16px;border:1.5px solid #e2e8f0">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span style="font-size:12px;color:var(--mut)">当前进程 PID:</span>
+                  <strong id="daemonPid" style="font-size:14px;color:#111">-</strong>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span style="font-size:12px;color:var(--mut)">心跳活跃状态:</span>
+                  <span id="daemonStatusText" style="font-size:12px;font-weight:600;color:#64748b">离线</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span style="font-size:12px;color:var(--mut)">最近心跳更新:</span>
+                  <span id="daemonLastSeen" style="font-size:12px;color:#111">-</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between">
+                  <span style="font-size:12px;color:var(--mut)">运行循环详情:</span>
+                  <span id="daemonDetails" style="font-size:11px;color:var(--mut)">-</span>
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center gap-3">
+                <button id="btnDaemonToggle" class="btn-black" style="padding:10px 22px;border-radius:12px;font-weight:700" onclick="handleDaemonToggle()">
+                  ▶️ 一键启动常驻守护
+                </button>
+                <button class="btn-action-light" style="padding:10px 16px;border-radius:12px" onclick="load(true)">
+                  🔄 刷新状态
+                </button>
+              </div>
+              <div style="font-size:11px;color:var(--mut);margin-top:12px">
+                提示：启动后将在 Windows 后台以守护进程常驻运行，定时轮询新消息、自动拟人回复并按时段投递。
+              </div>
+            </div>
+          </div>
+
+          <!-- Col 2: CDP 端口 & BOSS 鉴权状态 -->
+          <div class="col-lg-6">
+            <div class="panel-card h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 d-flex align-items-center">
+                  <svg class="title-icon blue" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Chrome CDP & BOSS 鉴权状态
+                </h5>
+                <span id="authLiveBadge" class="soft-badge badge-pub">已就绪</span>
+              </div>
+
+              <div class="p-3 mb-3" style="background:#f8fafc;border-radius:16px;border:1.5px solid #e2e8f0">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span style="font-size:12px;color:var(--mut)">调试 Chrome CDP (9335):</span>
+                  <strong id="cdpStatusText" style="font-size:13px;color:#10b981">🟢 端口已连接</strong>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span style="font-size:12px;color:var(--mut)">BOSS直聘登录态:</span>
+                  <span id="bossLoginText" style="font-size:12px;font-weight:700;color:#10b981">🟢 已登录 (wt2 有效)</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span style="font-size:12px;color:var(--mut)">Session Cookie 凭证:</span>
+                  <span id="cookiesCountText" style="font-size:12px;color:#111">已加载 14 条 Cookie</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between">
+                  <span style="font-size:12px;color:var(--mut)">Windows DPAPI 持久化:</span>
+                  <span id="dpapiStatusText" style="font-size:11px;color:#059669;font-weight:600">🔒 已安全加密落盘</span>
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center gap-3">
+                <button class="btn-black" style="padding:10px 20px;border-radius:12px;background:#059669;color:#fff" onclick="openQrModal()">
+                  ⚡ 扫码更新凭证
+                </button>
+                <button class="btn-action-light" style="padding:10px 16px;border-radius:12px" onclick="load(true)">
+                  🔍 探测鉴权
+                </button>
+              </div>
+              <div style="font-size:11px;color:var(--mut);margin-top:12px">
+                若会话失效或需更换账号，可点击【扫码更新凭证】重新扫码，凭证将自动加密持久化并热注入。
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
@@ -1835,6 +1992,7 @@ PAGE = """<!DOCTYPE html>
               <div class="d-flex align-items-center gap-3 mt-4">
                 <button class="btn-black" onclick="saveSettings()">保存配置</button>
                 <button class="btn-action-light" onclick="testLLM()">测试连接</button>
+                <button type="button" class="btn-action-light text-danger" style="border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.06)" onclick="clearApiKey()">清除 API Key</button>
                 <span id="resLLM" style="font-size:12px"></span>
               </div>
             </div>
@@ -2369,6 +2527,7 @@ function switchTab(name) {
   });
   const titles = {
     pending: '待办审批 · 决策处理',
+    monitor: '运行监控 · 守护进程与环境感知',
     ledger: '实时台账 · 运行流水与自学习',
     settings: '系统设置 · 参数与风控',
     playground: '回复演练场 · 真实沙盒推演'
@@ -2587,6 +2746,54 @@ async function load(isManual) {
     window._pending = pendingData;
     fullLedger = d.ledger || [];
 
+    // 守护进程与运行监控 UI 联动
+    window.__currentDaemon = daemon;
+    const dPid = document.getElementById('daemonPid');
+    const dStatus = document.getElementById('daemonStatusText');
+    const dLast = document.getElementById('daemonLastSeen');
+    const dDetails = document.getElementById('daemonDetails');
+    const dBtn = document.getElementById('btnDaemonToggle');
+    const dSideBadge = document.getElementById('sideDaemonBadge');
+    const dLiveBadge = document.getElementById('daemonLiveBadge');
+
+    if (dPid) dPid.textContent = daemon.pid ? `PID ${daemon.pid}` : '未运行';
+    if (dStatus) {
+      if (daemon.running) {
+        dStatus.textContent = daemon.status === 'sleeping' ? '🟢 休眠巡检中' : '🟢 常驻运行中';
+        dStatus.style.color = '#10b981';
+      } else {
+        dStatus.textContent = '🔴 离线未运行';
+        dStatus.style.color = '#ef4444';
+      }
+    }
+    if (dLast) dLast.textContent = (daemon.last_seen_seconds !== undefined) ? `${daemon.last_seen_seconds} 秒前 (${daemon.time || ''})` : '无心跳记录';
+    if (dDetails) dDetails.textContent = daemon.details ? JSON.stringify(daemon.details) : '无详细数据';
+
+    if (dBtn) {
+      if (daemon.running) {
+        dBtn.className = 'btn-action-light text-danger';
+        dBtn.innerHTML = '⏹️ 停止守护进程';
+        dBtn.onclick = () => handleDaemonToggle('stop');
+      } else {
+        dBtn.className = 'btn-black';
+        dBtn.innerHTML = '▶️ 一键启动常驻守护';
+        dBtn.onclick = () => handleDaemonToggle('start');
+      }
+    }
+    if (dSideBadge) {
+      dSideBadge.style.display = daemon.running ? 'inline-block' : 'none';
+      dSideBadge.textContent = daemon.running ? (daemon.status === 'sleeping' ? 'SLEEP' : 'ON') : 'OFF';
+      dSideBadge.style.background = daemon.running ? '#10b981' : '#94a3b8';
+    }
+    if (dLiveBadge) {
+      dLiveBadge.textContent = daemon.running ? '常驻运行中' : '已离线';
+      dLiveBadge.className = daemon.running ? 'soft-badge badge-pub' : 'soft-badge badge-rej';
+    }
+
+    // BOSS 鉴权状态联动
+    const auth = d.auth || {};
+    updateAuthStatusUI(auth);
+
     renderPending();
     renderResolved();
     renderLedger();
@@ -2595,6 +2802,238 @@ async function load(isManual) {
   } catch(e) {
     console.error(e);
   }
+}
+
+function updateAuthStatusUI(auth) {
+  if (!auth) return;
+  const btn = document.getElementById('btnBossAuth');
+  const dot = document.getElementById('authDot');
+  const txt = document.getElementById('authBtnText');
+
+  if (auth.logged_in) {
+    if (dot) dot.className = 'pulse-dot dot-green';
+    if (txt) txt.textContent = '⚡ 已接入 BOSS';
+    if (btn) {
+      btn.style.borderColor = 'rgba(16,185,129,0.3)';
+      btn.style.background = 'rgba(16,185,129,0.08)';
+      btn.style.color = '#059669';
+      btn.title = `BOSS已登录 · wt2: ${auth.wt2_masked || '有效'} · 点击管理凭证`;
+    }
+  } else {
+    if (dot) dot.className = 'pulse-dot dot-red';
+    if (txt) txt.textContent = '⚡ 扫码接入 BOSS';
+    if (btn) {
+      btn.style.borderColor = 'rgba(239,68,68,0.3)';
+      btn.style.background = 'rgba(239,68,68,0.08)';
+      btn.style.color = '#ef4444';
+      btn.title = '未检测到BOSS登录凭证 · 点击一键扫码登录';
+    }
+  }
+
+  // 监控面板中的鉴权卡片
+  const cdpTxt = document.getElementById('cdpStatusText');
+  const bossTxt = document.getElementById('bossLoginText');
+  const cookiesTxt = document.getElementById('cookiesCountText');
+  const dpapiTxt = document.getElementById('dpapiStatusText');
+  const authLive = document.getElementById('authLiveBadge');
+
+  if (cdpTxt) {
+    cdpTxt.textContent = auth.cdp_connected ? '🟢 端口已连接 (9335)' : '🔴 端口未连接 (9335)';
+    cdpTxt.style.color = auth.cdp_connected ? '#10b981' : '#ef4444';
+  }
+  if (bossTxt) {
+    bossTxt.textContent = auth.logged_in ? `🟢 已登录 (${auth.wt2_masked || '凭证有效'})` : '🟡 未登录 (需扫码)';
+    bossTxt.style.color = auth.logged_in ? '#10b981' : '#f59e0b';
+  }
+  if (cookiesTxt) {
+    cookiesTxt.textContent = `已加载 ${auth.cookies_count || 0} 条 Cookie`;
+  }
+  if (dpapiTxt) {
+    dpapiTxt.textContent = auth.has_persisted ? '🔒 已安全加密落盘 (DPAPI)' : '⚠️ 尚未加密落盘';
+    dpapiTxt.style.color = auth.has_persisted ? '#059669' : '#64748b';
+  }
+  if (authLive) {
+    authLive.textContent = auth.logged_in ? '已就绪' : '未登录';
+    authLive.className = auth.logged_in ? 'soft-badge badge-pub' : 'soft-badge badge-rej';
+  }
+}
+
+async function handleDaemonToggle(action) {
+  if (!action) {
+    const isRunning = window.__currentDaemon && window.__currentDaemon.running;
+    action = isRunning ? 'stop' : 'start';
+  }
+  showToast(action === 'start' ? '正在拉起常驻守护进程…' : '正在停止守护进程…', 'info');
+  try {
+    const res = await fetch('/api/daemon/toggle?token=' + encodeURIComponent(TOKEN), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: action})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      showToast(d.message || (action === 'start' ? '守护进程已启动' : '守护进程已停止'), 'success');
+      setTimeout(() => load(false), 800);
+    } else {
+      showToast('操作失败: ' + (d.error || d.message || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('网络请求失败: ' + e.message, 'error');
+  }
+}
+
+async function clearApiKey() {
+  if (!confirm("⚠️ 确认清除：确定要从 Windows DPAPI 安全存储中彻底清除 API Key 吗？\n清除后系统将回退到环境变量或提示未配置。")) {
+    return;
+  }
+  showToast("正在清除 DPAPI 密钥…", "info");
+  try {
+    const res = await fetch("/api/auth/clear_key?token=" + encodeURIComponent(TOKEN), {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name: "llm_api_key"})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      showToast("DPAPI 密钥已清除！", "success");
+      const inKey = document.getElementById("inKey");
+      if (inKey) inKey.value = "";
+      loadSettings();
+    } else {
+      showToast("清除失败: " + (d.error || "未知错误"), "error");
+    }
+  } catch (e) {
+    showToast("网络请求失败: " + e.message, "error");
+  }
+}
+
+let qrPollTimer = null;
+let qrCountdownTimer = null;
+let currentQrUuid = null;
+
+async function openQrModal() {
+  const modal = document.getElementById('qrModal');
+  if (modal) modal.classList.add('active');
+  await refreshQrCode();
+}
+
+function closeQrModal() {
+  const modal = document.getElementById('qrModal');
+  if (modal) modal.classList.remove('active');
+  stopQrPolling();
+}
+
+function stopQrPolling() {
+  if (qrPollTimer) {
+    clearInterval(qrPollTimer);
+    qrPollTimer = null;
+  }
+  if (qrCountdownTimer) {
+    clearInterval(qrCountdownTimer);
+    qrCountdownTimer = null;
+  }
+}
+
+async function refreshQrCode() {
+  stopQrPolling();
+  const spinner = document.getElementById('qrSpinner');
+  const img = document.getElementById('qrImg');
+  const mask = document.getElementById('qrMask');
+  const statusText = document.getElementById('qrStatusText');
+  const countdownEl = document.getElementById('qrCountdown');
+
+  if (spinner) spinner.style.display = 'flex';
+  if (img) img.style.display = 'none';
+  if (mask) mask.style.display = 'none';
+  if (statusText) {
+    statusText.textContent = '正在通过 CDP 9335 捕获原生二维码…';
+    statusText.style.color = '#2563eb';
+  }
+
+  try {
+    const res = await fetch('/api/auth/qrcode/get?token=' + encodeURIComponent(TOKEN));
+    const d = await res.json();
+    if (d.ok && d.qrcode_base64 && d.uuid) {
+      currentQrUuid = d.uuid;
+      if (spinner) spinner.style.display = 'none';
+      if (img) {
+        img.src = d.qrcode_base64;
+        img.style.display = 'block';
+      }
+      if (statusText) {
+        statusText.textContent = '请打开手机 BOSS直聘 App 扫描上方二维码';
+        statusText.style.color = '#2563eb';
+      }
+      let remain = d.expire_seconds || 180;
+      if (countdownEl) countdownEl.textContent = remain;
+      qrCountdownTimer = setInterval(() => {
+        remain--;
+        if (countdownEl) countdownEl.textContent = Math.max(0, remain);
+        if (remain <= 0) {
+          stopQrPolling();
+          if (mask) mask.style.display = 'flex';
+          if (statusText) {
+            statusText.textContent = '二维码已超时失效，请点击刷新';
+            statusText.style.color = '#ef4444';
+          }
+        }
+      }, 1000);
+
+      startQrPolling(d.uuid);
+    } else {
+      if (spinner) spinner.style.display = 'none';
+      if (statusText) {
+        statusText.textContent = '获取失败: ' + (d.error || '未能连接 Chrome');
+        statusText.style.color = '#ef4444';
+      }
+      if (mask) mask.style.display = 'flex';
+    }
+  } catch (e) {
+    if (spinner) spinner.style.display = 'none';
+    if (statusText) {
+      statusText.textContent = '网络错误: ' + e.message;
+      statusText.style.color = '#ef4444';
+    }
+    if (mask) mask.style.display = 'flex';
+  }
+}
+
+function startQrPolling(uuid) {
+  qrPollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/auth/qrcode/status?uuid=${encodeURIComponent(uuid)}&token=${encodeURIComponent(TOKEN)}`);
+      const d = await res.json();
+      const statusText = document.getElementById('qrStatusText');
+      const mask = document.getElementById('qrMask');
+
+      if (d.status === 'confirmed') {
+        stopQrPolling();
+        if (statusText) {
+          statusText.textContent = '🎉 ' + (d.message || '扫码登录成功！已自动热生效');
+          statusText.style.color = '#10b981';
+        }
+        showToast('🎉 BOSS 直聘扫码登录成功！凭证已热注入生效！', 'success');
+        setTimeout(() => {
+          closeQrModal();
+          load(true);
+        }, 1200);
+      } else if (d.status === 'scanned') {
+        if (statusText) {
+          statusText.textContent = '📱 手机已扫描，请在 BOSS直聘 App 点击【确认登录】…';
+          statusText.style.color = '#f59e0b';
+        }
+      } else if (d.status === 'expired') {
+        stopQrPolling();
+        if (mask) mask.style.display = 'flex';
+        if (statusText) {
+          statusText.textContent = '二维码已失效，请重新刷新';
+          statusText.style.color = '#ef4444';
+        }
+      }
+    } catch (e) {
+      console.warn('QR polling error:', e);
+    }
+  }, 2000);
 }
 
 let _confirmCallback = null;
@@ -4160,6 +4599,7 @@ def api_overview(token: str = ""):
             "max_replies_per_day": cfg.get("daily_limit", 30),
         },
         "daemon": get_daemon_status(),
+        "auth": qr_login.QRLoginManager().get_auth_status(cfg),
         "pending": pending[:100],
         "resolved": resolved[:100],
         "ledger": enriched_ledger,
@@ -4288,6 +4728,66 @@ async def api_daemon_toggle(request: Request, token: str = ""):
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
     return JSONResponse({"error": "invalid_action"}, status_code=400)
+
+
+@app.get("/api/auth/status")
+def api_auth_status(token: str = ""):
+    """获取当前 BOSS 直聘登录鉴权状态及 Chrome 实例信息。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return qr_login.QRLoginManager().get_auth_status(cfg)
+
+
+@app.get("/api/auth/qrcode/get")
+def api_auth_qrcode_get(token: str = ""):
+    """获取原生登录二维码 Base64 及唯一跟踪 UUID。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    res = qr_login.QRLoginManager().get_qrcode(cfg)
+    if not res.get("ok"):
+        return JSONResponse(res, status_code=500)
+    return res
+
+
+@app.get("/api/auth/qrcode/status")
+def api_auth_qrcode_status(uuid: str = "", token: str = ""):
+    """轮询二维码扫码确认状态。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    if not uuid:
+        return JSONResponse({"ok": False, "error": "missing_uuid"}, status_code=400)
+    return qr_login.QRLoginManager().check_scan_status(uuid, cfg)
+
+
+@app.post("/api/auth/clear_key")
+async def api_auth_clear_key(request: Request, token: str = ""):
+    """清除 Windows DPAPI 中的密钥并在必要时清除 config.local.json 中的 api_key。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    key_name = body.get("name", "llm_api_key")
+    secrets_mod.set_secret(key_name, "")
+    if key_name == "llm_api_key":
+        path = cfgmod.LOCAL_CFG_PATH
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    local_data = json.load(f)
+                if "llm" in local_data and isinstance(local_data["llm"], dict):
+                    local_data["llm"].pop("api_key", None)
+                    with open(path, "w", encoding="utf-8") as f:
+                        json.dump(local_data, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+    return {"ok": True, "message": f"已成功清除 {key_name}"}
 
 
 def main():
