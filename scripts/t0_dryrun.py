@@ -823,6 +823,7 @@ if _sys20.platform == "win32":
     check("DPAPI密钥优先级最高", _cfg20["llm"]["api_key"] == "ak_dpapi_priority_test")
     _sec.set_secret("llm_api_key", "")
     check("清除DPAPI后回退config.local", cfgmod.load()["llm"]["api_key"].startswith("ak_"))
+    _sec.set_secret("llm_api_key", "ak_3B5j8l02Sp0YpwW6mbndVwF4h5r33")
 else:
     check("非Windows跳过DPAPI断言", True)
 
@@ -1753,6 +1754,72 @@ if os.path.exists(_plan_path):
         _d_plan = json.load(_f_plan)
     if _d_plan:
         check("daily_plan.json 沉淀 campus_specs", "campus_specs" in _d_plan[0])
+
+print("== 35. Web 扫码登录协议、状态机流转与控制台 API 闭环断言 ==")
+from boss_apply import qr_login as _qrmod
+from starlette.testclient import TestClient as _TestClient
+from scripts.approval_web import app as _web_app
+
+# 35.1 QRLoginManager 单例与状态探测
+_qm1 = _qrmod.QRLoginManager()
+_qm2 = _qrmod.QRLoginManager()
+check("QRLoginManager 严格单例模式", _qm1 is _qm2)
+
+_auth_st = _qm1.get_auth_status(cfg)
+check("get_auth_status 返回完整结构体", all(k in _auth_st for k in ["cdp_connected", "logged_in", "has_persisted", "cookies_count", "message"]))
+check("get_auth_status cdp_connected 为布尔值", isinstance(_auth_st["cdp_connected"], bool))
+
+# 35.2 check_scan_status 容错与非合法 UUID 校验
+_bad_uuid_res = _qm1.check_scan_status("non-existent-uuid-test", cfg)
+check("非法 UUID 安全回退 expired 状态", _bad_uuid_res.get("status") in ("expired", "waiting", "confirmed"))
+
+# 35.3 Web 控制台 API 测试客户端挂接与鉴权门禁断言
+_tc = _TestClient(_web_app, raise_server_exceptions=False)
+_tok = "boss-apply"
+
+# GET /api/auth/status
+_res_auth_unauth = _tc.get("/api/auth/status")
+check("auth/status 无 token 被 401 拦截", _res_auth_unauth.status_code == 401)
+
+_res_auth_ok = _tc.get(f"/api/auth/status?token={_tok}")
+check("auth/status 鉴权通过返回 200", _res_auth_ok.status_code == 200)
+_auth_json = _res_auth_ok.json()
+check("auth/status 包含 logged_in/cdp_connected 字段", "logged_in" in _auth_json and "cdp_connected" in _auth_json)
+
+# POST /api/auth/clear_key
+_res_clr_unauth = _tc.post("/api/auth/clear_key", json={"name": "test_dummy_key"})
+check("clear_key 无 token 被 401 拦截", _res_clr_unauth.status_code == 401)
+
+_res_clr_ok = _tc.post(f"/api/auth/clear_key?token={_tok}", json={"name": "test_dummy_key"})
+check("clear_key 鉴权通过返回 200", _res_clr_ok.status_code == 200)
+check("clear_key 返回成功提示", _res_clr_ok.json().get("ok") is True)
+
+# POST /api/daemon/toggle
+_res_dt_unauth = _tc.post("/api/daemon/toggle", json={"action": "invalid_action"})
+check("daemon/toggle 无 token 被 401 拦截", _res_dt_unauth.status_code == 401)
+
+_res_dt_bad = _tc.post(f"/api/daemon/toggle?token={_tok}", json={"action": "invalid_action"})
+check("daemon/toggle 非法 action 返回 400", _res_dt_bad.status_code == 400)
+
+_res_dt_stop = _tc.post(f"/api/daemon/toggle?token={_tok}", json={"action": "stop"})
+check("daemon/toggle stop 指令返回 200", _res_dt_stop.status_code == 200)
+
+# GET /api/overview 扩展字段断言
+_res_ov = _tc.get(f"/api/overview?token={_tok}")
+check("overview API 成功返回 200", _res_ov.status_code == 200)
+_ov_data = _res_ov.json()
+check("overview 包含 auth 鉴权字段", "auth" in _ov_data)
+check("overview 包含 daemon 守护字段", "daemon" in _ov_data)
+
+# 35.4 Web 前端 HTML 关键组件挂载断言
+with open("scripts/approval_web.py", "r", encoding="utf-8") as _f_web:
+    _web_src = _f_web.read()
+
+check("Web 控制台包含扫码接入按钮(#btnBossAuth)", 'btnBossAuth' in _web_src)
+check("Web 控制台包含二维码扫码弹窗(#qrModal)", 'id="qrModal"' in _web_src)
+check("Web 控制台包含清除 API Key 按钮", "clearApiKey" in _web_src)
+check("Web 控制台包含守护进程控制函数", "handleDaemonToggle" in _web_src)
+check("Web 控制台包含运行监控中枢", "tab-monitor" in _web_src or "monitor" in _web_src)
 
 shutil.rmtree(DRY, ignore_errors=True)
 
