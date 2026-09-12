@@ -2590,7 +2590,7 @@ PAGE = """<!DOCTYPE html>
 <div class="modal-overlay" id="helpModal" style="display:none" onclick="if(event.target === this) closeHelpModal()">
   <div class="modal-card" style="max-width:560px;position:relative;padding:28px 26px;text-align:left">
     <button type="button" onclick="closeHelpModal()" style="position:absolute;top:16px;right:16px;border:none;background:rgba(0,0,0,0.05);width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#64748b">✕</button>
-    <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="d-flex align-items-center gap-3 mb-3" style="padding-right:32px">
       <div id="helpModalIcon" style="width:40px;height:40px;border-radius:12px;background:rgba(14,165,233,0.1);color:#0284c7;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">💡</div>
       <div>
         <h5 class="fw-bold mb-0" id="helpModalTitle" style="font-size:17px;color:#0f172a">说明指南</h5>
