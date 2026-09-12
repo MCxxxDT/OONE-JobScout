@@ -2883,7 +2883,7 @@ async function handleDaemonToggle(action) {
 }
 
 async function clearApiKey() {
-  if (!confirm("⚠️ 确认清除：确定要从 Windows DPAPI 安全存储中彻底清除 API Key 吗？\n清除后系统将回退到环境变量或提示未配置。")) {
+  if (!confirm("⚠️ 确认清除：确定要从 Windows DPAPI 安全存储中彻底清除 API Key 吗？清除后系统将回退到环境变量或提示未配置。")) {
     return;
   }
   showToast("正在清除 DPAPI 密钥…", "info");
