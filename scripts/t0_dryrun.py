@@ -1636,6 +1636,58 @@ try:
 finally:
     cfgmod.LOCAL_CFG_PATH = _orig_local_path29
 
+print("== 33. 企业代理池与地域就近路由断言 ==")
+from boss_apply.proxy_pool import GeoAffinityRouter, ProxyPoolManager
+
+# 33.1 原子落盘持久化断言
+_test_atomic_file = os.path.join(DRY, "test_atomic.json")
+_atomic_data = {"status": "healthy", "city": "杭州", "timestamp": 1234567890}
+cfgmod.atomic_save_json(_test_atomic_file, _atomic_data)
+check("atomic_save_json 目标文件落盘成功", os.path.exists(_test_atomic_file))
+check("atomic_save_json 无残留.tmp文件", not os.path.exists(_test_atomic_file + ".tmp"))
+with open(_test_atomic_file, "r", encoding="utf-8") as _f:
+    _read_data = json.load(_f)
+check("atomic_save_json 内容一致性校验", _read_data == _atomic_data)
+
+# 33.2 GeoAffinityRouter 地域就近映射断言
+_router = GeoAffinityRouter()
+check("华东核心城市(杭州/上海)映射", _router.get_region_for_city("杭州") == "华东" and _router.get_region_for_city("上海市") == "华东")
+check("华南核心城市(深圳/广州)映射", _router.get_region_for_city("深圳") == "华南" and _router.get_region_for_city("广州市") == "华南")
+check("华中核心城市(武汉/长沙)映射", _router.get_region_for_city("武汉") == "华中" and _router.get_region_for_city("长沙市") == "华中")
+check("西南核心城市(成都/重庆)映射", _router.get_region_for_city("成都") == "西南" and _router.get_region_for_city("重庆市") == "西南")
+check("城市名称容错与子串匹配", _router.get_region_for_city("浙江省杭州市") == "华东")
+check("未知城市匹配返回空串", _router.get_region_for_city("未知虚拟城") == "")
+
+# 33.3 ProxyPoolManager 多格式初始化与就近调度断言
+_eps = [
+    "http://10.0.1.1:8080#华东",
+    "socks5://10.0.1.2:1080#华东",
+    "http://10.0.2.1:8080#华南",
+    "socks5://10.0.3.1:1080#西南",
+]
+_mgr = ProxyPoolManager(endpoints=_eps, enabled=True, geo_affinity=True, max_failures=3)
+check("代理池节点初始化总数正确", len(_mgr) == 4)
+check("杭州优先调度到华东代理", _mgr.get_proxy("杭州") in ["http://10.0.1.1:8080", "socks5://10.0.1.2:1080"])
+check("深圳优先调度到华南代理", _mgr.get_proxy("深圳") == "http://10.0.2.1:8080")
+check("无地域代理时回退全局可用代理", _mgr.get_proxy("武汉") is not None)
+
+# 33.4 失败熔断隔离与恢复断言
+_target_p = "http://10.0.2.1:8080"
+_mgr.report_failure(_target_p)
+_mgr.report_failure(_target_p)
+check("前2次失败未达阈值保持健康", _mgr.get_stats()["circuit_broken"] == 0)
+_mgr.report_failure(_target_p)
+check("第3次失败触发熔断隔离", _mgr.get_stats()["circuit_broken"] == 1)
+check("熔断节点不再被调度", _mgr.get_proxy("深圳") != _target_p)
+_mgr.report_success(_target_p)
+check("report_success 重置熔断恢复健康", _mgr.get_stats()["circuit_broken"] == 0)
+
+# 33.5 get_stats 大盘统计指标断言
+_stats = _mgr.get_stats()
+check("get_stats 包含 total/healthy/circuit_broken/regions",
+      all(k in _stats for k in ["total", "healthy", "circuit_broken", "regions"]))
+check("get_stats 统计数字正确", _stats["total"] == 4 and _stats["healthy"] == 4 and _stats["circuit_broken"] == 0)
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

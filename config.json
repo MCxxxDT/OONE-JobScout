@@ -94,6 +94,12 @@
     "silent_mode": true,
     "minimize_on_start": true
   },
+  "proxy_pool": {
+    "enabled": false,
+    "provider": "custom",
+    "endpoints": [],
+    "geo_affinity": true
+  },
   "greeting": {
     "test": [
       "您好，看到贵司这个岗位与我的方向非常契合，已投递附件简历，期待您的回复，谢谢！"
