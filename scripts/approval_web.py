@@ -2190,7 +2190,7 @@ PAGE = """<!DOCTYPE html>
 </div>
 
 <!-- Global Help & Mechanism Modal -->
-<div class="modal-overlay" id="helpModal" style="display:none">
+<div class="modal-overlay" id="helpModal" style="display:none" onclick="if(event.target === this) closeHelpModal()">
   <div class="modal-card" style="max-width:560px;position:relative;padding:28px 26px;text-align:left">
     <button type="button" onclick="closeHelpModal()" style="position:absolute;top:16px;right:16px;border:none;background:rgba(0,0,0,0.05);width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#64748b">✕</button>
     <div class="d-flex align-items-center gap-3 mb-3">
@@ -3381,11 +3381,17 @@ function openHelpModal(type) {
   document.getElementById('helpModalSub').textContent = c.sub;
   document.getElementById('helpModalBody').innerHTML = c.body;
   modal.style.display = 'flex';
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
 }
 
 function closeHelpModal() {
   const modal = document.getElementById('helpModal');
-  if (modal) modal.style.display = 'none';
+  if (modal) {
+    modal.classList.remove('active');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
 }
 
 // Live Terminal Logs
@@ -3422,9 +3428,9 @@ async function fetchDaemonLogs() {
             return `<span style="color:#f87171">${escLine}</span>`;
           } else if (/warn|alert|needs_human/i.test(line)) {
             return `<span style="color:#fbbf24">${escLine}</span>`;
-          } else if (/success|ok|connected|login|\[PASS\]/i.test(line)) {
+          } else if (/success|ok|connected|login|\\[PASS\\]/i.test(line)) {
             return `<span style="color:#34d399">${escLine}</span>`;
-          } else if (/\[.+?\]/.test(line)) {
+          } else if (/\\[.+?\\]/.test(line)) {
             return `<span style="color:#38bdf8">${escLine}</span>`;
           }
           return `<span style="color:#94a3b8">${escLine}</span>`;

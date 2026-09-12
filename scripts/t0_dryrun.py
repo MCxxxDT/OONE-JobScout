@@ -1804,6 +1804,14 @@ check("daemon/toggle 非法 action 返回 400", _res_dt_bad.status_code == 400)
 _res_dt_stop = _tc.post(f"/api/daemon/toggle?token={_tok}", json={"action": "stop"})
 check("daemon/toggle stop 指令返回 200", _res_dt_stop.status_code == 200)
 
+# GET /api/daemon/logs
+_res_log_unauth = _tc.get("/api/daemon/logs")
+check("daemon/logs 无 token 被 401 拦截", _res_log_unauth.status_code == 401)
+_res_log_ok = _tc.get(f"/api/daemon/logs?token={_tok}&lines=10")
+check("daemon/logs 鉴权通过返回 200", _res_log_ok.status_code == 200)
+_log_data = _res_log_ok.json()
+check("daemon/logs 返回 logs 列表及 count", _log_data.get("ok") is True and isinstance(_log_data.get("logs"), list) and "count" in _log_data)
+
 # GET /api/overview 扩展字段断言
 _res_ov = _tc.get(f"/api/overview?token={_tok}")
 check("overview API 成功返回 200", _res_ov.status_code == 200)
@@ -1840,6 +1848,8 @@ check("Web 控制台包含顶栏真实头像组件(#topUserAvatar)", 'id="topUse
 check("Web 控制台包含登录成功欢迎横幅(#welcomeBanner)", 'id="welcomeBanner"' in _web_src)
 check("Web 控制台包含资料同步函数(syncBossProfile)", "syncBossProfile" in _web_src)
 check("Web 控制台包含二维码扫码弹窗(#qrModal)", 'id="qrModal"' in _web_src)
+check("Web 控制台包含全局说明帮助弹窗(#helpModal)", 'id="helpModal"' in _web_src)
+check("Web 控制台包含实时运行终端组件(#termLogsContainer)", 'id="termLogsContainer"' in _web_src)
 check("Web 控制台包含清除 API Key 按钮", "clearApiKey" in _web_src)
 check("Web 控制台包含守护进程控制函数", "handleDaemonToggle" in _web_src)
 check("Web 控制台包含运行监控中枢", "tab-monitor" in _web_src or "monitor" in _web_src)
