@@ -4,6 +4,7 @@ state/*.jsonl
 state/*.log
 state/*.png
 state/*.md
+state/*.lock
 !state/.gitkeep
 
 # 飞书卡片运行时留痕（与台账 human_alert_card 记录冗余）

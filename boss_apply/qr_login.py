@@ -79,6 +79,8 @@ def ensure_chrome_running(cfg=None) -> bool:
         except Exception:
             pass
 
+    is_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
+    window_arg = "--start-minimized" if is_silent else "--start-maximized"
     cmd = [
         chrome_exe,
         "--remote-debugging-port=9335",
@@ -87,7 +89,8 @@ def ensure_chrome_running(cfg=None) -> bool:
         "--no-default-browser-check",
         "--disable-background-networking",
         "--remote-allow-origins=*",
-        "https://www.zhipin.com/web/user/?ka=header-login"
+        window_arg,
+        "https://www.zhipin.com/web/geek/jobs"
     ]
 
     popen_kwargs = {
@@ -96,14 +99,51 @@ def ensure_chrome_running(cfg=None) -> bool:
         "stderr": subprocess.DEVNULL
     }
     if os.name == "nt":
-        DETACHED_PROCESS = 0x00000008
-        CREATE_NEW_PROCESS_GROUP = 0x00000200
-        popen_kwargs["creationflags"] = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        try:
+            import ctypes
+            import ctypes.wintypes
+            kernel32 = ctypes.windll.kernel32
 
-    try:
+            class STARTUPINFOW(ctypes.Structure):
+                _fields_ = [
+                    ('cb', ctypes.wintypes.DWORD), ('lpReserved', ctypes.c_wchar_p),
+                    ('lpDesktop', ctypes.c_wchar_p), ('lpTitle', ctypes.c_wchar_p),
+                    ('dwX', ctypes.wintypes.DWORD), ('dwY', ctypes.wintypes.DWORD),
+                    ('dwXSize', ctypes.wintypes.DWORD), ('dwYSize', ctypes.wintypes.DWORD),
+                    ('dwXCountChars', ctypes.wintypes.DWORD), ('dwYCountChars', ctypes.wintypes.DWORD),
+                    ('dwFillAttribute', ctypes.wintypes.DWORD), ('dwFlags', ctypes.wintypes.DWORD),
+                    ('wShowWindow', ctypes.wintypes.WORD), ('cbReserved2', ctypes.wintypes.WORD),
+                    ('lpReserved2', ctypes.c_void_p), ('hStdInput', ctypes.wintypes.HANDLE),
+                    ('hStdOutput', ctypes.wintypes.HANDLE), ('hStdError', ctypes.wintypes.HANDLE),
+                ]
+
+            class PROCESS_INFORMATION(ctypes.Structure):
+                _fields_ = [
+                    ('hProcess', ctypes.wintypes.HANDLE), ('hThread', ctypes.wintypes.HANDLE),
+                    ('dwProcessId', ctypes.wintypes.DWORD), ('dwThreadId', ctypes.wintypes.DWORD),
+                ]
+
+            si = STARTUPINFOW()
+            si.cb = ctypes.sizeof(STARTUPINFOW)
+            si.lpDesktop = 'WinSta0\\Default'
+            si.dwFlags = 1  # STARTF_USESHOWWINDOW
+            si.wShowWindow = 6 if is_silent else 3  # SW_MINIMIZE or SW_SHOWMAXIMIZED
+
+            pi = PROCESS_INFORMATION()
+            cmd_str = subprocess.list2cmdline(cmd)
+            # 0x00000208 = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+            res = kernel32.CreateProcessW(None, cmd_str, None, None, False, 0x00000208, None, None, ctypes.byref(si), ctypes.byref(pi))
+            if res:
+                kernel32.CloseHandle(pi.hProcess)
+                kernel32.CloseHandle(pi.hThread)
+            else:
+                popen_kwargs["creationflags"] = 0x00000208
+                subprocess.Popen(cmd, **popen_kwargs)
+        except Exception:
+            popen_kwargs["creationflags"] = 0x00000208
+            subprocess.Popen(cmd, **popen_kwargs)
+    else:
         subprocess.Popen(cmd, **popen_kwargs)
-    except Exception:
-        return False
 
     deadline = time.time() + 10
     while time.time() < deadline:
