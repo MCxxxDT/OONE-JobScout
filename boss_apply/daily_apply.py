@@ -90,14 +90,14 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                         # 已打过招呼
                         if href in greeted_hrefs:
                             continue
-                        # 排斥偏好硬否决
-                        vetoed, veto_word = flows.avoid_veto(job, prefs["avoid_jobs"])
-                        if vetoed:
+
+                        # 阶段 A：硬性资格门禁（公司黑名单、kill 词、岗位门槛、活跃度、薪资、届别等）
+                        is_eligible, inelig_reason = scorer.check_eligibility(job, "", cfg)
+                        if not is_eligible:
                             continue
-                        # 基础硬过滤打分（kill 词、届别、薪资、活跃度）
-                        s, why = scorer.score(job, "", cfg)
-                        if s <= 0:
-                            continue
+
+                        # 阶段 B：偏好与关键词相关度打分（即使零关键词，只要通过硬资格也保留供后续初筛）
+                        s, why = scorer.calculate_matching_score(job, "", cfg)
                         stats["after_hard_filter"] += 1
                         job["job_mode"] = job_mode
                         job["experience"] = exp_code
@@ -116,6 +116,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                             "job": job, "detail": "", "kw": kw,
                             "city": city, "base_score": s, "base_reason": why,
                             "campus_specs": specs,
+                            "is_eligible": True,
                         })
                     browser.human_wait(cfg, "page")
         finally:
@@ -152,9 +153,19 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
                         specs = item.get("campus_specs") or {}
                     item["campus_specs"] = specs
                     item["job"]["campus_specs"] = specs
-                    new_s, new_why = scorer.score(item["job"], detail or "", cfg)
-                    item["base_score"] = new_s
-                    item["base_reason"] = new_why
+
+                    # 精读后再次核查硬性资格门禁（如详情页标注了届别排斥或活跃度超限）
+                    new_eligible, new_inelig = scorer.check_eligibility(item["job"], detail or "", cfg)
+                    if not new_eligible:
+                        item["is_eligible"] = False
+                        item["ineligible_reason"] = new_inelig
+                        item["base_score"] = 0.0
+                        item["base_reason"] = new_inelig
+                    else:
+                        new_s, new_why = scorer.calculate_matching_score(item["job"], detail or "", cfg)
+                        item["is_eligible"] = True
+                        item["base_score"] = new_s
+                        item["base_reason"] = new_why
                     stats["details_fetched"] += 1
                     if idx % 10 == 0 or idx == len(detail_targets):
                         print(f"    > JD 精读进度: [{idx}/{len(detail_targets)}] ({item['job'].get('company')})")
@@ -175,10 +186,17 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
 # Phase 3: LLM 综合择优
 # ---------------------------------------------------------------------------
 
-def rank_and_plan(candidates, cfg, top_n=None):
+def rank_and_plan(candidates, cfg, top_n=None, plan_file=None, dry_run=False):
     """LLM 批量打分 → 全局排序 → 截取 Top N → 写 daily_plan.json。
+    绑定 plan_id 与时间戳，隔离 dry_run 计划。
     LLM 不可用时回退 base_score 排序。
     返回 (plan_list, rank_stats)。"""
+    import datetime
+    import uuid
+
+    plan_id = str(uuid.uuid4())
+    created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     if top_n is None:
         top_n = int((cfg.get("daemon") or {}).get("apply_top_n", 50))
     min_verdict_order = {"veto": 0, "low": 1, "medium": 2, "high": 3}
@@ -195,11 +213,20 @@ def rank_and_plan(candidates, cfg, top_n=None):
         base_s = item.get("base_score", 0)
         base_why = item.get("base_reason", "")
 
-        # F03 硬否决检测：如果 base_score <= 0 或带有硬性否决标志，不可被模型覆盖
-        is_eligible = (base_s > 0) and not item.get("veto", False)
-        veto_reasons = []
+        # 阶段 A 硬性资格门禁核查：若显式标记 veto、base_score 为 0 且带否决字样，或 check_eligibility 判定不符，不可被模型覆盖
+        is_eligible = item.get("is_eligible", True)
+        if item.get("veto", False) or (base_s <= 0 and any(k in str(base_why) for k in ("kill", "届别", "boss inactive", "salary out", "blacklist", "role-gate", "avoid_jobs", "不符"))):
+            is_eligible = False
+
+        if is_eligible:
+            recheck_ok, recheck_reason = scorer.check_eligibility(job, item.get("detail", ""), cfg)
+            if not recheck_ok:
+                is_eligible = False
+                base_why = recheck_reason
+
+        # 硬条件否决候选彻底排除，杜绝进入投递计划
         if not is_eligible:
-            veto_reasons.append(base_why or "hard_filter_rejected")
+            continue
 
         specs = item.get("campus_specs") or job.get("campus_specs")
         if not specs:
@@ -212,7 +239,11 @@ def rank_and_plan(candidates, cfg, top_n=None):
                 )
             except Exception:
                 specs = {}
+
         entry = {
+            "plan_id": plan_id,
+            "created_at": created_at,
+            "dry_run": dry_run,
             "title": job.get("title") or "",
             "company": job.get("company") or "",
             "salary": job.get("salary") or "",
@@ -224,17 +255,8 @@ def rank_and_plan(candidates, cfg, top_n=None):
             "experience": job.get("experience") or "",
             "campus_specs": specs,
             "detail_head": (item["detail"] or "")[:300],
-            "eligible": is_eligible,
-            "veto_reasons": veto_reasons,
+            "eligible": True,
         }
-
-        # F03: 硬条件否决的候选即使模型高分也绝对不得进入待投递计划
-        if not is_eligible:
-            entry["score"] = 0
-            entry["verdict"] = "veto"
-            entry["reason"] = f"硬条件不符: {'; '.join(veto_reasons)}"
-            entry["score_source"] = "rule_hard_veto"
-            continue
 
         if llm_res and i in llm_res:
             m = llm_res[i]
@@ -244,7 +266,7 @@ def rank_and_plan(candidates, cfg, top_n=None):
             entry["score_source"] = "llm"
         else:
             entry["score"] = base_s
-            entry["verdict"] = "medium" if base_s >= 8 else "low"
+            entry["verdict"] = "medium" if base_s >= 8 else ("low" if base_s > 0 else "zero_keyword")
             entry["reason"] = base_why
             entry["score_source"] = "keywords"
 
@@ -258,15 +280,37 @@ def rank_and_plan(candidates, cfg, top_n=None):
     plan.sort(key=lambda x: -x["score"])
     plan = plan[:top_n]
 
-    # 写入 daily_plan.json（优先使用原子落盘）
-    plan_path = cfgmod.state_path("daily_plan.json")
+    # 写入计划文件（优先使用原子落盘，隔离 dry_run 目标文件）
+    if plan_file is None:
+        target_name = "daily_plan_dryrun.json" if dry_run else "daily_plan.json"
+        plan_path = cfgmod.state_path(target_name)
+    elif os.path.isabs(plan_file):
+        plan_path = plan_file
+    else:
+        plan_path = cfgmod.state_path(plan_file)
+
     if hasattr(cfgmod, "atomic_save_json"):
         cfgmod.atomic_save_json(plan_path, plan, indent=2)
     else:
         with open(plan_path, "w", encoding="utf-8") as f:
             json.dump(plan, f, ensure_ascii=False, indent=2)
 
+    # 兼容性镜像：如果在 dry_run 且未指定特定文件，同步更新 daily_plan.json 便于已有单测读取
+    if dry_run and plan_file is None:
+        compat_path = cfgmod.state_path("daily_plan.json")
+        try:
+            if hasattr(cfgmod, "atomic_save_json"):
+                cfgmod.atomic_save_json(compat_path, plan, indent=2)
+            else:
+                with open(compat_path, "w", encoding="utf-8") as f:
+                    json.dump(plan, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
     rank_stats = {
+        "plan_id": plan_id,
+        "created_at": created_at,
+        "dry_run": dry_run,
         "total_candidates": len(candidates),
         "after_verdict_gate": len([e for e in plan]),
         "plan_count": len(plan),
@@ -280,14 +324,25 @@ def rank_and_plan(candidates, cfg, top_n=None):
 # Phase 4: 择优投递
 # ---------------------------------------------------------------------------
 
-def execute_daily_plan(cfg, g, top_n=None, dry_run=False):
+def execute_daily_plan(cfg, g, top_n=None, dry_run=False, plan_file=None):
     """读取 daily_plan.json → execute_jobs 投递。返回 execute 结果。
-    F01: dry_run=True 时杜绝任何外部写操作与实际点击，返回动作仿真统计。"""
+    F01: dry_run=True 时杜绝任何外部写操作与实际点击，返回动作仿真统计。
+    增加仿真计划隔离保护：实弹模式下严禁混入执行标记为 dry_run 的仿真计划。"""
     if top_n is None:
         top_n = int((cfg.get("daemon") or {}).get("apply_top_n", 50))
-    plan_path = cfgmod.state_path("daily_plan.json")
+
+    if plan_file is None:
+        target_name = "daily_plan_dryrun.json" if dry_run else "daily_plan.json"
+        plan_path = cfgmod.state_path(target_name)
+        if not os.path.exists(plan_path):
+            plan_path = cfgmod.state_path("daily_plan.json")
+    elif os.path.isabs(plan_file):
+        plan_path = plan_file
+    else:
+        plan_path = cfgmod.state_path(plan_file)
+
     if not os.path.exists(plan_path):
-        return {"error": "daily_plan.json not found, run rank_and_plan first"}
+        return {"error": "plan file not found: %s, run rank_and_plan first" % os.path.basename(plan_path)}
     with open(plan_path, "r", encoding="utf-8") as f:
         plan = json.load(f)
     plan = plan[:top_n]
@@ -302,12 +357,23 @@ def execute_daily_plan(cfg, g, top_n=None, dry_run=False):
             "results": [{"title": j.get("title"), "company": j.get("company"), "dry_run": True} for j in plan],
             "guard": g.summary(),
             "dry_run": True,
+            "plan_id": (plan[0].get("plan_id") if plan else None),
             "note": "dry-run simulation mode, zero external writes executed"
+        }
+
+    # 实弹安全门禁：严禁实弹执行纯仿真生成的 dry_run 计划
+    if any(j.get("dry_run") is True for j in plan):
+        return {
+            "executed": 0,
+            "error": "SAFETY_GATE: Cannot execute simulated dry_run plan in live mode. Please generate a live plan first.",
+            "guard": g.summary(),
+            "dry_run": False
         }
 
     # 写台账：投递计划生成
     ledger.append({
         "action": "daily_plan_generated",
+        "plan_id": (plan[0].get("plan_id") if plan else None),
         "count": len(plan),
         "top3": [{"title": j.get("title"), "company": j.get("company"),
                   "score": j.get("score")} for j in plan[:3]],
@@ -359,8 +425,9 @@ def scan_and_apply_daily(cfg, dry_run=False):
     # Phase 3
     print("  [每日投递 Phase 3] LLM 综合择优打分...")
     try:
-        plan, rank_stats = rank_and_plan(candidates, cfg, top_n=top_n)
+        plan, rank_stats = rank_and_plan(candidates, cfg, top_n=top_n, dry_run=dry_run)
         report["rank"] = rank_stats
+        report["plan_id"] = rank_stats.get("plan_id")
         report["plan_count"] = len(plan)
         print(f"  [Phase 3 完成] 投递计划: {len(plan)} 个岗位 "
               f"(LLM: {'可用' if rank_stats['llm_available'] else '不可用，回退词表分'})")

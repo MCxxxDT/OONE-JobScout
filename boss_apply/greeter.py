@@ -429,8 +429,27 @@ def _do_send(sess):
     return r if isinstance(r, dict) and r.get("r") == "sent" else None
 
 
+_MSG_SNAPSHOT_JS = """
+(() => {
+  const list = document.querySelector('.chat-message .im-list, .im-list, .chat-conversation, .chat-main');
+  if (!list) return JSON.stringify({count: -1, last: ''});
+  const items = list.querySelectorAll('.item-myself, .chat-item--right, li, .message-item');
+  const cnt = items.length;
+  const last = cnt > 0 ? (items[cnt - 1].innerText || '').slice(-60) : '';
+  return JSON.stringify({count: cnt, last: last});
+})()
+"""
+
+
 def _send_verified(sess, tries=3, expect_text=""):
-    """发送并以'输入框清零'或'消息出现在聊天列表'为准验证成功；未清零多轮等待并重试发送。"""
+    """发送并多重证据比对核验：
+    1. 发送前记录当前会话消息增量快照 (count, last)；
+    2. 发送后比对输入框清零与聊天列表中是否新增我方匹配消息或消息总数增加；
+    3. 若核验超时无法确认状态，返回 ("unknown", r4, post) 挂起，杜绝盲目判定或重复轰炸。
+    """
+    snap_before = _ev(sess, _MSG_SNAPSHOT_JS) or {}
+    cnt_before = snap_before.get("count", -1)
+
     r4 = None
     post = None
     for attempt in range(tries):
@@ -438,9 +457,15 @@ def _send_verified(sess, tries=3, expect_text=""):
         for _ in range(3):
             time.sleep(1.0)
             post = _ev(sess, _probe_js())
-            if isinstance(post, dict) and post.get("inputLen") == 0:
-                return True, r4, post
-            # 双重核验：若消息流中已包含该文本片段，判定成功（应对异步清零延迟与送达即时刷新）
+            input_cleared = isinstance(post, dict) and post.get("inputLen") == 0
+
+            # 消息证据核验
+            snap_curr = _ev(sess, _MSG_SNAPSHOT_JS) or {}
+            cnt_curr = snap_curr.get("count", -1)
+            msg_increased = (cnt_before >= 0 and cnt_curr > cnt_before)
+
+            # 文本片段核验
+            text_found = False
             if expect_text and len(expect_text) >= 6:
                 clean_snippet = re.sub(r"[\s\xa0\u3000\-_·•,，.()（）\[\]【】！!？?]", "", expect_text[:16])
                 msg_check = sess.eval(r"""(() => {
@@ -449,8 +474,14 @@ def _send_verified(sess, tries=3, expect_text=""):
                     const text = (list.innerText || '').replace(/[\s\xa0\u3000\-_·•,，.()（）\[\]【】！!？?]/g, '');
                     return text.includes(%s);
                 })()""" % json.dumps(clean_snippet, ensure_ascii=False))
-                if msg_check is True or msg_check == "true":
-                    return True, r4, post
+                text_found = (msg_check is True or msg_check == "true")
+
+            if text_found or (input_cleared and (msg_increased or cnt_before == -1)):
+                return True, r4, post
+
+    # 无法核验：如果已点击发送或输入框已清空，但消息流未确凿捕获，返回 unknown 挂起状态
+    if r4 or (isinstance(post, dict) and post.get("inputLen") == 0):
+        return "unknown", r4, post
     return False, None, post
 
 
@@ -458,7 +489,7 @@ def send_message_via_chat(sess, company, text, poll_s=12):
     """消息中心按公司名点开会话并发送一条消息（回复 HR / 跟发通用）。
     以发送后输入框清零为成功标准（2026-08-31 实测：Enter 兜底可能不触发发送，
     按钮在填充后短暂 disabled，必须清零验证，否则不算发出）。
-    返回 {conv, filled_len, send_via, post}；失败抛异常。"""
+    返回 {status, conv, filled_len, send_via, post}；失败抛异常。"""
     info, head = _open_conversation_input(sess, (company or "").strip(), poll_s)
     if not info:
         raise RuntimeError("conversation/input not found for %r (head=%r)" % (company, head))
@@ -466,14 +497,17 @@ def send_message_via_chat(sess, company, text, poll_s=12):
     if not (isinstance(r3, dict) and r3.get("r") == "filled"):
         raise RuntimeError("fill failed: %r" % (r3,))
     ok, r4, post = _send_verified(sess, expect_text=text)
-    if not ok:
+    if ok is True:
+        return {"status": "ok", "conv": head, "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
+    elif ok == "unknown":
+        return {"status": "unknown", "conv": head, "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post, "note": "message send unverified"}
+    else:
         raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
-    return {"conv": head, "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
 
 
 def send_message_in_current_conv(sess, text):
     """在当前已处于激活状态的会话输入框中直接填充并发送短文本（零二次页面跳转与会话重选）。
-    以发送后输入框清零为准验证成功；返回 {filled_len, send_via, post}；失败抛异常。"""
+    以发送后输入框清零为准验证成功；返回 {status, filled_len, send_via, post}；失败抛异常。"""
     info = _ev(sess, _probe_js())
     if not (isinstance(info, dict) and info.get("inputTag")):
         raise RuntimeError("input not ready in current conversation")
@@ -481,7 +515,11 @@ def send_message_in_current_conv(sess, text):
     if not (isinstance(r3, dict) and r3.get("r") == "filled"):
         raise RuntimeError("fill failed: %r" % (r3,))
     ok, r4, post = _send_verified(sess, expect_text=text)
-    if not ok:
+    if ok is True:
+        return {"status": "ok", "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
+    elif ok == "unknown":
+        return {"status": "unknown", "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post, "note": "message send unverified"}
+    else:
         raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
     return {"filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post}
 
@@ -851,10 +889,14 @@ def send_greeting_raw(sess, job, cfg):
     if not (isinstance(r3, dict) and r3.get("r") == "filled"):
         raise RuntimeError("fill greeting failed: %r" % (r3,))
     ok, r4, post = _send_verified(sess, expect_text=text)
+    if ok == "unknown":
+        return {"status": "unknown", "clicked": r1.get("cls"), "chat_href": info.get("href") if info else None, "conv": conv_head,
+                "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post, "greeting": text,
+                "note": "greeting send unverified"}
     if not ok:
         raise RuntimeError("send not verified (inputLen>0): post=%r" % (post,))
 
-    return {"clicked": r1.get("cls"), "chat_href": info.get("href") if info else None, "conv": conv_head,
+    return {"status": "ok", "clicked": r1.get("cls"), "chat_href": info.get("href") if info else None, "conv": conv_head,
             "filled_len": r3.get("len"), "send_via": (r4 or {}).get("via"), "post": post, "greeting": text}
 
 

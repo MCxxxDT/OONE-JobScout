@@ -1738,18 +1738,28 @@ _jd_neg = "日常实习生岗位，纯日常实习，不提供转正，暂无转
 _sp_neg = _ISE.extract_specs(jd_text=_jd_neg, tags="日常实习", title="产品实习生")
 check("明确不转正排斥准确", _sp_neg["has_conversion_chance"] is False and _sp_neg["conversion_prob"] == 0.0)
 
-# 34.3 差异化打招呼 DifferentiatedGreeter
+# 34.3 差异化打招呼 DifferentiatedGreeter（事实真实性与自定义画像能力校验）
 _job_in = {"title": "AI产品经理实习生", "city": "杭州", "tags": "Agent,FastMCP", "campus_specs": _sp1}
 _txt_in = _DG.generate_greeting(_job_in, job_mode="intern")
-check("实习模式强调零课业与满勤", ("零课业负担" in _txt_in or "课业已全部修完零负担" in _txt_in) and "每周5天满勤" in _txt_in)
-check("实习模式强调稳定6个月与FastMCP即战力", "6个月" in _txt_in and "FastMCP" in _txt_in)
+# 空画像去虚构化：杜绝捏造 2027/200人/10万GMV/每周5天满勤等未经确认经历
+check("实习模式空画像安全真实不含虚构履历", not any(k in _txt_in for k in ["2027", "200人", "10万", "GMV", "每周5天满勤"]))
+check("实习模式开场白礼貌专业且含岗位意向", "AI产品经理实习生" in _txt_in)
+
+# 自定义画像注入校验：用户提供真实背景时准确动态组装
+_prof_custom = {
+    "grade_desc": "2027届应届生",
+    "availability": "每周5天满勤，可连续实习6个月",
+    "tech_highlights": "FastMCP与微内核智能体架构",
+    "business_highlights": "带领200人团队达成10万+GMV战果"
+}
+_txt_in_custom = _DG.generate_greeting(_job_in, job_mode="intern", profile=_prof_custom)
+check("实习模式自定义画像强调可出勤与FastMCP", "每周5天满勤" in _txt_in_custom and "FastMCP" in _txt_in_custom)
 
 _job_cp = {"title": "AI商业化产品经理", "city": "上海", "tags": "校招,商业化", "campus_specs": _sp1}
-_txt_cp = _DG.generate_greeting(_job_cp, job_mode="campus")
-check("校招模式强调2027届应届生", "2027届" in _txt_cp)
-check("校招模式强调200人团队10万+GMV战果", "200人" in _txt_cp and "10万+GMV" in _txt_cp)
-check("校招模式强调微内核智能体架构", "微内核智能体架构" in _txt_cp)
-check("差异化招呼无联系方式泄露", not _gr.privacy_blocked(_txt_in) and not _gr.privacy_blocked(_txt_cp))
+_txt_cp_custom = _DG.generate_greeting(_job_cp, job_mode="campus", profile=_prof_custom)
+check("校招模式自定义画像强调应届生届别", "2027届" in _txt_cp_custom)
+check("校招模式自定义画像强调战果与架构", "10万+GMV" in _txt_cp_custom and "微内核智能体架构" in _txt_cp_custom)
+check("差异化招呼无联系方式泄露", not _gr.privacy_blocked(_txt_in) and not _gr.privacy_blocked(_txt_cp_custom))
 
 # 34.4 scorer 动态调优加分与活跃度严格否决
 _j_bon = {"title": "AI产品经理实习生", "company": "某科技", "salary": "200-300元/天", "tags": "4天/周,可转正", "boss_active": 0}
@@ -1946,6 +1956,121 @@ check("F06: boss_apply.web_server 模块成功导入", hasattr(_bws, "app") and 
 from boss_apply import secrets as secrets_mod
 _non_win_key = secrets_mod._get_non_win_key()
 check("F06: 非 Windows 密钥派生生成 32 字节设备级私钥", len(_non_win_key) == 32 and isinstance(_non_win_key, bytes))
+
+print("== 37. 第二轮优化实施方案全量闭环验证 (Round 2 Full Verification) ==")
+# 37.1 [P0] Guard 排他文件锁超时拦截与死锁根治
+_tmp_lock_guard_path = os.path.join(DRY, "guard_lock_test.json")
+_g_lock1 = guard.Guard({**cfg, "daily_limit": 1, "cities": [{"name": "杭州", "quota": 1}]})
+_g_lock1.path = _tmp_lock_guard_path
+_g_lock1.lock_path = _tmp_lock_guard_path + ".lock"
+_g_lock1.s = dict(guard._DEFAULT)
+_g_lock1.save()
+
+# 测试 1: 持有锁时跨日重载 (in_lock=True) 不死锁且正常执行
+with guard._guard_file_lock(_g_lock1.lock_path, timeout_s=1.0):
+    _g_lock1.reload(in_lock=True)
+check("Guard 在锁内 reload 不发生死锁且正常执行", True)
+
+# 测试 2: 锁被占用时超时坚决抛出 TimeoutError，绝不裸奔进入临界区
+_timeout_raised = False
+with guard._guard_file_lock(_g_lock1.lock_path, timeout_s=1.0):
+    try:
+        with guard._guard_file_lock(_g_lock1.lock_path, timeout_s=0.1):
+            pass
+    except TimeoutError:
+        _timeout_raised = True
+check("Guard 文件锁超时坚决抛出 TimeoutError", _timeout_raised is True)
+
+# 测试 3: 原子预占与安全回滚
+_slot_ok, _ = _g_lock1.acquire_greet_slot("杭州")
+check("Guard 原子预占成功消耗配额", _slot_ok is True and _g_lock1.s["city_counts"].get("杭州") == 1)
+_g_lock1.release_greet_slot("杭州")
+check("Guard 原子回滚配额恢复可用", _g_lock1.s["city_counts"].get("杭州") == 0)
+
+# 37.2 [P0] 统一权限下沉与阻断
+from boss_apply import flows as _fl37
+p_spell, r_spell = _fl37.check_privacy_permission("exchange_wechat", {"privacy_policy": {"exchange_wechat": "manul"}})
+check("check_privacy_permission 拦截拼写错误 manul", p_spell is False and "未知或非法" in r_spell)
+
+p_force_dis, r_force_dis = _fl37.check_privacy_permission("exchange_wechat", {"privacy_policy": {"exchange_wechat": "disabled"}}, force=True)
+check("disabled 模式严禁任何人工审批绕过", p_force_dis is False and "禁用" in r_force_dis)
+
+# 37.3 [P1] 密钥平滑向后兼容与版本自升级
+from boss_apply import secrets as _sec37
+check("secrets 当前主版本为 v2", _sec37.CURRENT_VERSION == 2)
+_test_sec_name = "test_round2_secret"
+_sec_plain = "sk-round2-test-api-key-999"
+_sec37.set_secret(_test_sec_name, _sec_plain)
+_all_secs = _sec37._load_all()
+check("set_secret 默认写入 ver=2", _all_secs.get(_test_sec_name, {}).get("ver") == 2)
+
+# 剥离 ver 字段模拟历史老密文
+_all_secs[_test_sec_name].pop("ver", None)
+_sec37._save_all(_all_secs)
+check("模拟历史无 ver 密文保存成功", "ver" not in _sec37._load_all().get(_test_sec_name, {}))
+
+# 读取时平滑兼容并自升级为 v2
+_read_plain = _sec37.get_secret(_test_sec_name)
+check("读取历史无 ver 密文成功解出明文", _read_plain == _sec_plain)
+_upgraded_entry = _sec37._load_all().get(_test_sec_name, {})
+check("读取历史密文后自动平滑升级为 ver=2", _upgraded_entry.get("ver") == 2)
+_sec37.set_secret(_test_sec_name, "")  # 清理
+
+# 无效密文安全兜底
+_all_secs = _sec37._load_all()
+_all_secs["corrupt_key"] = {"v": "invalid_base64_???", "ver": 1}
+_sec37._save_all(_all_secs)
+check("损坏或非本机密文安全返回 None 不崩溃", _sec37.get_secret("corrupt_key") is None)
+_sec37.set_secret("corrupt_key", "")
+
+# 37.4 [P1] 发送核验 unknown 挂起与状态隔离
+from boss_apply import greeter as _gr37
+class _FakeUncertainSess:
+    def eval(self, js):
+        return None
+_orig_do_send = _gr37._do_send
+try:
+    _gr37._do_send = lambda s: {"r": "sent", "via": "btn"}
+    _old_ev = _gr37._ev
+    _gr37._ev = lambda s, js: {"inputLen": 10, "inputTag": "textarea"} if "probe" in str(js) or "pick" in str(js) else {"count": 1}
+    _uk_ok, _, _ = _gr37._send_verified(_FakeUncertainSess(), tries=1, expect_text="这是一个无法核验状态的消息文本")
+    check("_send_verified 在超时未核验时返回 unknown", _uk_ok == "unknown")
+finally:
+    _gr37._do_send = _orig_do_send
+    _gr37._ev = _old_ev
+
+# 37.5 [P2] 资格判断与偏好评分解耦
+from boss_apply import scorer as _sc37
+_job_inelig = {"title": "AI产品经理实习生", "company": "外包黑名单", "salary": "200-300元/天"}
+_cfg_test_inelig = {**cfg, "blacklist_companies": ["外包黑名单"]}
+_is_el, _inelig_why = _sc37.check_eligibility(_job_inelig, "", _cfg_test_inelig)
+check("check_eligibility 识别黑名单公司不合格", _is_el is False and "blacklist" in _inelig_why)
+
+_job_zero_kw = {"title": "普通实习岗位", "company": "正常企业", "salary": "150-200元/天"}
+_is_el2, _ = _sc37.check_eligibility(_job_zero_kw, "", cfg)
+_zero_s, _zero_why = _sc37.calculate_matching_score(_job_zero_kw, "", cfg)
+check("check_eligibility 放行符合资格的零关键词岗位", _is_el2 is True)
+check("calculate_matching_score 零关键词返回 0 分且保留标志", _zero_s >= 0.0)
+
+# 37.6 [P2] 投递计划绑定 plan_id 与 dry_run 隔离
+from boss_apply import daily_apply as _da37
+_sample_cand = [{
+    "job": {"title": "AI产品经理实习生", "company": "合规企业A", "salary": "200-300元/天", "href": "/job/1"},
+    "detail": "合规JD全文",
+    "city": "杭州",
+    "kw": "AI产品",
+    "base_score": 10.0,
+    "base_reason": "+10 match",
+    "is_eligible": True,
+}]
+_plan_dry, _stats_dry = _da37.rank_and_plan(_sample_cand, cfg, top_n=5, dry_run=True)
+check("rank_and_plan 生成 plan_id (UUID)", bool(_stats_dry.get("plan_id")) and len(_stats_dry["plan_id"]) > 20)
+check("rank_and_plan 包含 created_at 时间戳", bool(_stats_dry.get("created_at")))
+check("rank_and_plan dry_run=True 计划条目打上仿真标记", _plan_dry[0].get("dry_run") is True)
+
+# 实弹安全门禁：实弹 execute_daily_plan 拒绝执行 dry_run 标记的计划
+_exec_block = _da37.execute_daily_plan(cfg, g, top_n=5, dry_run=False)
+check("execute_daily_plan 实弹模式安全拒绝执行 dry_run 仿真计划", _exec_block.get("executed") == 0 and "SAFETY_GATE" in _exec_block.get("error", ""))
 
 shutil.rmtree(DRY, ignore_errors=True)
 

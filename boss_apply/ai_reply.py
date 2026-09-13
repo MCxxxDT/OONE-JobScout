@@ -654,24 +654,35 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
                 headers["Authorization"] = f"Bearer {engine.openai_key}"
                 model = engine.llm_model
 
-            cur_city = prof.get("current_city", "福州")
-            target_city = city or prof.get("target_region", "江浙沪")
+            cur_city = prof.get("current_city") or "当地"
+            target_city = city or prof.get("target_region") or "期望城市"
             cand_name = prof.get("name") or "求职者"
+            grade_desc = prof.get("grade_desc") or "求职者"
+            school_info = f"{prof.get('school', '')} {prof.get('major', '')}".strip()
+            hl_info = f"{prof.get('tech_highlights', '')}；{prof.get('business_highlights', '')}".strip("； ")
+            bg_parts = []
+            if school_info:
+                bg_parts.append(f"学历专业：{school_info}")
+            if grade_desc and grade_desc != "求职者":
+                bg_parts.append(f"届别状态：{grade_desc}")
+            if hl_info:
+                bg_parts.append(f"真实亮点：{hl_info}")
+            bg_desc = "\n".join(bg_parts) if bg_parts else "(求职者未配置具体履历亮点，沟通中请就岗位要求就事论事，严禁虚构任何履历或业绩数据)"
+
             prompt = (
-                f"【候选人背景】：{prof.get('school', '')} {prof.get('major', '')}，{prof.get('grade_desc', '应届生')}。\n"
-                f"核心亮点：{prof.get('tech_highlights', '')}；{prof.get('business_highlights', '')}。\n"
-                f"你是一名真实求职者（姓名：{cand_name}），常驻{cur_city}，强烈意向奔赴{target_city}全职到岗实习。\n\n"
+                f"【候选人真实背景（严禁虚构捏造）】：\n{bg_desc}\n"
+                f"你是一名真实求职者（称呼：{cand_name}），积极寻找合适的发展机会。\n\n"
                 f"【应聘岗位信息】：\n"
                 f"- 公司：{company}\n"
                 f"- 岗位：{title}\n"
                 f"- 城市：{city}\n"
                 f"- 职位详细描述与要求（JD全文）：\n{jd_text[:1500] if jd_text else '(未抓取到详细JD，请紧密围绕岗位名称核心职责展开)'}\n\n"
-                f"【任务】：请你作为{cand_name}本人，深入研读上述岗位的具体工作职责与任职要求（JD），写一句向招聘方打招呼的第一声开场白（看岗位下菜碟，拒绝千篇一律）。\n"
+                f"【任务】：请你作为{cand_name}本人，写一句向招聘方打招呼的第一声开场白（真诚自然，拒绝八股）。\n"
                 f"要求：\n"
-                f"1. 务必深度结合该岗位具体的职位要求/工作职责（JD），提炼其最关键的1-2个业务场景或技术要点，并精准对齐候选人最匹配的实操经历（如FastMCP与智能体生产流全栈落地、高校社交系统全栈交付、或操盘200人团队破10万GMV商业闭环）；\n"
-                f"2. 口吻真诚干练、从容自信、不卑不亢，展示能够即插即用的实干战斗力，绝无学生气或机器人客服感；\n"
-                f"3. 严禁出现“从...来看”、“祝好”、“非常荣幸”、“期待沟通”等客服八股废话；严禁Markdown标记（如**）；\n"
-                f"4. 严格控制在 40-75 字之间，单段纯文本，标点完整，句子自然收尾；\n"
+                f"1. 务必结合该岗位具体的职位要求，展示对岗位的诚意与契合度；严禁捏造未在【候选人真实背景】中明确列明的任何学校、公司、团队规模或营业额（GMV）等具体数据；未提及的事实绝不无中生有；\n"
+                f"2. 口吻真诚干练、从容自信、不卑不亢，绝无客服机器人感；\n"
+                f"3. 严禁Markdown标记（如**）；严禁空洞八股套话；\n"
+                f"4. 严格控制在 30-65 字之间，单段纯文本，标点完整；\n"
                 f"直接输出开场白正文，不要有任何解释说明、前后缀或引号。"
             )
 
@@ -699,30 +710,36 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
 
     # 2. 离线多模态智能语义合成（无大模型时的保底，结合岗位关键词看岗位下菜碟）
     full_target = f"{title} {jd_text}".lower()
-    t_city = city or "江浙沪"
+    city_str = f"在{city}的" if city else ""
+    tech_hl = prof.get("tech_highlights") or ""
+    biz_hl = prof.get("business_highlights") or ""
 
     if any(k in full_target for k in ("agent", "智能体", "workflow", "mcp", "fastmcp", "coze", "llm", "大模型", "prompt")):
-        options = [
-            f"您好！看到贵司的{title}岗位，我在AI Agent架构、FastMCP协议与智能体工作流上有全栈落地经验，随时可全职到岗在{t_city}实习，期待与您深入沟通！",
-            f"您好！关注到贵司正在寻找{title}伙伴，我有大模型Agent落地实战经历与工程交付能力，目前意向奔赴{t_city}发展，已附简历，期待您的交流！",
-            f"您好！看到贵司的{title}机会，我的方向专注于大模型应用与智能体系统搭建，契合度很高。随时可全职在{t_city}到岗，期待能有深入沟通机会！",
-        ]
+        if tech_hl:
+            options = [
+                f"您好！看到贵司招聘{city_str}{title}岗位，我在{tech_hl}上有实操经验，已附简历，期待与您深入沟通！",
+                f"您好！关注到贵司的{title}机会，我的方向专注于大模型应用与智能体系统，契合度高，期待能与您进一步交流！",
+            ]
+        else:
+            options = [
+                f"您好！看到贵司正在招聘{city_str}{title}岗位，我对大模型与智能体方向非常感兴趣，已附上简历，期待交流！",
+                f"您好！关注到贵司发布的{title}机会与我的求职意向高度契合，已投递简历，希望能与您进一步探讨，谢谢！",
+            ]
     elif any(k in full_target for k in ("商业", "运营", "增长", "渠道", "gmv", "私域", "销售", "电商")):
-        options = [
-            f"您好！看到贵司的{title}岗位，我曾全职操盘过200+人校园团队与单月十万级GMV商业化闭环，业务即战力强。意向奔赴{t_city}全职发展，期待与您交流！",
-            f"您好！关注到贵司这个{title}机会，我在商业化变现与多渠道团队运营上有扎实操盘战果。随时可前往{t_city}全职到岗，期待与贵团队深入探讨！",
-            f"您好！看到贵司招聘{title}，我的实战经验涵盖商业化转化与规模化业务运营，契合岗位要求。期待能与您就业务方向进一步沟通！",
-        ]
-    elif any(k in full_target for k in ("产品", "交互", "需求", "原型", "设计")):
-        options = [
-            f"您好！看到贵司的{title}岗位，我有数字媒体技术背景与多款全栈系统端到端交付经验，兼具产品设计与落地能力，随时可到{t_city}全职实习，期待交流！",
-            f"您好！关注到贵司这个{title}机会，我在产品规划与敏捷交付上有深度实操，目前意向奔赴{t_city}全职到岗，已附上个人简历，期待与您沟通！",
-            f"您好！看到贵司招聘{title}，我的专业技能与实操项目与岗位契合度高，随时可奔赴现场全职投入，期待能与您深入聊聊！",
-        ]
+        if biz_hl:
+            options = [
+                f"您好！看到贵司的{title}岗位，我具备{biz_hl}，业务即战力强，已附简历，期待与您探讨！",
+                f"您好！关注到贵司的{title}机会，我对业务变现与运营落地有浓厚兴趣与实操，希望能与贵团队深入交流！",
+            ]
+        else:
+            options = [
+                f"您好！看到贵司招聘{city_str}{title}，我对该业务方向非常感兴趣，契合岗位要求，期待能与您进一步沟通！",
+                f"您好！关注到贵司这个{title}机会，已附上个人简历，希望能与贵团队深入探讨业务落地，谢谢！",
+            ]
     else:
         options = [
-            f"您好！看到贵司的{title}岗位非常符合我的预期，我有扎实的技术落地与业务实战经验，意向奔赴{t_city}全职到岗，已投递简历，期待与您沟通！",
-            f"您好！关注到贵司这个{title}机会，我的背景与岗位方向高度契合，具备较强的学习与即战力，随时可到岗，期待能与贵司进一步交流！",
+            f"您好！看到贵司正在招聘{city_str}{title}岗位，非常符合我的预期与发展方向，已投递简历，期待与您深入沟通！",
+            f"您好！关注到贵司发布的{title}机会，我的背景与岗位方向契合度高，具备较强学习与实操能力，期待能与您进一步交流！",
         ]
 
     chosen = random.choice(options)

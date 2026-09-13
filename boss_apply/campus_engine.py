@@ -246,7 +246,9 @@ class InternSpecExtractor:
 
 
 class DifferentiatedGreeter:
-    """差异化打招呼生成器：针对实习与校招模式定制高转化沟通话术。"""
+    """差异化打招呼生成器：针对实习与校招模式定制高转化沟通话术。
+    严格遵循事实真实性底线，绝无硬编码虚构经历。
+    """
 
     @classmethod
     def generate_greeting(
@@ -255,86 +257,58 @@ class DifferentiatedGreeter:
         job_mode: Optional[str] = None,
         specs: Optional[Dict[str, Any]] = None,
         cfg: Optional[Dict[str, Any]] = None,
+        profile: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """根据 job_mode（'intern' 或 'campus'）生成差异化打招呼话术。
-        - intern 实习模式：强调零课业负担、每周5天满勤、稳定6个月长期投入、FastMCP/Trae 工具链落地即战力；
-        - campus 校招模式：强调2027届统招应届身份、200人团队月销10万+ GMV商业操盘战果、微内核智能体架构交付能力；
+        """根据 job_mode（'intern' 或 'campus'）及候选人真实画像生成差异化打招呼话术。
+        空画像或未确认关键事实时，一律回退至中性安全真实文案。
         """
         cfg = cfg or {}
         mode = job_mode or job.get("job_mode") or cfg.get("job_mode") or "intern"
         title = (job.get("title") or "该岗位").strip()
-        city = (job.get("city") or "江浙沪").strip()
+        city = (job.get("city") or "").strip()
 
-        # 实习/校招规格
-        if specs is None:
-            specs = job.get("campus_specs") or InternSpecExtractor.extract_specs(
-                jd_text=job.get("detail") or job.get("jd_text") or "",
-                tags=job.get("tags") or "",
-                title=title
-            )
+        # 加载真实画像（若外部未显式传入）
+        prof = profile
+        if prof is None:
+            try:
+                from . import profile_store
+                prof = profile_store.load()
+            except Exception:
+                prof = {}
+        prof = prof or {}
 
-        # 针对具体模式组织差异化话术
+        # 检查画像是否具备确认的事实字段
+        has_facts = any(bool(prof.get(k)) for k in ("grade_desc", "grad_year", "school", "major", "tech_highlights", "business_highlights", "availability"))
+
+        # 空画像或缺乏事实支撑时：直接返回专业、中性、安全真实的开场白
+        city_phrase = f"在{city}的" if city else ""
+        if not has_facts:
+            return f"您好！看到贵司正在招聘{city_phrase}{title}岗位，我对该方向非常感兴趣，已附上个人简历，希望能与您进一步沟通了解具体要求，谢谢！"
+
+        # 有画像时，基于实际已配置的事实组装
+        grade_desc = prof.get("grade_desc") or (f"{prof['grad_year']}届应届生" if prof.get("grad_year") else "")
+        grade_part = f"我是{grade_desc}，" if grade_desc else ""
+        
+        tech_hl = prof.get("tech_highlights") or ""
+        biz_hl = prof.get("business_highlights") or ""
+        avail = prof.get("availability") or ""
+        target_city = city or prof.get("target_region") or ""
+        city_target_part = f"意向在{target_city}全职发展，" if target_city else ""
+
         if mode == "intern":
-            # 实习模式：突出零课业负担、每周 5 天满勤、稳定 6 个月长期投入、FastMCP/Trae 工具链即战力
-            t_lower = (title + " " + str(job.get("tags") or "")).lower()
-            if any(k in t_lower for k in ("agent", "智能体", "mcp", "fastmcp", "llm", "大模型", "prompt")):
-                text = (
-                    f"您好！看到贵司招聘{title}，我目前课业已全部修完零负担，"
-                    f"可每周5天满勤、稳定连续实习6个月以上。熟练掌握FastMCP与Trae智能体工具链，"
-                    f"具备工程落地即战力，意向全职在{city}到岗，期待深入交流！"
-                )
-            elif any(k in t_lower for k in ("商业", "运营", "增长", "gmv", "销售", "电商")):
-                text = (
-                    f"您好！关注到贵司的{title}岗位，我课业已修完零负担，"
-                    f"能每周5天满勤、稳定连续实习6个月以上。我有200人团队规模化运营与单月10万+GMV操盘经验，"
-                    f"且熟练掌握FastMCP与Trae智能体工具链，随时奔赴{city}全职投入，期待交流！"
-                )
-            else:
-                text = (
-                    f"您好！看到贵司的{title}实习机会，我目前零课业负担，"
-                    f"可每周5天满勤、稳定连续实习6个月以上。熟练运用FastMCP与Trae智能体工具链，"
-                    f"具备业务即战力，意向在{city}全职发展，已附简历期待沟通！"
-                )
-
+            avail_part = f"{avail}，" if avail else ""
+            hl_part = f"具备{tech_hl}实践经验，" if tech_hl else (f"具备{biz_hl}，" if biz_hl else "")
+            text = f"您好！看到贵司招聘{title}，{grade_part}{avail_part}{hl_part}{city_target_part}已附个人简历，期待深入交流！"
         elif mode == "campus":
-            # 校招模式：突出 2027 届统招应届身份、200 人团队月销 10 万+ GMV 商业操盘战果、微内核智能体架构交付能力
-            t_lower = (title + " " + str(job.get("tags") or "")).lower()
-            if any(k in t_lower for k in ("商业", "运营", "增长", "gmv", "私域")):
-                text = (
-                    f"您好！看到贵司{title}校招机会，我是2027届统招应届生。"
-                    f"曾主导操盘200人校园团队创下月销10万+GMV商业化战果，具备微内核智能体架构交付能力，"
-                    f"商业与技术综合战斗力扎实，诚意奔赴{city}全职发展，期待交流！"
-                )
-            elif any(k in t_lower for k in ("agent", "智能体", "技术", "架构", "mcp")):
-                text = (
-                    f"您好！关注到贵司{title}校招机会，我是2027届统招应届生。"
-                    f"拥有微内核智能体架构全栈交付能力，同时操盘过200人团队达成单月10万+GMV战果，"
-                    f"兼具工程自研与商业闭环即战力，期待与贵团队深入探讨！"
-                )
-            else:
-                text = (
-                    f"您好！看到贵司{title}校招机会，我是2027届统招应届生。"
-                    f"兼具微内核智能体架构交付能力与200人团队月销10万+GMV商业操盘战果，"
-                    f"具备高度自驱与业务破局战斗力，诚意应聘并在{city}全职投入，期待沟通！"
-                )
+            hl_part = f"拥有{tech_hl}交付能力并具备{biz_hl}，" if (tech_hl and biz_hl) else (f"拥有{tech_hl}交付能力，" if tech_hl else (f"具备{biz_hl}，" if biz_hl else ""))
+            text = f"您好！看到贵司{title}校招机会，{grade_part}{hl_part}{city_target_part}诚意应聘，期待深入探讨！"
         else:
-            # mix 混合模式：自适应
-            if specs.get("has_conversion_chance"):
-                text = (
-                    f"您好！关注到贵司{title}岗位，我是2027届统招应届生，课业已全部修完零负担，"
-                    f"可每周5天满勤、稳定投入6个月冲刺转正。掌握微内核智能体架构与FastMCP工具链，"
-                    f"曾创下200人团队单月10万+GMV操盘战果，期待深入沟通！"
-                )
-            else:
-                text = (
-                    f"您好！看到贵司的{title}岗位，我课业修完零负担，"
-                    f"可每周5天满勤、稳定连续实习6个月以上。在FastMCP与Trae工具链及智能体架构有扎实落地经验，"
-                    f"意向奔赴{city}全职发展，已附简历期待交流！"
-                )
+            hl_part = f"具备{tech_hl}与{biz_hl}能力，" if (tech_hl and biz_hl) else (f"具备{tech_hl or biz_hl}，" if (tech_hl or biz_hl) else "")
+            text = f"您好！关注到贵司{title}岗位，{grade_part}{hl_part}{city_target_part}已附简历期待交流！"
 
         # 检查隐私安全，若有泄露则保底清理
         from .greeter import privacy_blocked
         if privacy_blocked(text):
-            text = f"您好！看到贵司的{title}机会与我的背景高度契合，已投递个人简历，期待与您深入沟通，谢谢！"
+            text = f"您好！看到贵司招聘{title}，已投递个人简历，期待能与您深入沟通了解具体要求，谢谢！"
 
         return text

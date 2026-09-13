@@ -10,6 +10,7 @@ import datetime
 import errno
 import json
 import os
+import sys
 import time
 
 from . import config as cfgmod
@@ -31,39 +32,57 @@ def _today():
 
 
 @contextlib.contextmanager
-def _guard_file_lock(lock_path, timeout=5.0):
-    """跨平台原子文件排他锁，杜绝跨进程快照覆盖与并发超额投递。"""
+def _guard_file_lock(lock_path, timeout=5.0, timeout_s=None):
+    """跨平台操作系统级排他文件锁，确保多实例/多进程并发读写无竞争。
+    抢锁超时坚决抛出 TimeoutError，绝不裸奔放行。
+    """
+    if timeout_s is not None:
+        timeout = timeout_s
     start_time = time.time()
-    fd = None
-    while True:
-        try:
-            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
-            break
-        except OSError as e:
-            if e.errno in (errno.EEXIST, 17):
-                # 检查陈旧孤儿锁（超过 10 秒自动清理）
-                try:
-                    if time.time() - os.path.getmtime(lock_path) > 10.0:
-                        os.remove(lock_path)
-                except OSError:
-                    pass
-                if time.time() - start_time > timeout:
-                    break
-                time.sleep(0.02)
-            else:
-                raise
+    lock_dir = os.path.dirname(lock_path)
+    if lock_dir:
+        os.makedirs(lock_dir, exist_ok=True)
+    f = open(lock_path, "a+b")
     try:
+        if f.tell() == 0:
+            f.write(b"0")
+            f.flush()
+    except Exception:
+        pass
+    locked = False
+    try:
+        while True:
+            try:
+                if sys.platform == "win32":
+                    import msvcrt
+                    f.seek(0)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked = True
+                break
+            except (IOError, OSError):
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(f"获取 Guard 文件锁超时 ({timeout}s): {lock_path}")
+                time.sleep(0.02)
         yield
     finally:
-        if fd is not None:
+        if locked:
             try:
-                os.close(fd)
-            except OSError:
+                if sys.platform == "win32":
+                    import msvcrt
+                    f.seek(0)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            except Exception:
                 pass
-            try:
-                os.remove(lock_path)
-            except OSError:
-                pass
+        try:
+            f.close()
+        except Exception:
+            pass
 
 
 class Guard:
@@ -74,7 +93,7 @@ class Guard:
         self.s = dict(_DEFAULT)
         self.reload()
 
-    def reload(self):
+    def reload(self, in_lock=False):
         """从磁盘重载最新状态，保证多实例快照实时一致。"""
         if os.path.exists(self.path):
             try:
@@ -84,17 +103,20 @@ class Guard:
                         self.s.update(disk_data)
             except Exception:
                 pass
-        self._rollover()
+        self._rollover(in_lock=in_lock)
 
-    def _rollover(self):
-        if self.s["date"] != _today():
+    def _rollover(self, in_lock=False):
+        if self.s.get("date") != _today():
             self.s["date"] = _today()
             self.s["greet_count"] = 0
             self.s["search_count"] = 0
             self.s["city_counts"] = {}
             self.s["paused_reason"] = None
             self.s["scan_done_today"] = False
-            self.save()
+            if in_lock:
+                self._save_unlocked()
+            else:
+                self.save()
 
     def _save_unlocked(self):
         """原子写入状态文件（临时文件替换），防止写一半崩溃。"""
@@ -114,13 +136,13 @@ class Guard:
     # ---------- 风控熔断 ----------
     def pause(self, reason):
         with _guard_file_lock(self.lock_path):
-            self.reload()
+            self.reload(in_lock=True)
             self.s["paused_reason"] = reason
             self._save_unlocked()
 
     def resume(self):
         with _guard_file_lock(self.lock_path):
-            self.reload()
+            self.reload(in_lock=True)
             self.s["paused_reason"] = None
             self._save_unlocked()
 
@@ -141,7 +163,7 @@ class Guard:
 
     def record_search(self):
         with _guard_file_lock(self.lock_path):
-            self.reload()
+            self.reload(in_lock=True)
             self.s["search_count"] += 1
             self.s["last_search_ts"] = time.time()
             self._save_unlocked()
@@ -168,7 +190,7 @@ class Guard:
     def record_greet(self, city):
         """记录打招呼并持久化（带文件锁原子更新）。"""
         with _guard_file_lock(self.lock_path):
-            self.reload()
+            self.reload(in_lock=True)
             clean = (city or "").strip().rstrip("市")
             self.s["greet_count"] += 1
             self.s["city_counts"][clean] = self.s["city_counts"].get(clean, 0) + 1
@@ -179,7 +201,7 @@ class Guard:
         """原子预占沟通配额：在文件锁保护下，重载最新状态、执行门禁校验并直接原子递增。
         返回 (ok, info_or_wait)。彻底解决并发竞争与超额风险。"""
         with _guard_file_lock(self.lock_path):
-            self.reload()
+            self.reload(in_lock=True)
             ok, res = self._check_greet_internal(city)
             if not ok:
                 return False, res
@@ -189,6 +211,16 @@ class Guard:
             self.s["last_greet_ts"] = time.time()
             self._save_unlocked()
             return True, res
+
+    def release_greet_slot(self, city=None):
+        """释放已预占但确定未实际发送的沟通配额（安全回滚）。"""
+        with _guard_file_lock(self.lock_path):
+            self.reload(in_lock=True)
+            clean = (city or "").strip().rstrip("市")
+            self.s["greet_count"] = max(0, self.s.get("greet_count", 1) - 1)
+            if clean and clean in self.s.get("city_counts", {}):
+                self.s["city_counts"][clean] = max(0, self.s["city_counts"][clean] - 1)
+            self._save_unlocked()
 
     def city_left(self, city):
         clean = (city or "").strip().rstrip("市")
@@ -225,6 +257,6 @@ class Guard:
 
     def mark_scan_done(self):
         with _guard_file_lock(self.lock_path):
-            self.reload()
+            self.reload(in_lock=True)
             self.s["scan_done_today"] = True
             self._save_unlocked()

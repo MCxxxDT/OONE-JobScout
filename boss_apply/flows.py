@@ -9,6 +9,7 @@ import json
 import os
 import re
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
 from . import browser, citycodes, config as cfgmod, guard, greeter, ledger, llm_match, rawcdp, scorer
 
@@ -398,8 +399,14 @@ def chat_reply(cfg, company, text, force=False):
     try:
         sess.open_tab()
         r = greeter.send_message_via_chat(sess, company, text)
+        r_status = (r or {}).get("status", "ok")
+        if r_status == "unknown":
+            ledger.append({"action": "reply", "status": "unknown", "company": company,
+                           "text_head": (text or "")[:120], "conv": (r or {}).get("conv"),
+                           "note": "发送结果无法核验，已挂起等待下轮确认"})
+            return {"ok": False, "status": "unknown", "company": company, "result": r}
         ledger.append({"action": "reply", "status": "ok", "company": company,
-                       "text_head": (text or "")[:120], "conv": r.get("conv")})
+                       "text_head": (text or "")[:120], "conv": (r or {}).get("conv")})
         return {"ok": True, "company": company, "result": r}
     except Exception as e:
         ledger.append({"action": "reply", "status": "failed", "company": company,
@@ -410,15 +417,67 @@ def chat_reply(cfg, company, text, force=False):
         sess.close()
 
 
-def chat_exchange_wechat(cfg, company, reply_text="", force=False):
+def check_privacy_permission(action: str, cfg: dict, hi_flag: bool = False, force: bool = False) -> Tuple[bool, str]:
+    """核查动作是否允许根据 privacy_policy 执行。
+    策略模式:
+      - disabled: 该动作禁用，任何外部调用与普通审批均禁止执行
+      - manual: 仅允许人工显式审批 (force=True)
+      - high_intent_only: 仅高意向会话 (hi_flag=True) 或人工显式审批 (force=True) 放行
+      - auto: 允许自动执行或人工审批
+    非法未知模式（如拼写错误 manul）默认安全阻断并报错。
+    """
+    pol = (cfg or {}).get("privacy_policy") or {}
+    key_map = {
+        "exchange_wechat": "exchange_wechat",
+        "agree_wechat": "exchange_wechat",
+        "send_resume": "send_resume",
+        "exchange_phone": "exchange_phone",
+    }
+    pol_key = key_map.get(action)
+    if not pol_key:
+        return True, ""
+
+    default_mode = "manual" if pol_key == "exchange_phone" else "auto"
+    mode = pol.get(pol_key, default_mode)
+
+    action_cn = {
+        "exchange_wechat": "换微信",
+        "agree_wechat": "同意换微信",
+        "send_resume": "发简历",
+        "exchange_phone": "换电话",
+    }.get(action, action)
+
+    VALID_MODES = {"auto", "high_intent_only", "manual", "disabled"}
+    if mode not in VALID_MODES:
+        return False, f"{action_cn}策略模式未知或非法[{mode}]（仅支持 auto/high_intent_only/manual/disabled），默认安全拦截"
+
+    if mode == "disabled":
+        return False, f"{action_cn}动作已被用户设置为[禁用]（disabled），禁止任何执行"
+
+    if force:
+        return True, ""
+
+    if mode == "auto":
+        return True, ""
+    elif mode == "high_intent_only":
+        if hi_flag:
+            return True, ""
+        return False, f"{action_cn}策略为[仅高意向自动]，当前会话未达到高意向标准，转人工审批"
+    elif mode == "manual":
+        return False, f"{action_cn}策略为[必须人工审批]，已转入人工审批台"
+
+    return False, f"{action_cn}策略未命中有效放行规则，默认安全拦截"
+
+
+def chat_exchange_wechat(cfg, company, reply_text="", force=False, hi_flag=False):
     """按公司名点开会话并点击【换微信】官方按钮。写台账 action=exchange_wechat。
-    2026-09-08：greeter 层已加固（受信任点击+弹窗标题校验），no_dialog/no_verify
-    状态如实返回 ok=False（不再谎报成功）。
-    2026-09-09：岗位适配门禁——执行前 judge_job_fit 判定（prefs 规则优先/LLM 语义兜底/
-    零硬编码），拒绝时归因留痕（job_fit_gate + status=blocked_job_fit），防销售地推岗误发。
-    安全门禁：online_reply_enabled 为 False 时（非人工强制 force）物理拦截。
-    若 force=True（人工审批台显式派发），放行跳过门禁。
-    若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
+    受统一 privacy_policy、岗位适配门禁（_job_fit_gate）与在线回复安全门禁保护。"""
+    perm_ok, perm_reason = check_privacy_permission("exchange_wechat", cfg, hi_flag=hi_flag, force=force)
+    if not perm_ok:
+        ledger.append({"action": "exchange_wechat", "status": "blocked_privacy_policy",
+                       "company": company, "reason": perm_reason})
+        return {"ok": False, "blocked": "privacy_policy", "company": company, "reason": perm_reason}
+
     if not force:
         gate = _job_fit_gate(cfg, company)
         if not gate["allow"]:
@@ -457,13 +516,15 @@ def chat_exchange_wechat(cfg, company, reply_text="", force=False):
         sess.close()
 
 
-def chat_send_resume(cfg, company, reply_text="", force=False):
+def chat_send_resume(cfg, company, reply_text="", force=False, hi_flag=False):
     """按公司名点开会话并点击【发简历】官方按钮。写台账 action=send_resume。
-    2026-09-08：greeter 层已加固，no_verify 状态如实返回 ok=False。
-    2026-09-09：岗位适配门禁——与换微信同链路（judge_job_fit），拒绝归因留痕。
-    安全门禁：online_reply_enabled 为 False 时（非人工强制 force）物理拦截。
-    若 force=True（人工审批台显式派发），放行跳过门禁。
-    若传入 reply_text，在同会话中伴随发送短文本（单会话单标签页执行）。"""
+    受统一 privacy_policy、岗位适配门禁（_job_fit_gate）与在线回复安全门禁保护。"""
+    perm_ok, perm_reason = check_privacy_permission("send_resume", cfg, hi_flag=hi_flag, force=force)
+    if not perm_ok:
+        ledger.append({"action": "send_resume", "status": "blocked_privacy_policy",
+                       "company": company, "reason": perm_reason})
+        return {"ok": False, "blocked": "privacy_policy", "company": company, "reason": perm_reason}
+
     if not force:
         gate = _job_fit_gate(cfg, company)
         if not gate["allow"]:
@@ -502,9 +563,15 @@ def chat_send_resume(cfg, company, reply_text="", force=False):
         sess.close()
 
 
-def chat_agree_wechat(cfg, company, reply_text="", force=False):
+def chat_agree_wechat(cfg, company, reply_text="", force=False, hi_flag=False):
     """按公司名点开会话并点击【同意交换微信】官方按钮。写台账 action=agree_wechat。
-    受岗位适配门禁（_job_fit_gate）与在线回复安全门禁保护。若传入 reply_text，在同会话中伴随发送短文本。"""
+    受统一 privacy_policy、岗位适配门禁（_job_fit_gate）与在线回复安全门禁保护。若传入 reply_text，在同会话中伴随发送短文本。"""
+    perm_ok, perm_reason = check_privacy_permission("agree_wechat", cfg, hi_flag=hi_flag, force=force)
+    if not perm_ok:
+        ledger.append({"action": "agree_wechat", "status": "blocked_privacy_policy",
+                       "company": company, "reason": perm_reason})
+        return {"ok": False, "blocked": "privacy_policy", "company": company, "reason": perm_reason}
+
     if not force:
         gate = _job_fit_gate(cfg, company)
         if not gate["allow"]:
@@ -640,11 +707,16 @@ def execute_jobs(cfg, g, jobs, max_count=10, dry_run=False):
             company = job.get("company") or ""
             title = job.get("title") or ""
             print(f"\n  [{idx}/{len(jobs)}] 正在处理: {company} - {title} ({city}, {job.get('score')}分)...")
-            ok, info = g.check_greet(city)
+            if hasattr(g, "acquire_greet_slot"):
+                ok, info = g.acquire_greet_slot(city)
+            else:
+                ok, info = g.check_greet(city)
             if not ok:
-                print(f"  [{idx}/{len(jobs)}] 护栏熔断拦截: {info}")
+                print(f"  [{idx}/{len(jobs)}] 护栏熔断或配额不足拦截: {info}")
                 results.append({"stopped": info})
                 break
+            slot_acquired = True
+            sent_successfully = False
             try:
                 href = job.get("href") or ""
                 if not href:
@@ -660,16 +732,34 @@ def execute_jobs(cfg, g, jobs, max_count=10, dry_run=False):
                 if not st:
                     raise RuntimeError("detail page not ready: %s" % full[:80])
                 greet_res = greeter.send_greeting_raw(sess, job, cfg)
-                g.record_greet(city)
+                greeting_status = (greet_res or {}).get("status", "ok")
                 greeting_text_sent = (greet_res or {}).get("greeting") or ""
-                ledger.append({"action": "greet", "status": "ok", "city": city,
-                               "title": job.get("title"), "company": job.get("company"),
-                               "href": href, "score": job.get("score"),
-                               "greeting": greeting_text_sent})
-                done += 1
-                results.append({"ok": True, "title": job.get("title"), "company": job.get("company"),
-                                "greeting": greeting_text_sent})
-                print(f"  [{idx}/{len(jobs)}] 实弹送达成功! 专属开场白: {greeting_text_sent}")
+                if greeting_status == "unknown":
+                    if hasattr(g, "release_greet_slot"):
+                        try:
+                            g.release_greet_slot(city)
+                        except Exception:
+                            pass
+                    ledger.append({"action": "greet", "status": "unknown", "city": city,
+                                   "title": job.get("title"), "company": job.get("company"),
+                                   "href": href, "score": job.get("score"),
+                                   "greeting": greeting_text_sent,
+                                   "note": "投递状态无法核验(已挂起并回滚槽位)"})
+                    results.append({"ok": False, "status": "unknown", "title": job.get("title"),
+                                    "note": "投递状态无法核验(已挂起)"})
+                    print(f"  [{idx}/{len(jobs)}] 投递状态未知(已挂起并回滚槽位)")
+                else:
+                    sent_successfully = True
+                    if not hasattr(g, "acquire_greet_slot"):
+                        g.record_greet(city)
+                    ledger.append({"action": "greet", "status": "ok", "city": city,
+                                   "title": job.get("title"), "company": job.get("company"),
+                                   "href": href, "score": job.get("score"),
+                                   "greeting": greeting_text_sent})
+                    done += 1
+                    results.append({"ok": True, "title": job.get("title"), "company": job.get("company"),
+                                    "greeting": greeting_text_sent})
+                    print(f"  [{idx}/{len(jobs)}] 实弹送达成功! 专属开场白: {greeting_text_sent}")
             except browser.RiskControl as e:
                 g.pause("risk: %s" % e)
                 ledger.append({"action": "greet", "status": "risk_paused", "reason": str(e), "title": job.get("title")})
@@ -677,10 +767,15 @@ def execute_jobs(cfg, g, jobs, max_count=10, dry_run=False):
                 print(f"  [{idx}/{len(jobs)}] 风控暂停: {e}")
                 break
             except Exception as e:
+                if not sent_successfully and hasattr(g, "release_greet_slot"):
+                    try:
+                        g.release_greet_slot(city)
+                    except Exception:
+                        pass
                 ledger.append({"action": "greet", "status": "failed", "error": str(e)[:200],
                                "title": job.get("title"), "company": job.get("company"), "href": job.get("href")})
                 results.append({"ok": False, "title": job.get("title"), "error": str(e)[:120]})
-                print(f"  [{idx}/{len(jobs)}] 投递异常: {e}")
+                print(f"  [{idx}/{len(jobs)}] 投递异常（已释放预占）: {e}")
             browser.human_wait(cfg, "greet")
     finally:
         sess.close_tab()

@@ -10,10 +10,15 @@
 """
 import base64
 import json
+import logging
 import os
 import sys
 
 from . import config as cfgmod
+
+logger = logging.getLogger("boss_apply.secrets")
+
+CURRENT_VERSION = 2
 
 # 应用熵：绑定 boss-apply 用途，其他程序用默认参数也解不开
 _ENTROPY = b"boss-apply-secrets-v1"
@@ -66,14 +71,25 @@ def _dpapi_call(data, protect):
         kernel32.LocalFree(blob_out.pbData)
 
 
+def _legacy_v1_decrypt(raw_bytes):
+    """v1 历史算法：纯 _ENTROPY 异或解密。"""
+    key = _ENTROPY
+    dec = bytes([b ^ key[i % len(key)] for i, b in enumerate(raw_bytes)])
+    return dec.decode("utf-8")
+
+
 def protect(plain):
     """明文 -> base64(DPAPI密文)。"""
     return base64.b64encode(_dpapi_call(plain.encode("utf-8"), True)).decode("ascii")
 
 
-def unprotect(b64):
-    """base64(DPAPI密文) -> 明文。"""
-    return _dpapi_call(base64.b64decode(b64), False).decode("utf-8")
+def unprotect(b64, ver=CURRENT_VERSION):
+    """base64(DPAPI密文) -> 明文。支持按版本解密与异常安全兜底。"""
+    raw_bytes = base64.b64decode(b64)
+    if not _IS_WIN and ver == 1:
+        return _legacy_v1_decrypt(raw_bytes)
+    dec_bytes = _dpapi_call(raw_bytes, False)
+    return dec_bytes.decode("utf-8")
 
 
 def _load_all():
@@ -93,24 +109,57 @@ def _save_all(data):
 
 
 def set_secret(name, value):
-    """加密保存（value 为空则删除该条）。"""
+    """加密保存（value 为空则删除该条），记录密文版本。"""
     data = _load_all()
     if value:
-        data[name] = {"v": protect(value)}
+        data[name] = {"v": protect(value), "ver": CURRENT_VERSION}
     else:
         data.pop(name, None)
     _save_all(data)
 
 
 def get_secret(name):
-    """解密读取；不存在/解密失败返回 None。"""
-    entry = _load_all().get(name)
+    """解密读取；支持 v1 历史密文平滑迁移升级至 v2。不存在/解密失败返回 None。"""
+    data = _load_all()
+    entry = data.get(name)
     if not entry or not entry.get("v"):
         return None
+
+    v = entry["v"]
+    ver = entry.get("ver")
+    plain = None
+    needs_upgrade = False
+
+    if ver == CURRENT_VERSION:
+        try:
+            return unprotect(v, ver=CURRENT_VERSION)
+        except Exception as e:
+            logger.warning("Failed to decrypt secret %r (v%s): %s", name, ver, e)
+            return None
+
+    # 未标注版本或旧版本 (ver is None 或 ver == 1)
+    # 1. 尝试当前版本算法解密
     try:
-        return unprotect(entry["v"])
-    except Exception:
-        return None
+        plain = unprotect(v, ver=CURRENT_VERSION)
+        needs_upgrade = True
+    except (UnicodeDecodeError, Exception):
+        # 2. 回退尝试 v1 历史算法解密
+        try:
+            plain = unprotect(v, ver=1)
+            needs_upgrade = True
+        except Exception as e:
+            logger.warning("Failed to decrypt legacy secret %r: %s", name, e)
+            return None
+
+    if plain and needs_upgrade:
+        try:
+            data[name] = {"v": protect(plain), "ver": CURRENT_VERSION}
+            _save_all(data)
+            logger.info("Migrated secret %r to version %s", name, CURRENT_VERSION)
+        except Exception as e:
+            logger.warning("Failed to save upgraded secret %r: %s", name, e)
+
+    return plain
 
 
 def has_secret(name):
