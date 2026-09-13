@@ -59,11 +59,25 @@ try {
 # 2. 若 Chrome 未启动，自动拉起
 if (-not $chromeAlive) {
     Write-Host "[自检告警] 端口 9335 未就绪，正在自动拉起专有 Chrome 实例..." -ForegroundColor Yellow
-    $chromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-    $profilePath = "C:\Users\LENOVO\chrome-cdp-profile"
+    $profilePath = Join-Path $env:USERPROFILE "chrome-cdp-profile"
+    $chromeCandidates = @(
+        "C:\Program Files\Google\Chrome\Application\chrome.exe",
+        "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
+        "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        "C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
+    )
+    $chromePath = $null
+    foreach ($cand in $chromeCandidates) {
+        if (Test-Path $cand) {
+            $chromePath = $cand
+            break
+        }
+    }
 
-    if (-not (Test-Path $chromePath)) {
-        Write-Host "[错误] 未找到 Chrome 路径: $chromePath" -ForegroundColor Red
+    if (-not $chromePath) {
+        Write-Host "[错误] 未在系统中检测到 Chrome 或 Edge 浏览器！请安装后再试。" -ForegroundColor Red
         exit 1
     }
 

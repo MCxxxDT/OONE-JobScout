@@ -46,10 +46,22 @@ def ensure_chrome_running(cfg=None) -> bool:
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
         os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe"),
+        r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        os.path.expanduser("~/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        os.path.expanduser("~/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
+        "/Applications/Arc.app/Contents/MacOS/Arc",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
         "/usr/bin/google-chrome",
+        "/usr/bin/microsoft-edge",
         "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
     ]
     chrome_exe = None
     for cand in chrome_candidates:
@@ -78,16 +90,18 @@ def ensure_chrome_running(cfg=None) -> bool:
         "https://www.zhipin.com/web/user/?ka=header-login"
     ]
 
-    DETACHED_PROCESS = 0x00000008
-    CREATE_NEW_PROCESS_GROUP = 0x00000200
+    popen_kwargs = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL
+    }
+    if os.name == "nt":
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        popen_kwargs["creationflags"] = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+
     try:
-        subprocess.Popen(
-            cmd,
-            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        subprocess.Popen(cmd, **popen_kwargs)
     except Exception:
         return False
 
