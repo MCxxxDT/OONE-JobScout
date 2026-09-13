@@ -622,14 +622,30 @@ class AIReplyEngine:
         return None
 
 
+def sanitize_greeting_no_fake_resume(text: str) -> str:
+    """针对打招呼文本的专项防虚构清理：强力剥除任何虚构'已发/已附/已投递简历'的幻觉痕迹。"""
+    if not text:
+        return ""
+    cleaned = re.sub(r"[，,、\s]*已(?:投递|附上?|发送?)(?:个人)?(?:附件)?简历[，,、\s]*", "，", text)
+    cleaned = re.sub(r"[，,、\s]*已发您?(?:附件)?简历[，,、\s]*", "，", cleaned)
+    cleaned = re.sub(r"[，,、\s]*请查收(?:附件)?简历[，,、\s]*", "，", cleaned)
+    cleaned = re.sub(r"[，,、\s]*附件简历已发送[，,、\s]*", "，", cleaned)
+    cleaned = re.sub(r"[，,、\s]*已投递[，,、\s]*", "，", cleaned)
+    cleaned = re.sub(r"^[，,、\s]+|[，,、\s]+$", "", cleaned)
+    cleaned = re.sub(r"[，,]{2,}", "，", cleaned)
+    if cleaned and not cleaned.endswith(("！", "!", "。", "，", "？", "?")):
+        cleaned += "！"
+    return cleaned
+
+
 def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = None) -> str:
     """结合目标岗位、公司信息及候选人画像，动态生成定制化第一声打招呼开场白（看岗位下菜碟）。
     1. 优先调用大模型针对具体岗位与JD生成 35-65 字定制化口语；
     2. 若大模型未配置或生成失败，按岗位核心关键词与画像优势进行智能语义匹配合成；
-    3. 严格执行脱敏与防套话安全审查。
+    3. 严格执行脱敏、防套话及防虚构事实（杜绝虚构已发简历）安全审查。
     """
     if not job or not isinstance(job, dict):
-        return "您好，看到贵司这个岗位与我的方向非常契合，已投递附件简历，期待您的回复，谢谢！"
+        return "您好！看到贵司这个岗位与我的方向非常契合，希望能与您深入沟通了解具体要求，期待交流！"
 
     title = (job.get("title") or "").strip()
     company = (job.get("company") or "").strip()
@@ -683,13 +699,14 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
                 f"2. 口吻真诚干练、从容自信、不卑不亢，绝无客服机器人感；\n"
                 f"3. 严禁Markdown标记（如**）；严禁空洞八股套话；\n"
                 f"4. 严格控制在 30-65 字之间，单段纯文本，标点完整；\n"
+                f"5. 【平台机制底线】：BOSS直聘平台在招聘方首次回复前，求职者绝对无法发送附件简历（PDF）或交换联系方式。严禁在开场白中出现'已投递附件简历'、'已附上简历'、'已发简历'、'请查收简历'、'已投递个人简历'等虚构已发送附件的违背事实表述！可以说'对该方向非常感兴趣，希望能与您深入沟通了解具体要求'、'希望能向您深入沟通并投递简历'或'期待能与您深入探讨'等；\n"
                 f"直接输出开场白正文，不要有任何解释说明、前后缀或引号。"
             )
 
             payload = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "你是一位真实人类求职者，正在BOSS直聘手机端向HR主动发送第一条打招呼消息。深入研读具体岗位JD，看岗位下菜碟，真人口语化。"},
+                    {"role": "system", "content": "你是一位真实人类求职者，正在BOSS直聘手机端向HR主动发送第一条打招呼消息。深入研读具体岗位JD，看岗位下菜碟，真人口语化。严禁虚构任何已投递附件简历的事实。"},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": round(random.uniform(0.7, 0.85), 2),
@@ -702,6 +719,7 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     text = (resp_data["choices"][0]["message"].get("content") or "").strip()
                     cleaned = sanitize_and_clean_reply(text, max_chars=90)
+                    cleaned = sanitize_greeting_no_fake_resume(cleaned)
                     is_leak, _ = detect_privacy_leak(cleaned, cfg, prof)
                     if cleaned and not is_leak and len(cleaned) >= 20:
                         return cleaned
@@ -717,31 +735,31 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
     if any(k in full_target for k in ("agent", "智能体", "workflow", "mcp", "fastmcp", "coze", "llm", "大模型", "prompt")):
         if tech_hl:
             options = [
-                f"您好！看到贵司招聘{city_str}{title}岗位，我在{tech_hl}上有实操经验，已附简历，期待与您深入沟通！",
+                f"您好！看到贵司招聘{city_str}{title}岗位，我在{tech_hl}上有实操经验，期待与您深入沟通！",
                 f"您好！关注到贵司的{title}机会，我的方向专注于大模型应用与智能体系统，契合度高，期待能与您进一步交流！",
             ]
         else:
             options = [
-                f"您好！看到贵司正在招聘{city_str}{title}岗位，我对大模型与智能体方向非常感兴趣，已附上简历，期待交流！",
-                f"您好！关注到贵司发布的{title}机会与我的求职意向高度契合，已投递简历，希望能与您进一步探讨，谢谢！",
+                f"您好！看到贵司正在招聘{city_str}{title}岗位，我对大模型与智能体方向非常感兴趣，期待能与您深入交流！",
+                f"您好！关注到贵司发布的{title}机会与我的求职意向高度契合，希望能与您进一步探讨，谢谢！",
             ]
     elif any(k in full_target for k in ("商业", "运营", "增长", "渠道", "gmv", "私域", "销售", "电商")):
         if biz_hl:
             options = [
-                f"您好！看到贵司的{title}岗位，我具备{biz_hl}，业务即战力强，已附简历，期待与您探讨！",
+                f"您好！看到贵司的{title}岗位，我具备{biz_hl}，业务即战力强，期待与您探讨！",
                 f"您好！关注到贵司的{title}机会，我对业务变现与运营落地有浓厚兴趣与实操，希望能与贵团队深入交流！",
             ]
         else:
             options = [
                 f"您好！看到贵司招聘{city_str}{title}，我对该业务方向非常感兴趣，契合岗位要求，期待能与您进一步沟通！",
-                f"您好！关注到贵司这个{title}机会，已附上个人简历，希望能与贵团队深入探讨业务落地，谢谢！",
+                f"您好！关注到贵司这个{title}机会，希望能与贵团队深入探讨业务落地，谢谢！",
             ]
     else:
         options = [
-            f"您好！看到贵司正在招聘{city_str}{title}岗位，非常符合我的预期与发展方向，已投递简历，期待与您深入沟通！",
+            f"您好！看到贵司正在招聘{city_str}{title}岗位，非常符合我的预期与发展方向，期待与您深入沟通！",
             f"您好！关注到贵司发布的{title}机会，我的背景与岗位方向契合度高，具备较强学习与实操能力，期待能与您进一步交流！",
         ]
 
     chosen = random.choice(options)
-    return sanitize_and_clean_reply(chosen, max_chars=80)
+    return sanitize_greeting_no_fake_resume(sanitize_and_clean_reply(chosen, max_chars=80))
 

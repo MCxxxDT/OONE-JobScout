@@ -1761,6 +1761,27 @@ check("校招模式自定义画像强调应届生届别", "2027届" in _txt_cp_c
 check("校招模式自定义画像强调战果与架构", "10万+GMV" in _txt_cp_custom and "微内核智能体架构" in _txt_cp_custom)
 check("差异化招呼无联系方式泄露", not _gr.privacy_blocked(_txt_in) and not _gr.privacy_blocked(_txt_cp_custom))
 
+# 34.3.1 打招呼生成防虚构简历与差异化综合断言（事故根治门禁）
+import re as _re
+_fake_resume_re = _re.compile(r"(?:已投递|已附上?|已发|请查收)(?:您?的?)?(?:个人)?(?:附件)?简历")
+check("DifferentiatedGreeter(空画像)不含虚构简历", not _fake_resume_re.search(_txt_in))
+check("DifferentiatedGreeter(自定义画像)不含虚构简历", not _fake_resume_re.search(_txt_in_custom) and not _fake_resume_re.search(_txt_cp_custom))
+
+from boss_apply import ai_reply as _airp
+_fake_cleaned = _airp.sanitize_greeting_no_fake_resume("您好！看到贵司招聘该岗位，已投递附件简历，期待回复！")
+check("sanitize_greeting_no_fake_resume 成功剥离虚构投递附件简历", "已投递" not in _fake_cleaned and "附件简历" not in _fake_cleaned)
+
+# 多岗位打招呼差异化与防虚构核验
+_jobs_test_batch = [
+    {"title": "AI产品经理实习生", "company": "字节跳动", "city": "深圳", "jd_text": "负责大模型与Agent应用落地"},
+    {"title": "商业化运营专员", "company": "腾讯", "city": "上海", "jd_text": "负责商业变现与GMV增长"},
+    {"title": "数据标注实习生", "company": "米哈游", "city": "上海", "jd_text": "负责多模态数据清洗标注"},
+]
+_greetings_generated = [_gr.greeting_text(cfg, j) for j in _jobs_test_batch]
+for idx_g, g_txt in enumerate(_greetings_generated):
+    check(f"多岗位打招呼[{idx_g}]不含虚构简历外发", not _fake_resume_re.search(g_txt))
+check("多岗位打招呼生成绝不同质化(互不相同)", len(set(_greetings_generated)) > 1)
+
 # 34.4 scorer 动态调优加分与活跃度严格否决
 _j_bon = {"title": "AI产品经理实习生", "company": "某科技", "salary": "200-300元/天", "tags": "4天/周,可转正", "boss_active": 0}
 _s_bon, _r_bon = scorer.score(_j_bon, "表现优异可转正，每周4天出勤", cfg)

@@ -72,42 +72,58 @@ def self_openers(cfg, head_len=14):
     return tuple(o for o in ops if o)
 
 
-def greeting_text(cfg, job):
-    # 1. 若为 test profile，严格使用中性模板，不含任何个人信息
-    if cfg.get("profile") == "test":
-        templates = (cfg.get("greeting", {}) or {}).get("test") or ["您好，我对该岗位很感兴趣，期待沟通！"]
-        t = random.choice(templates)
-        if privacy_blocked(t):
-            raise RuntimeError("greeting template contains contact info (privacy), profile='test'")
-        return t.replace("{job}", job.get("title") or "该岗位")
+def greeting_text(cfg, job, profile=None):
+    # 自动加载真实结构化画像（若未显式传入）
+    prof = profile
+    if prof is None:
+        try:
+            from . import profile_store
+            prof = profile_store.load_profile()
+        except Exception:
+            prof = None
 
-    # 2. 优先调用差异化打招呼生成器（Module 2: 实习/校招双模定制）
-    try:
-        from .campus_engine import DifferentiatedGreeter
-        mode = job.get("job_mode") or cfg.get("job_mode")
-        if mode in ("intern", "campus", "mix"):
-            dyn_diff = DifferentiatedGreeter.generate_greeting(job, job_mode=mode, cfg=cfg)
-            if dyn_diff and not privacy_blocked(dyn_diff):
-                return dyn_diff
-    except Exception:
-        pass
-
-    # 3. 优先调用 AI 动态开场白引擎（看岗位下菜碟，结合岗位与画像生成定制化第一句）
+    # 1. 优先调用 AI 动态开场白引擎（看岗位下菜碟：结合具体岗位JD与真实画像，由大模型深度定制第一句）
     try:
         from . import ai_reply
-        dyn = ai_reply.generate_dynamic_greeting(cfg, job)
+        dyn = ai_reply.generate_dynamic_greeting(cfg, job, profile=prof)
         if dyn and not privacy_blocked(dyn):
-            return dyn
+            from .ai_reply import sanitize_greeting_no_fake_resume
+            return sanitize_greeting_no_fake_resume(dyn)
     except Exception:
         pass
 
-    # 4. 保底降级：使用静态模板
-    profile = cfg.get("profile", "real")
-    templates = (cfg.get("greeting", {}) or {}).get(profile) or (cfg.get("greeting", {}) or {}).get("real") or ["您好，我对该岗位很感兴趣，期待沟通！"]
+    # 2. 次级降级：调用差异化打招呼生成器（Module 2: 实习/校招双模定制与结构化画像匹配）
+    try:
+        from .campus_engine import DifferentiatedGreeter
+        mode = job.get("job_mode") or cfg.get("job_mode") or "intern"
+        dyn_diff = DifferentiatedGreeter.generate_greeting(job, job_mode=mode, cfg=cfg, profile=prof)
+        if dyn_diff and not privacy_blocked(dyn_diff):
+            from .ai_reply import sanitize_greeting_no_fake_resume
+            return sanitize_greeting_no_fake_resume(dyn_diff)
+    except Exception:
+        pass
+
+    # 3. 保底降级：使用多样化静态安全模板池（绝无虚构简历外发，轮换防同质化）
+    profile_key = cfg.get("profile", "real")
+    templates = ((cfg.get("greeting", {}) or {}).get(profile_key)
+                 or (cfg.get("greeting", {}) or {}).get("real")
+                 or (cfg.get("greeting", {}) or {}).get("test")
+                 or [
+                     "您好！看到贵司正在招聘{job}，我对该岗位方向非常感兴趣，希望能与您沟通了解具体要求，期待交流！",
+                     "您好！关注到贵司发布的{job}机会与我的求职意向高度契合，希望能进一步沟通探讨，谢谢！",
+                     "您好！看到贵司的{job}岗位，非常符合我的发展方向，诚意应聘，期待能有机会深入交流！"
+                 ])
     t = random.choice(templates)
-    if privacy_blocked(t):
-        raise RuntimeError("greeting template contains contact info (privacy), profile=%r" % profile)
-    return t.replace("{job}", job.get("title") or "该岗位")
+    title = job.get("title") or "该岗位"
+    result = t.replace("{job}", title)
+    try:
+        from .ai_reply import sanitize_greeting_no_fake_resume
+        result = sanitize_greeting_no_fake_resume(result)
+    except Exception:
+        pass
+    if privacy_blocked(result):
+        raise RuntimeError("greeting template contains contact info (privacy), profile=%r" % profile_key)
+    return result
 
 
 def send_greeting(page, job, cfg):

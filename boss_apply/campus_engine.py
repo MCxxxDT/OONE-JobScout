@@ -284,7 +284,7 @@ class DifferentiatedGreeter:
         # 空画像或缺乏事实支撑时：直接返回专业、中性、安全真实的开场白
         city_phrase = f"在{city}的" if city else ""
         if not has_facts:
-            return f"您好！看到贵司正在招聘{city_phrase}{title}岗位，我对该方向非常感兴趣，已附上个人简历，希望能与您进一步沟通了解具体要求，谢谢！"
+            return f"您好！看到贵司正在招聘{city_phrase}{title}岗位，我对该方向非常感兴趣，希望能与您进一步沟通了解具体要求，谢谢！"
 
         # 有画像时，基于实际已配置的事实组装
         grade_desc = prof.get("grade_desc") or (f"{prof['grad_year']}届应届生" if prof.get("grad_year") else "")
@@ -299,17 +299,17 @@ class DifferentiatedGreeter:
         if mode == "intern":
             avail_part = f"{avail}，" if avail else ""
             hl_part = f"具备{tech_hl}实践经验，" if tech_hl else (f"具备{biz_hl}，" if biz_hl else "")
-            text = f"您好！看到贵司招聘{title}，{grade_part}{avail_part}{hl_part}{city_target_part}已附个人简历，期待深入交流！"
+            text = f"您好！看到贵司招聘{title}，{grade_part}{avail_part}{hl_part}{city_target_part}诚意应聘，期待深入交流！"
         elif mode == "campus":
             hl_part = f"拥有{tech_hl}交付能力并具备{biz_hl}，" if (tech_hl and biz_hl) else (f"拥有{tech_hl}交付能力，" if tech_hl else (f"具备{biz_hl}，" if biz_hl else ""))
             text = f"您好！看到贵司{title}校招机会，{grade_part}{hl_part}{city_target_part}诚意应聘，期待深入探讨！"
         else:
             hl_part = f"具备{tech_hl}与{biz_hl}能力，" if (tech_hl and biz_hl) else (f"具备{tech_hl or biz_hl}，" if (tech_hl or biz_hl) else "")
-            text = f"您好！关注到贵司{title}岗位，{grade_part}{hl_part}{city_target_part}已附简历期待交流！"
+            text = f"您好！关注到贵司{title}岗位，{grade_part}{hl_part}{city_target_part}诚意应聘，期待深入交流！"
 
         # 检查隐私安全，若有泄露则保底清理
         from .greeter import privacy_blocked
         if privacy_blocked(text):
-            text = f"您好！看到贵司招聘{title}，已投递个人简历，期待能与您深入沟通了解具体要求，谢谢！"
+            text = f"您好！看到贵司招聘{title}，我对该方向很感兴趣，期待能与您深入沟通了解具体要求，谢谢！"
 
         return text

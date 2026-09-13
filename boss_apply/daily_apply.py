@@ -256,6 +256,7 @@ def rank_and_plan(candidates, cfg, top_n=None, plan_file=None, dry_run=False):
             "experience": job.get("experience") or "",
             "campus_specs": specs,
             "detail_head": (item["detail"] or "")[:300],
+            "jd_text": item.get("detail") or "",
             "eligible": True,
         }
 
