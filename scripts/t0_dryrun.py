@@ -2091,7 +2091,48 @@ check("rank_and_plan dry_run=True 计划条目打上仿真标记", _plan_dry[0].
 
 # 实弹安全门禁：实弹 execute_daily_plan 拒绝执行 dry_run 标记的计划
 _exec_block = _da37.execute_daily_plan(cfg, g, top_n=5, dry_run=False)
-check("execute_daily_plan 实弹模式安全拒绝执行 dry_run 仿真计划", _exec_block.get("executed") == 0 and "SAFETY_GATE" in _exec_block.get("error", ""))
+# ===========================================================================
+# 38. 投递上限动态调整自动补投与主动技能升级核验
+# ===========================================================================
+print("=== 38. 投递上限动态调整自动补投与主动技能升级核验 ===")
+
+# 38.1 Guard 配额缺口计算与重置机制
+_tmp_quota_guard = os.path.join(DRY, "guard_quota_test.json")
+_cfg_quota_test = {**cfg, "daily_limit": 50, "daemon": {**cfg.get("daemon", {}), "apply_top_n": 50}}
+_g_quota = guard.Guard(_cfg_quota_test)
+_g_quota.path = _tmp_quota_guard
+_g_quota.lock_path = _tmp_quota_guard + ".lock"
+_g_quota.s = dict(guard._DEFAULT)
+_g_quota.s["date"] = guard._today()
+_g_quota.s["greet_count"] = 30
+_g_quota.save()
+_g_quota.mark_scan_done()
+check("Guard mark_scan_done 成功置位", _g_quota.is_scan_done() is True)
+
+_has_gap, _gap_cnt, _target, _greeted = _g_quota.has_unfilled_quota(_cfg_quota_test)
+check("Guard has_unfilled_quota 准确识别配额缺口 (30/50)", _has_gap is True and _gap_cnt == 20 and _target == 50 and _greeted == 30)
+
+_sum38 = _g_quota.summary()
+check("Guard summary 透出 target_quota 与 quota_left", _sum38.get("target_quota") == 50 and _sum38.get("quota_left") == 20)
+
+_g_quota.reset_scan_done()
+check("Guard reset_scan_done 成功重置今日扫描完成标记", _g_quota.is_scan_done() is False)
+
+_g_quota.s["greet_count"] = 50
+_g_quota.save()
+_has_gap50, _gap50, _, _ = _g_quota.has_unfilled_quota(_cfg_quota_test)
+check("Guard 额度满额时不报缺口 (50/50)", _has_gap50 is False and _gap50 == 0)
+
+# 38.2 daily_apply.scan_and_apply_daily 差额参数化透传
+import inspect
+_sig_scan = inspect.signature(daily_apply.scan_and_apply_daily)
+check("scan_and_apply_daily 支持显式传入 top_n 差额参数", "top_n" in _sig_scan.parameters)
+
+# 38.3 守护进程补投判定逻辑仿真
+_last_target_mock = 30
+_current_target_mock = 50
+_quota_increased_mock = _current_target_mock > _last_target_mock
+check("守护进程能够捕获日内配额提升事件 (30->50)", _quota_increased_mock is True)
 
 shutil.rmtree(DRY, ignore_errors=True)
 

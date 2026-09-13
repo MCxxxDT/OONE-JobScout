@@ -344,37 +344,63 @@ def run_cycle(cfg, engine, args, st=None):
     if st is not None:
         st["guard_alerted"] = False  # 正常巡检中，重置熔断告警状态
 
-    # 2.5 每日自动投递扫描（Phase 1~4，活跃窗口内每日一次）
+    # 2.5 每日自动投递扫描（Phase 1~4，支持初次扫描与配额上调日内自动补投）
     daemon_cfg = cfg.get("daemon") or {}
     auto_apply = daemon_cfg.get("auto_apply", True)
     if auto_apply and in_active and not soft_close:
         g_apply = guardmod.Guard(cfg)
+        has_gap, gap_count, target_quota, greeted = g_apply.has_unfilled_quota(cfg)
+
+        apply_window = str(daemon_cfg.get("apply_window", "09:30-14:00"))
+        try:
+            aw_start_s, aw_end_s = apply_window.split("-")
+            aw_start = _parse_hhmm(aw_start_s, datetime.time(9, 30))
+            aw_end = _parse_hhmm(aw_end_s, datetime.time(14, 0))
+            in_apply_window = aw_start <= now.time() <= aw_end
+        except Exception:
+            in_apply_window = True
+
+        # 冷却与判定机制
+        last_scan_ts = (st or {}).get("last_apply_scan_ts", 0) if st is not None else 0
+        last_target = (st or {}).get("last_target_quota", target_quota) if st is not None else target_quota
+        quota_increased = target_quota > last_target
+        cooldown_passed = (time.time() - last_scan_ts) > 1800  # 30分钟防抖
+
+        # 触发条件：
+        # 1. 今日从未成功执行过全城扫描 (not scan_done)，且在时间窗口或活跃时间内；
+        # 2. 或者检测到配额缺口 (has_gap)：且（配额刚刚被调高 OR 30分钟冷却已过）
+        should_run_apply = False
+        reason_tag = ""
+
         if not g_apply.is_scan_done():
-            apply_window = str(daemon_cfg.get("apply_window", "09:30-14:00"))
-            try:
-                aw_start_s, aw_end_s = apply_window.split("-")
-                aw_start = _parse_hhmm(aw_start_s, datetime.time(9, 30))
-                aw_end = _parse_hhmm(aw_end_s, datetime.time(14, 0))
-                in_apply_window = aw_start <= now.time() <= aw_end
-            except Exception:
-                in_apply_window = True  # 解析失败默认允许
-            should_run_apply = in_apply_window or (not g_apply.is_scan_done() and in_active)
-            if should_run_apply:
+            if in_apply_window or in_active:
+                should_run_apply = True
                 reason_tag = "窗口内巡检" if in_apply_window else "今日未执行补偿"
-                print(f"  [🎯 每日自动投递] 触发投递扫描管线 ({reason_tag})...")
-                try:
-                    report = daily_apply.scan_and_apply_daily(cfg, dry_run=args.dry_run)
-                    if not args.dry_run:
+        elif has_gap and (quota_increased or cooldown_passed):
+            should_run_apply = True
+            reason_tag = f"配额提升日内自动补投 (缺口: {gap_count} 岗, 已投: {greeted}/{target_quota})"
+
+        if should_run_apply:
+            print(f"  [🎯 每日自动投递] 触发投递扫描管线 ({reason_tag})...")
+            try:
+                report = daily_apply.scan_and_apply_daily(cfg, top_n=gap_count, dry_run=args.dry_run)
+                if not args.dry_run:
+                    if st is not None:
+                        st["last_apply_scan_ts"] = time.time()
+                        st["last_target_quota"] = target_quota
+                    g_apply.reload()
+                    still_has_gap, _, _, _ = g_apply.has_unfilled_quota(cfg)
+                    if not still_has_gap or report.get("phase") in ("no_candidates", "no_qualified"):
                         g_apply.mark_scan_done()
-                    print(f"  [🎯 每日投递完成] 阶段: {report.get('phase')} | "
-                          f"候选: {report.get('candidates_count', 0)} | "
-                          f"计划: {report.get('plan_count', 0)} | "
-                          f"投递: {(report.get('execute') or {}).get('executed', 0)}")
-                except Exception as e:
-                    print(f"  [🎯 每日投递异常] {e}")
-                    ledger.append({"action": "daily_apply_error", "error": str(e)[:200]})
+                print(f"  [🎯 每日投递完成] 阶段: {report.get('phase')} | "
+                      f"候选: {report.get('candidates_count', 0)} | "
+                      f"计划: {report.get('plan_count', 0)} | "
+                      f"投递: {(report.get('execute') or {}).get('executed', 0)}")
+            except Exception as e:
+                print(f"  [🎯 每日投递异常] {e}")
+                ledger.append({"action": "daily_apply_error", "error": str(e)[:200]})
         else:
-            pass  # 今日扫描已完成，静默跳过
+            pass  # 今日扫描已完成且无配额缺口，静默跳过
 
     # 3. 裸CDP读取消息中心
     print("  [CDP] 正在拉取消息中心会话列表...")

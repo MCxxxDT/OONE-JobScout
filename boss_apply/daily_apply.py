@@ -388,13 +388,16 @@ def execute_daily_plan(cfg, g, top_n=None, dry_run=False, plan_file=None):
 # 入口函数：串联四阶段
 # ---------------------------------------------------------------------------
 
-def scan_and_apply_daily(cfg, dry_run=False):
+def scan_and_apply_daily(cfg, top_n=None, dry_run=False):
     """每日自动投递入口：搜索 → 精读 → 择优 → 投递。
+    top_n: 本次投递目标上限（支持日内额度补偿模式传入差额，默认读取 apply_top_n）。
     dry_run=True 时只跑 Phase 1~3（生成计划），不执行 Phase 4 投递。
     返回完整的管线执行报告。"""
     daemon_cfg = cfg.get("daemon") or {}
     max_pages = int(daemon_cfg.get("apply_max_pages", 5))
-    top_n = int(daemon_cfg.get("apply_top_n", 50))
+    if top_n is None:
+        top_n = int(daemon_cfg.get("apply_top_n", 50))
+    top_n = max(1, int(top_n))
     fetch_detail = bool(daemon_cfg.get("apply_fetch_detail", True))
 
     g = guardmod.Guard(cfg)

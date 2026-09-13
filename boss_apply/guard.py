@@ -238,12 +238,28 @@ class Guard:
             used += self.s["city_counts"].get(city, 0)
         return max(0, quota - used)
 
+    def has_unfilled_quota(self, cfg=None):
+        """检查今日是否还有未用完的投递配额。
+        返回 (has_gap: bool, gap_count: int, target_quota: int, greeted: int)"""
+        self.reload()
+        c = cfg or self.cfg
+        daemon_cfg = c.get("daemon") or {}
+        limit = int(c.get("daily_limit", 50))
+        top_n = int(daemon_cfg.get("apply_top_n", 50))
+        target_quota = min(limit, top_n)
+        greeted = int(self.s.get("greet_count", 0))
+        gap = max(0, target_quota - greeted)
+        return (gap > 0), gap, target_quota, greeted
+
     def summary(self):
         self.reload()
+        has_gap, gap, target, greeted = self.has_unfilled_quota()
         return {
             "date": self.s["date"],
             "greet_count": self.s["greet_count"],
             "daily_limit": self.cfg["daily_limit"],
+            "target_quota": target,
+            "quota_left": gap,
             "city_counts": self.s["city_counts"],
             "search_count": self.s["search_count"],
             "paused_reason": self.s["paused_reason"],
@@ -259,4 +275,11 @@ class Guard:
         with _guard_file_lock(self.lock_path):
             self.reload(in_lock=True)
             self.s["scan_done_today"] = True
+            self._save_unlocked()
+
+    def reset_scan_done(self):
+        """重置今日扫描完成标记，允许守护进程或主动调用重新触发补投扫描。"""
+        with _guard_file_lock(self.lock_path):
+            self.reload(in_lock=True)
+            self.s["scan_done_today"] = False
             self._save_unlocked()

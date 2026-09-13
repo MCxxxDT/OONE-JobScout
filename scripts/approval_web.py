@@ -313,14 +313,23 @@ async def api_settings_post(request: Request, token: str = ""):
         if "apply_max_pages" in aa:
             clean_aa["apply_max_pages"] = max(1, min(10, int(aa["apply_max_pages"])))
         if "apply_top_n" in aa:
-            clean_aa["apply_top_n"] = max(1, min(50, int(aa["apply_top_n"])))
+            new_top_n = max(1, min(50, int(aa["apply_top_n"])))
+            clean_aa["apply_top_n"] = new_top_n
+            _write_local("daily_limit", new_top_n)
         if "apply_fetch_detail" in aa:
             clean_aa["apply_fetch_detail"] = bool(aa["apply_fetch_detail"])
         if clean_aa:
             _write_local("daemon", clean_aa)
             changed.append("每日自动投递设置已更新")
 
-    return {"ok": True, "changed": changed or ["无变更"]}
+    # 联动：若配额提升且存在未投递差额，重置今日完成标记，唤醒后台自动补投
+    g_set = guardmod.Guard(cfgmod.load())
+    has_gap, gap_count, target_q, greeted = g_set.has_unfilled_quota()
+    if has_gap and g_set.is_scan_done():
+        g_set.reset_scan_done()
+        changed.append(f"已重置日扫描标记以激活额度补投 (缺口: {gap_count} 岗)")
+
+    return {"ok": True, "changed": changed or ["无变更"], "quota_summary": g_set.summary()}
 
 
 @app.post("/api/settings/test")
@@ -3586,6 +3595,26 @@ PAGE = """<!DOCTYPE html>
       <div class="setting-help-box info">
         在指定工作时间窗口内，由大模型遍历全城岗位、精读JD、综合评估择优生成计划并自动投递。
       </div>
+
+      <!-- 今日投递配额与主动技能看板 -->
+      <div class="p-3 mb-3" style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:14px">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <span style="font-size:12px;font-weight:700;color:#334155">📊 今日投递额度监控与主动技能</span>
+          <span id="aaQuotaStatusTag" class="soft-badge badge-ok" style="font-size:11px">监控中</span>
+        </div>
+        <div class="d-flex align-items-baseline gap-2 mb-2">
+          <span style="font-size:22px;font-weight:800;color:#0f172a" id="aaStatGreeted">0</span>
+          <span style="font-size:12px;color:#64748b">/ 今日目标上限 <strong id="aaStatTarget">50</strong> 岗</span>
+          <span class="ms-auto" style="font-size:12px;font-weight:700;color:#2563eb">尚余 <strong id="aaStatLeft" style="font-size:16px">0</strong> 岗待投</span>
+        </div>
+        <div class="progress mb-2" style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">
+          <div id="aaProgressBar" class="progress-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#10b981);border-radius:3px;transition:width 0.3s"></div>
+        </div>
+        <div style="font-size:11px;color:#64748b" id="aaQuotaHint">
+          💡 当调高上限后，工作流将感知到配额缺口并自动开启日内补投；也可随时点击下方【保存并立即补投】主动施放！
+        </div>
+      </div>
+
       <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
         <div>
           <strong style="font-size:13px;color:#111;display:block">启用每日自动投递 (Auto Apply)</strong>
@@ -3603,7 +3632,7 @@ PAGE = """<!DOCTYPE html>
         </div>
         <div class="col-6">
           <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">单日择优投递上限 (Top N)</label>
-          <input type="number" id="inApplyTopN" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" min="1" max="50" value="15">
+          <input type="number" id="inApplyTopN" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" min="1" max="50" value="15" oninput="updateQuotaPreview()">
         </div>
       </div>
       <div class="row g-3 mb-3">
@@ -3622,7 +3651,8 @@ PAGE = """<!DOCTYPE html>
       <div class="setting-modal-footer">
         <span id="resAutoApply" style="font-size:12px;margin-right:auto"></span>
         <button type="button" class="btn-action-light" onclick="closeSettingModal('modalAutoApply')">取消</button>
-        <button type="button" class="btn-black" onclick="saveAutoApply()">保存投递设置</button>
+        <button type="button" class="btn-action-light" onclick="saveAutoApply()">仅保存设置</button>
+        <button type="button" class="btn-black" onclick="saveAndApplyNow()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);border-color:#1d4ed8;color:#fff;font-weight:600" title="保存设置并立即启动全链路主动补投">⚡ 保存并立即补投/执行</button>
       </div>
     </div>
   </div>
@@ -4402,22 +4432,33 @@ function triggerApplyNow() {
   const inputTopN = document.getElementById('inApplyTopN') ? parseInt(document.getElementById('inApplyTopN').value) : 0;
   const cachedTopN = (window.__cachedSettings && window.__cachedSettings.auto_apply && window.__cachedSettings.auto_apply.apply_top_n) || 0;
   const topN = inputTopN > 0 ? inputTopN : (cachedTopN > 0 ? cachedTopN : 50);
+
+  const gSummary = (window.__latestOverview && window.__latestOverview.guard) || {};
+  const greeted = gSummary.greet_count || 0;
+  const remaining = Math.max(0, topN - greeted);
+
+  let confirmMsg = '';
+  if (remaining <= 0) {
+    confirmMsg = `今日已达投递上限（已投 <strong>${greeted}</strong> / 上限 <strong>${topN}</strong> 岗）。<br><br>若仍需投递，请先在设置弹窗调高单日上限。<br><br>点击确认将强行尝试检索新岗位。`;
+  } else {
+    confirmMsg = `今日已投 <strong>${greeted}</strong> 岗，单日目标上限 <strong>${topN}</strong> 岗，尚余 <strong style="color:var(--pri)">${remaining}</strong> 个配额。<br><br>系统将自动检索全城符合条件的优质岗位、精读JD并执行针对性打招呼，主动补齐剩余差额。<br><br><span style="color:var(--dan);font-weight:600">注意：此操作将直接向 BOSS 直聘平台发送针对具体JD定制的打招呼消息并消耗今日投递配额。</span>`;
+  }
+
   showConfirm(
-    '⚡ 执行今日智能投递',
-    `系统将对已生成的候选岗位计划（按单日上限最多 ${topN} 个，按评分从高到低排序）发起实弹打招呼投递。<br><br><span style="color:var(--dan);font-weight:600">注意：此操作将直接向 BOSS 直聘平台发送针对具体JD定制的打招呼消息并消耗今日投递配额。</span>`,
+    '⚡ 施放主动投递技能',
+    confirmMsg,
     async () => {
-      showToast('正在执行今日投递计划…', 'info');
+      showToast('正在启动主动投递管线（全网检索+智能补齐）…', 'info');
       try {
         const res = await api('/api/apply/now', {
           method: 'POST',
-          body: JSON.stringify({ mode: 'execute_plan', top_n: topN })
+          body: JSON.stringify({ mode: 'auto_compensate', top_n: topN, async_run: true })
         });
         if (res.ok) {
-          const count = (res.result && res.result.executed) || 0;
-          showToast(`今日投递完成！已成功投递 ${count} 个岗位`, 'success');
+          showToast('主动投递任务已在后台启动！请稍候刷新查看最新进展', 'success');
           load(true);
         } else {
-          showToast(`投递未完成: ${res.error || (res.result && res.result.error) || '未知错误'}`, 'danger');
+          showToast(`启动失败: ${res.error || (res.result && res.result.error) || '任务可能已在运行中'}`, 'warning');
         }
       } catch (e) {
         showToast('请求异常: ' + e.message, 'danger');
@@ -4430,6 +4471,7 @@ async function load(isManual) {
   if (isManual) showToast('正在刷新工作台数据…', 'info');
   try {
     const d = await api('/api/overview');
+    window.__latestOverview = d;
     lastSyncTimestamp = Date.now();
     updateRealtimeClock();
 
@@ -6107,9 +6149,10 @@ async function loadSettings() {
   const aa = s.auto_apply || {};
   if (document.getElementById('inAutoApplyEnabled')) document.getElementById('inAutoApplyEnabled').checked = aa.enabled !== false;
   if (document.getElementById('inApplyWindow')) document.getElementById('inApplyWindow').value = aa.apply_window || '10:00-14:00';
-  if (document.getElementById('inApplyTopN')) document.getElementById('inApplyTopN').value = aa.apply_top_n || 15;
+  if (document.getElementById('inApplyTopN')) document.getElementById('inApplyTopN').value = aa.apply_top_n || 50;
   if (document.getElementById('inApplyMaxPages')) document.getElementById('inApplyMaxPages').value = aa.apply_max_pages || 3;
   if (document.getElementById('inApplyFetchDetail')) document.getElementById('inApplyFetchDetail').value = String(aa.apply_fetch_detail !== false);
+  updateQuotaPreview();
 
   document.getElementById('profMeta').textContent = s.profile.has_resume
     ? `已存简历 ${s.profile.resume_chars} 字（${s.profile.source}，${s.profile.updated_at}）` + (s.profile.has_refined ? ` · 画像已提炼：${s.profile.refined_summary}` : ' · 画像未提炼')
@@ -6480,13 +6523,36 @@ async function saveBrowserSettings() {
   }
 }
 
+function updateQuotaPreview() {
+  const inputTopN = parseInt(document.getElementById('inApplyTopN')?.value) || 0;
+  const gSummary = (window.__latestOverview && window.__latestOverview.guard) || {};
+  const greeted = gSummary.greet_count || 0;
+  const remaining = Math.max(0, inputTopN - greeted);
+  const pct = inputTopN > 0 ? Math.min(100, Math.round((greeted / inputTopN) * 100)) : 0;
+  if (document.getElementById('aaStatGreeted')) document.getElementById('aaStatGreeted').textContent = greeted;
+  if (document.getElementById('aaStatTarget')) document.getElementById('aaStatTarget').textContent = inputTopN;
+  if (document.getElementById('aaStatLeft')) document.getElementById('aaStatLeft').textContent = remaining;
+  if (document.getElementById('aaProgressBar')) document.getElementById('aaProgressBar').style.width = pct + '%';
+  const tagEl = document.getElementById('aaQuotaStatusTag');
+  if (tagEl) {
+    if (remaining === 0) {
+      tagEl.className = 'soft-badge badge-warn';
+      tagEl.textContent = '已达上限';
+    } else {
+      tagEl.className = 'soft-badge badge-ok';
+      tagEl.textContent = `待补投 ${remaining} 岗`;
+    }
+  }
+}
+
 async function saveAutoApply() {
   const el = document.getElementById('resAutoApply');
+  const topN = parseInt(document.getElementById('inApplyTopN').value) || 50;
   const body = {
     auto_apply: {
       enabled: document.getElementById('inAutoApplyEnabled').checked,
       apply_window: document.getElementById('inApplyWindow').value.trim(),
-      apply_top_n: parseInt(document.getElementById('inApplyTopN').value) || 15,
+      apply_top_n: topN,
       apply_max_pages: parseInt(document.getElementById('inApplyMaxPages').value) || 3,
       apply_fetch_detail: document.getElementById('inApplyFetchDetail').value === 'true',
     }
@@ -6499,7 +6565,48 @@ async function saveAutoApply() {
   if (d.ok) {
     showToast('每日自动投递设置已保存！', 'success');
     loadSettings();
+    load(true);
     setTimeout(() => closeSettingModal('modalAutoApply'), 600);
+  }
+}
+
+async function saveAndApplyNow() {
+  const el = document.getElementById('resAutoApply');
+  const topN = parseInt(document.getElementById('inApplyTopN').value) || 50;
+  const body = {
+    auto_apply: {
+      enabled: document.getElementById('inAutoApplyEnabled').checked,
+      apply_window: document.getElementById('inApplyWindow').value.trim(),
+      apply_top_n: topN,
+      apply_max_pages: parseInt(document.getElementById('inApplyMaxPages').value) || 3,
+      apply_fetch_detail: document.getElementById('inApplyFetchDetail').value === 'true',
+    }
+  };
+  if (el) { el.style.color = '#2563eb'; el.textContent = '正在保存设置…'; }
+  const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!d.ok) {
+    if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ 保存设置失败'; }
+    showToast('保存失败: ' + (d.error || '网络异常'), 'danger');
+    return;
+  }
+  showToast('设置已保存！正在启动主动补投任务…', 'info');
+  try {
+    const res = await api('/api/apply/now', {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'auto_compensate', top_n: topN, async_run: true })
+    });
+    if (res.ok) {
+      showToast('⚡ 主动补投任务已在后台启动！正在遍历全城岗位补齐差额', 'success');
+      loadSettings();
+      load(true);
+      setTimeout(() => closeSettingModal('modalAutoApply'), 600);
+    } else {
+      showToast('补投触发提示: ' + (res.error || '任务已在运行中'), 'warning');
+      loadSettings();
+      load(true);
+    }
+  } catch (ex) {
+    showToast('补投触发异常: ' + ex.message, 'danger');
   }
 }
 
@@ -7460,7 +7567,8 @@ def api_apply_status(token: str = ""):
 
 @app.post("/api/apply/now")
 async def api_apply_now(request: Request, token: str = ""):
-    """立即执行今日投递计划（Phase 4）或全链路扫描投递（Phase 1~4）。支持同步或异步后台执行。"""
+    """立即执行今日投递计划（Phase 4）或全链路扫描投递（Phase 1~4）。
+    支持智能升格与差额补偿：若本地计划已投完且存在配额缺口，自动升格为全网检索新岗位并投递补齐。"""
     cfg = cfgmod.load()
     if not _check_token(cfg, token):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -7469,14 +7577,14 @@ async def api_apply_now(request: Request, token: str = ""):
         body = await request.json()
     except Exception:
         pass
-    mode = body.get("mode", "execute_plan")
+    mode = body.get("mode", "auto_compensate")
     dry_run = bool(body.get("dry_run", False))
     async_run = bool(body.get("async_run", False))
     daemon_cfg = cfg.get("daemon") or {}
     default_top_n = int(daemon_cfg.get("apply_top_n", 50))
     top_n = int(body.get("top_n") or default_top_n)
 
-    from boss_apply import daily_apply
+    from boss_apply import daily_apply, flows
     g = guardmod.Guard(cfg)
 
     def _worker():
@@ -7484,15 +7592,53 @@ async def api_apply_now(request: Request, token: str = ""):
         _DAILY_APPLY_STATUS["last_run_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _DAILY_APPLY_STATUS["last_error"] = None
         try:
-            if mode == "full_scan":
-                report = daily_apply.scan_and_apply_daily(cfg, dry_run=dry_run)
-                if not dry_run and report.get("phase") in ("complete", "no_candidates", "no_qualified"):
-                    g.mark_scan_done()
+            target_mode = mode
+            has_gap, gap_count, t_quota, greeted = g.has_unfilled_quota(cfg)
+
+            # 智能探测：当 mode 为 execute_plan 或 auto_compensate 时
+            if target_mode in ("execute_plan", "auto_compensate"):
+                plan_file = cfgmod.state_path("daily_plan.json")
+                un_greeted_in_plan = 0
+                if os.path.exists(plan_file):
+                    try:
+                        with open(plan_file, "r", encoding="utf-8") as pf:
+                            pdata = json.load(pf)
+                            if isinstance(pdata, list):
+                                un_greeted = flows.filter_greeted(pdata)
+                                un_greeted_in_plan = len(un_greeted)
+                    except Exception:
+                        un_greeted_in_plan = 0
+
+                # 若本地计划中未投岗位不足且有配额缺口，自动平滑升格为 full_scan 搜寻新岗位
+                if target_mode == "auto_compensate" or (target_mode == "execute_plan" and un_greeted_in_plan == 0):
+                    if has_gap:
+                        print(f"  [智能自适应] 原计划待投岗位不足 ({un_greeted_in_plan} 岗)，检测到配额缺口 {gap_count} 岗，自动升格全网搜寻补齐！")
+                        target_mode = "full_scan"
+                    elif un_greeted_in_plan == 0:
+                        _DAILY_APPLY_STATUS["last_report"] = {
+                            "executed": 0,
+                            "quota_exhausted": True,
+                            "note": f"今日投递配额已用满 ({greeted}/{t_quota})，且现有计划无待投岗位",
+                            "guard": g.summary()
+                        }
+                        return
+
+            if target_mode == "full_scan":
+                scan_top_n = min(top_n, gap_count) if has_gap else top_n
+                report = daily_apply.scan_and_apply_daily(cfg, top_n=scan_top_n, dry_run=dry_run)
+                if not dry_run:
+                    g.reload()
+                    still_gap, _, _, _ = g.has_unfilled_quota(cfg)
+                    if not still_gap or report.get("phase") in ("no_candidates", "no_qualified"):
+                        g.mark_scan_done()
                 _DAILY_APPLY_STATUS["last_report"] = report
             else:
                 exec_res = daily_apply.execute_daily_plan(cfg, g, top_n=top_n, dry_run=dry_run)
-                if not dry_run and (exec_res.get("executed", 0) > 0 or not exec_res.get("error")):
-                    g.mark_scan_done()
+                if not dry_run:
+                    g.reload()
+                    still_gap, _, _, _ = g.has_unfilled_quota(cfg)
+                    if not still_gap:
+                        g.mark_scan_done()
                 _DAILY_APPLY_STATUS["last_report"] = exec_res
         except Exception as ex:
             _DAILY_APPLY_STATUS["last_error"] = str(ex)
@@ -7509,8 +7655,8 @@ async def api_apply_now(request: Request, token: str = ""):
 
     # 同步模式（向后兼容已有单元测试）
     _worker()
-    if mode == "full_scan":
-        return {"ok": True, "mode": "full_scan", "report": _DAILY_APPLY_STATUS["last_report"], "error": _DAILY_APPLY_STATUS["last_error"]}
+    if mode in ("full_scan", "auto_compensate"):
+        return {"ok": True, "mode": mode, "report": _DAILY_APPLY_STATUS["last_report"], "error": _DAILY_APPLY_STATUS["last_error"]}
     else:
         return {"ok": True, "mode": "execute_plan", "result": _DAILY_APPLY_STATUS["last_report"], "error": _DAILY_APPLY_STATUS["last_error"]}
 
