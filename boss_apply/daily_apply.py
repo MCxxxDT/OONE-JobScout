@@ -41,6 +41,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
              "raw_found": 0, "after_dedup": 0, "after_hard_filter": 0,
              "details_fetched": 0, "errors": []}
 
+    is_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
     for city_info in eff["cities"]:
         city = city_info["name"]
         code = city_info["code"]
@@ -48,7 +49,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
         print(f"  [城市扫描] 正在扫描城市: {city} (关键词: {len(kws)} 个, 最大页数: {max_pages} 页)...")
         sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
         try:
-            sess.open_tab()
+            sess.open_tab(background=is_silent)
             for kw in kws:
                 for p in range(1, max_pages + 1):
                     ok, info = g.check_search()
@@ -134,7 +135,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True):
         print(f"  [Phase 2] 开始 JD 精读 (从 {len(candidates)} 个候选优先精读头部 {len(detail_targets)} 个岗位)...")
         sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
         try:
-            sess.open_tab()
+            sess.open_tab(background=is_silent)
             for idx, item in enumerate(detail_targets, 1):
                 try:
                     detail, active = sess.fetch_detail(item["job"])

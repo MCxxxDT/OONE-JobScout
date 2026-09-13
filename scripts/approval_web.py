@@ -3357,13 +3357,13 @@ PAGE = """<!DOCTYPE html>
           <div>
             <div class="hub-card-top">
               <div class="hub-icon-box slate">🌐</div>
-              <span class="soft-badge badge-ok" id="hubBadgeBrowserSilent">🟢 静默后台模式</span>
+              <span class="soft-badge badge-pub" id="hubBadgeBrowserSilent">🖥️ 前台可视模式</span>
             </div>
             <div class="hub-title">浏览器运行模式</div>
-            <div class="hub-desc">Chrome CDP 自动化后台巡检，防抢占桌面焦点与启动最小化防护</div>
+            <div class="hub-desc" id="hubDescBrowser">Chrome CDP 前台可视化运行，自动化操作实时可见，便于人工监工与调试</div>
             <div class="hub-meta-tags">
-              <span class="soft-badge badge-ok">零焦点抢占</span>
-              <span class="soft-badge" id="hubBadgeBrowserMin">启动最小化</span>
+              <span class="soft-badge" id="hubTagBrowserFocus">前台实时可见</span>
+              <span class="soft-badge" id="hubBadgeBrowserMin">默认前台尺寸</span>
             </div>
           </div>
           <button type="button" class="hub-card-btn">⚙️ 运行模式设置</button>
@@ -6165,10 +6165,29 @@ async function loadSettings() {
     hAuto.textContent = aa.enabled !== false ? '🟢 已启用' : '⚪ 已暂停';
     hAuto.className = aa.enabled !== false ? 'soft-badge badge-ok' : 'soft-badge badge-rej';
   }
+  const isSilent = br.silent_mode !== false;
+  const isMin = br.minimize_on_start !== false;
   const hSilent = document.getElementById('hubBadgeBrowserSilent');
-  if (hSilent) hSilent.textContent = br.silent_mode !== false ? '🟢 静默后台模式' : '⚪ 前台正常模式';
+  if (hSilent) {
+    hSilent.textContent = isSilent ? '🟢 静默后台模式' : '🖥️ 前台可视模式';
+    hSilent.className = isSilent ? 'soft-badge badge-ok' : 'soft-badge badge-pub';
+  }
+  const hDesc = document.getElementById('hubDescBrowser');
+  if (hDesc) {
+    hDesc.textContent = isSilent
+      ? 'Chrome CDP 自动化后台巡检，防抢占桌面焦点与启动最小化防护'
+      : 'Chrome CDP 前台可视化运行，自动化操作实时可见，便于人工监工与调试';
+  }
+  const hFocus = document.getElementById('hubTagBrowserFocus');
+  if (hFocus) {
+    hFocus.textContent = isSilent ? '零焦点抢占' : '前台实时可见';
+    hFocus.className = isSilent ? 'soft-badge badge-ok' : 'soft-badge';
+  }
   const hMin = document.getElementById('hubBadgeBrowserMin');
-  if (hMin) hMin.textContent = br.minimize_on_start !== false ? '启动最小化' : '默认尺寸';
+  if (hMin) {
+    hMin.textContent = isMin ? '启动最小化' : '默认前台尺寸';
+    hMin.className = isMin ? 'soft-badge badge-ok' : 'soft-badge';
+  }
   const hCandidate = document.getElementById('hubBadgeProfileCandidate');
   const hSchool = document.getElementById('hubBadgeProfileSchool');
   const hMajor = document.getElementById('hubBadgeProfileMajor');

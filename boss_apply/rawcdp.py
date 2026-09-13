@@ -294,7 +294,39 @@ class RawCDP:
             params["background"] = True
         self.tab_id = self._send("Target.createTarget", params)["targetId"]
         self.sid = self._send("Target.attachToTarget", {"targetId": self.tab_id, "flatten": True})["sessionId"]
+        if not background:
+            try:
+                self.activate_tab()
+                self.restore_window()
+            except Exception:
+                pass
         return self.tab_id
+
+    def activate_tab(self):
+        """将当前标签页激活置顶到浏览器前台。"""
+        if self.tab_id:
+            try:
+                return self._send("Target.activateTarget", {"targetId": self.tab_id})
+            except Exception:
+                pass
+        return None
+
+    def restore_window(self):
+        """尝试通过 CDP 将当前浏览器窗口恢复为正常可视形态，避免最小化或被遮挡。"""
+        try:
+            target_id = self.tab_id
+            if not target_id:
+                targets = self._send("Target.getTargets").get("targetInfos", [])
+                target_id = targets[0]["targetId"] if targets else None
+            if target_id:
+                win = self._send("Browser.getWindowForTarget", {"targetId": target_id})
+                win_id = win.get("windowId")
+                if win_id:
+                    self._send("Browser.setWindowBounds", {"windowId": win_id, "bounds": {"windowState": "normal"}})
+                    return True
+        except Exception:
+            pass
+        return False
 
     def minimize_window(self):
         """尝试通过 CDP 将当前浏览器窗口最小化，避免抢占焦点或弹窗打扰用户。"""

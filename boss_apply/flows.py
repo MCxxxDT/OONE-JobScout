@@ -696,10 +696,11 @@ def execute_jobs(cfg, g, jobs, max_count=10, dry_run=False):
             "dry_run": True
         }
     done, results = 0, []
+    is_silent = bool(((cfg or {}).get("browser") or {}).get("silent_mode", True))
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     print(f"  [投递执行] 待投递岗位池: {len(jobs)} 个 (本次上限: {max_count})")
     try:
-        sess.open_tab()
+        sess.open_tab(background=is_silent)
         for idx, job in enumerate(jobs, 1):
             if done >= max_count:
                 break
