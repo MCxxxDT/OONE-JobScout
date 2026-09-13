@@ -192,6 +192,15 @@ def rank_and_plan(candidates, cfg, top_n=None):
     plan = []
     for i, item in enumerate(candidates):
         job = item["job"]
+        base_s = item.get("base_score", 0)
+        base_why = item.get("base_reason", "")
+
+        # F03 硬否决检测：如果 base_score <= 0 或带有硬性否决标志，不可被模型覆盖
+        is_eligible = (base_s > 0) and not item.get("veto", False)
+        veto_reasons = []
+        if not is_eligible:
+            veto_reasons.append(base_why or "hard_filter_rejected")
+
         specs = item.get("campus_specs") or job.get("campus_specs")
         if not specs:
             try:
@@ -215,7 +224,18 @@ def rank_and_plan(candidates, cfg, top_n=None):
             "experience": job.get("experience") or "",
             "campus_specs": specs,
             "detail_head": (item["detail"] or "")[:300],
+            "eligible": is_eligible,
+            "veto_reasons": veto_reasons,
         }
+
+        # F03: 硬条件否决的候选即使模型高分也绝对不得进入待投递计划
+        if not is_eligible:
+            entry["score"] = 0
+            entry["verdict"] = "veto"
+            entry["reason"] = f"硬条件不符: {'; '.join(veto_reasons)}"
+            entry["score_source"] = "rule_hard_veto"
+            continue
+
         if llm_res and i in llm_res:
             m = llm_res[i]
             entry["score"] = m["score"]
@@ -223,9 +243,9 @@ def rank_and_plan(candidates, cfg, top_n=None):
             entry["reason"] = m.get("reason") or ""
             entry["score_source"] = "llm"
         else:
-            entry["score"] = item["base_score"]
-            entry["verdict"] = "medium" if item["base_score"] >= 8 else "low"
-            entry["reason"] = item["base_reason"]
+            entry["score"] = base_s
+            entry["verdict"] = "medium" if base_s >= 8 else "low"
+            entry["reason"] = base_why
             entry["score_source"] = "keywords"
 
         # verdict 门禁
@@ -260,8 +280,9 @@ def rank_and_plan(candidates, cfg, top_n=None):
 # Phase 4: 择优投递
 # ---------------------------------------------------------------------------
 
-def execute_daily_plan(cfg, g, top_n=None):
-    """读取 daily_plan.json → execute_jobs 投递。返回 execute 结果。"""
+def execute_daily_plan(cfg, g, top_n=None, dry_run=False):
+    """读取 daily_plan.json → execute_jobs 投递。返回 execute 结果。
+    F01: dry_run=True 时杜绝任何外部写操作与实际点击，返回动作仿真统计。"""
     if top_n is None:
         top_n = int((cfg.get("daemon") or {}).get("apply_top_n", 50))
     plan_path = cfgmod.state_path("daily_plan.json")
@@ -272,6 +293,17 @@ def execute_daily_plan(cfg, g, top_n=None):
     plan = plan[:top_n]
     if not plan:
         return {"executed": 0, "results": [], "guard": g.summary(), "note": "plan empty"}
+
+    # F01: 模拟模式下零外部写操作
+    if dry_run:
+        return {
+            "executed": 0,
+            "simulated": len(plan),
+            "results": [{"title": j.get("title"), "company": j.get("company"), "dry_run": True} for j in plan],
+            "guard": g.summary(),
+            "dry_run": True,
+            "note": "dry-run simulation mode, zero external writes executed"
+        }
 
     # 写台账：投递计划生成
     ledger.append({

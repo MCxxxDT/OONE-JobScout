@@ -614,9 +614,20 @@ def chat_job_detail(cfg, company=None, fetch_jd=True, fetch_history=True):
         sess.close()
 
 
-def execute_jobs(cfg, g, jobs, max_count=10):
-    """带护栏执行打招呼（裸CDP版）。任何风控信号 → 立即熔断并写台账。"""
+def execute_jobs(cfg, g, jobs, max_count=10, dry_run=False):
+    """带护栏执行打招呼（裸CDP版）。任何风控信号 → 立即熔断并写台账。
+    F01: dry_run=True 时杜绝任何 CDP 标签页开启与外部写操作。"""
     jobs = filter_greeted(jobs)
+    if dry_run:
+        sim_count = min(len(jobs), max_count)
+        print(f"  [投递执行·模拟模式] 待投递岗位池: {len(jobs)} 个 (仿真执行 {sim_count} 个，零外部写操作)")
+        return {
+            "executed": 0,
+            "simulated": sim_count,
+            "results": [{"title": j.get("title"), "company": j.get("company"), "dry_run": True} for j in jobs[:max_count]],
+            "guard": g.summary(),
+            "dry_run": True
+        }
     done, results = 0, []
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     print(f"  [投递执行] 待投递岗位池: {len(jobs)} 个 (本次上限: {max_count})")

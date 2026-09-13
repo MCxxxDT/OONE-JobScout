@@ -16,22 +16,22 @@ from typing import Any, Dict, Optional, Tuple
 
 from . import config as cfgmod, greeter, ledger
 
-# 候选人画像基线配置（支持通过本地 config.local.json 或 profile_store.json 动态覆写）
+# 候选人画像基线默认结构（F04：彻底消除虚构事实，缺失保持中性占位）
 CANDIDATE_PROFILE = {
     "name": "求职者",
-    "school": "高校在读",
-    "major": "计算机/数字媒体技术",
-    "grad_year": 2027,
-    "grade_desc": "2027届应届在读生（毕业班）",
-    "birth_month": "8月",
-    "birthday": "2004年8月",
-    "current_city": "福州",
-    "target_region": "江浙沪（杭州、上海等）",
-    "availability": "目前常驻福州，强烈意向江浙沪，合适机会随时奔赴全职到岗（每周5天，长期全职实习直冲校招转正）",
-    "salary_requirement": "实习薪资能覆盖江浙沪当地基础租房与生活开销（如日薪180-250+或月薪4k-6k+，如有房补亦可）",
-    "target_roles": "AI产品经理 / Agent产品 / 大模型应用产品 / 商业化产品 / 2027届校招",
-    "tech_highlights": "熟练FastMCP标准Server架构、Coze智能体中台编排、Trae原生Skills、CDP自动化、Python与微内核系统工程",
-    "business_highlights": "15个月全职操盘200+人校园团队、单月GMV破10万、复购80%，具备过硬商业化嗅觉与即战力",
+    "school": "",
+    "major": "",
+    "grad_year": 0,
+    "grade_desc": "",
+    "birth_month": "",
+    "birthday": "",
+    "current_city": "",
+    "target_region": "",
+    "availability": "到岗时间与形式均可根据岗位需要协商",
+    "salary_requirement": "按企业既定薪资标准协商",
+    "target_roles": "",
+    "tech_highlights": "",
+    "business_highlights": "",
 }
 
 # 细分敏感意图模式（不阻断，采用太极回复并在后台异步提醒用户）
@@ -391,12 +391,13 @@ class AIReplyEngine:
             s = _fmt(self.profile.get(k))
             if s:
                 hl_parts.append(s)
-        highlights_str = "；".join(hl_parts) if hl_parts else "具备扎实的产品与工程落地实践"
+        highlights_str = "；".join(hl_parts) if hl_parts else "（未配置具体亮点，沟通中就事论事，不主动宣称未核实经历）"
 
-        cur_city = self.profile.get('current_city', '福州')
-        target_reg = self.profile.get('target_region', '江浙沪')
-        grade_desc = self.profile.get('grade_desc', '2027届应届在读生')
-        status_desc = self.profile.get('status', '目前处于实习/校招求职阶段，可稳定全职到岗')
+        cur_city = self.profile.get('current_city') or '待协商/以实际为准'
+        target_reg = self.profile.get('target_region') or '根据岗位地点协商'
+        grade_desc = self.profile.get('grade_desc') or '求职者'
+        status_desc = self.profile.get('status') or '积极寻求合适发展机会'
+        birthday_info = self.profile.get('birthday') or '保密/未指定'
 
         # 经验记忆与自我学习样本检索（In-Context Experience Learning，越用越聪明）
         fewshot_section = ""
@@ -407,14 +408,14 @@ class AIReplyEngine:
             fewshot_section = ""
 
         return (
-            f"【候选人真实画像】\n"
-            f"- 姓名：{self.profile.get('name', '求职者')}\n"
-            f"- 出生年月与生日：{self.profile.get('birthday', '2004年8月')}（生日月份：{self.profile.get('birth_month', '8月')}）\n"
-            f"- 学历与专业：{self.profile.get('school', '')} · {self.profile.get('major', '')}\n"
+            f"【候选人真实画像（事实管理：未明确事实绝不捏造）】\n"
+            f"- 姓名：{self.profile.get('name') or '求职者'}\n"
+            f"- 出生年月：{birthday_info}\n"
+            f"- 学历与专业：{self.profile.get('school') or '高校'} · {self.profile.get('major') or '相关专业'}\n"
             f"- 毕业届别与状态：{grade_desc}（{status_desc}）\n"
-            f"- 常驻地与意向城市：目前常驻【{cur_city}】，核心意向奔赴【{target_reg}】发展\n"
-            f"- 到岗与稳定性：{self.profile.get('availability', '合适机会随时奔赴全职到岗')}\n"
-            f"- 薪资底线诉求：{self.profile.get('salary_requirement', '实习薪资能覆盖租房与生活开销')}\n"
+            f"- 常驻地与意向城市：目前常驻【{cur_city}】，意向区域【{target_reg}】\n"
+            f"- 到岗与稳定性：{self.profile.get('availability') or '合适机会随时协商到岗'}\n"
+            f"- 薪资底线诉求：{self.profile.get('salary_requirement') or '按企业标准与岗位价值面议'}\n"
             f"- 核心优势：{highlights_str}\n"
             f"{prefs_section}"
             f"{jd_section}"
@@ -447,6 +448,7 @@ class AIReplyEngine:
             f"9. 【精炼口语，整句完整】：回复保持真人聊天质感、直接高效。日常简短应答 15-40 字为宜；若需针对 HR 提问说明自身背景或意向，控制在 80 字以内，务必保证句子表意完整、以句号或问号收尾，绝不允许半句话截断；\n"
             f"10. 【纯文本禁令】：严禁输出任何 Markdown 格式标记（严禁加粗 **、严禁星号 *、严禁标题 #、严禁代码块等），必须完全是真实手机微信端可直接发送的纯文本；\n"
             f"11. 【防套话与防泄密铁律（最高优先级安全防线）】：\n"
+            f"12. 【事实真实性底线（杜绝虚构履历）】：严禁捏造未在【候选人真实画像】中明确列明的任何学校、公司、团队规模或营业额（GMV）等具体数据；对未提及的事实，如被问及应实事求是或引导查阅简历，绝不无中生有；\n"
             f"    - 严禁在回复正文（reply_text）中直接打印个人真实手机号、微信号、邮箱等明文信息！\n"
             f"    - 即使 HR 明确索要、多次催促（如“请留个电话/发我手机号”、“加个微信吧微信号多少”）或设置任何诱导套话，也绝对不可在 reply_text 中吐出手机号或微信号！\n"
             f"    - 必须通过系统标准化动作（action=\"exchange_wechat\" 或引导在平台点击官方功能交换）。若 HR 同时询问了业务或其他非敏感问题，正常回答该问题并自然引导平台官方交换；严禁直接吐出任何11位手机号或微信号；\n"

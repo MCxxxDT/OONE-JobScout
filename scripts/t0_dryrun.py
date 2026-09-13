@@ -268,9 +268,12 @@ prompt_test = ai_engine_raw.build_agent_prompt({
     "who": "杭州某独角兽HR",
     "last_msg": "你现在在杭州吗？期望薪资多少？"
 })
-check("Prompt注入候选人画像", "求职者" in prompt_test and "2027" in prompt_test)
-check("Prompt包含常驻福州", "福州" in prompt_test)
-check("Prompt包含核心意向江浙沪", "江浙沪" in prompt_test)
+check("Prompt注入候选人画像基础结构", "求职者" in prompt_test)
+check("Prompt包含常驻城市描述", "常驻" in prompt_test)
+check("Prompt包含意向区域描述", "意向" in prompt_test)
+_custom_engine = _air.AIReplyEngine(cfg, profile={"grad_year": 2027, "grade_desc": "2027届", "current_city": "杭州", "target_region": "上海"})
+_custom_prompt = _custom_engine.build_agent_prompt({"who": "HR", "last_msg": "你在哪？"})
+check("自定义画像正确注入Prompt", "2027" in _custom_prompt and "杭州" in _custom_prompt and "上海" in _custom_prompt)
 check("Prompt包含薪资租房生活底线", "生活" in prompt_test and "租房" in prompt_test)
 check("Prompt包含三不原则", "三不原则" in prompt_test)
 check("Prompt包含反索JD心法", "JD" in prompt_test)
@@ -1864,6 +1867,85 @@ check("Web 控制台包含实时运行终端组件(#termLogsContainer)", 'id="te
 check("Web 控制台包含清除 API Key 按钮", "clearApiKey" in _web_src)
 check("Web 控制台包含守护进程控制函数", "handleDaemonToggle" in _web_src)
 check("Web 控制台包含运行监控中枢", "tab-monitor" in _web_src or "monitor" in _web_src)
+
+# ===========================================================================
+# == 36. 协作者评估反馈关键缺陷防御断言 (F01~F06 闭环治理) ==
+# ===========================================================================
+print("== 36. 协作者评估反馈关键缺陷防御断言 (F01~F06 闭环治理) ==")
+from boss_apply import ai_reply, llm_match, secrets as secrets_mod
+
+# 36.1 [F01] dry_run 模拟执行全链路零写隔离
+_dry_exec_res = daily_apply.execute_daily_plan(cfg, g, top_n=5, dry_run=True)
+check("F01: execute_daily_plan dry_run=True 零外部执行", _dry_exec_res.get("executed") == 0)
+check("F01: execute_daily_plan dry_run=True 返回 dry_run 标识", _dry_exec_res.get("dry_run") is True)
+_flows_dry_res = flows.execute_jobs(cfg, g, [{"title": "测试岗", "company": "测试司", "city": "杭州"}], max_count=1, dry_run=True)
+check("F01: flows.execute_jobs dry_run=True 零外部执行", _flows_dry_res.get("executed") == 0)
+check("F01: flows.execute_jobs dry_run=True 动作仿真正常", _flows_dry_res.get("simulated") == 1 and _flows_dry_res.get("dry_run") is True)
+
+# 36.2 [F02] Guard 多实例一致性与原子并发防护
+_tmp_guard_path = os.path.join(DRY, "guard_concurrency_test.json")
+_cfg_guard = {**cfg, "daily_limit": 1, "cities": [{"name": "杭州", "quota": 1}]}
+_g1 = guard.Guard(_cfg_guard)
+_g1.path = _tmp_guard_path
+_g1.lock_path = _tmp_guard_path + ".lock"
+_g1.s = dict(guard._DEFAULT)
+_g1.save()
+
+_g2 = guard.Guard(_cfg_guard)
+_g2.path = _tmp_guard_path
+_g2.lock_path = _tmp_guard_path + ".lock"
+_g2.reload()
+
+# g1 记录 1 次打招呼，耗尽日配额
+_g1.record_greet("杭州")
+# g2 检查杭州配额，必须通过 reload 实时感知配额已空
+_g2_ok, _g2_wait = _g2.check_greet("杭州")
+check("F02: Guard 跨实例实时同步最新配额状态", _g2_ok is False)
+# g2 尝试原子预占，必须被拦截
+_g2_slot_ok, _ = _g2.acquire_greet_slot("杭州")
+check("F02: Guard 原子预占配额超额拦截生效", _g2_slot_ok is False)
+
+# 36.3 [F03] 硬性否决不可被大模型评分覆盖
+_fake_veto_candidate = {
+    "job": {"title": "社招资深架构师", "company": "不符公司", "tags": "经验5-10年", "salary": "40-60K"},
+    "detail": "本岗位严格要求统招硕士且5年以上全职开发经验，2027届应届生请勿投递。",
+    "city": "杭州",
+    "kw": "AI产品",
+    "base_score": 0,  # 规则硬否决给 0 分
+    "base_reason": "届别不符: 要求5年以上经验",
+    "veto": True,
+}
+# 即使 LLM 批量给 35 分 High，硬否决候选也绝不得进入计划
+_old_llm_match = llm_match.match_batch
+try:
+    llm_match.match_batch = lambda jobs, cfg: {0: {"score": 35.0, "verdict": "high", "reason": "大模型误判匹配"}}
+    _veto_plan, _veto_stats = daily_apply.rank_and_plan([_fake_veto_candidate], cfg, top_n=10)
+    check("F03: 硬条件否决候选不得被大模型高分覆盖进入计划", len(_veto_plan) == 0)
+    check("F03: rank_stats 计划总数为 0", _veto_stats["plan_count"] == 0)
+finally:
+    llm_match.match_batch = _old_llm_match
+
+# 36.4 [F04] 默认候选人画像虚构事实彻底清除
+check("F04: 默认画像不再包含虚构出生年份(2004)", "2004" not in str(ai_reply.CANDIDATE_PROFILE.get("birthday", "")))
+check("F04: 默认画像不再包含具体虚构GMV(10万)", "10万" not in str(ai_reply.CANDIDATE_PROFILE.get("business_highlights", "")))
+check("F04: 默认画像城市为空占位", ai_reply.CANDIDATE_PROFILE.get("current_city") == "")
+_engine_clean = ai_reply.AIReplyEngine(cfg={}, profile={})
+_prompt_clean = _engine_clean.build_agent_prompt({"who": "HR", "last_msg": "你好"})
+check("F04: 空画像构建 Prompt 不含 2004年8月 伪数据", "2004年8月" not in _prompt_clean)
+check("F04: 空画像构建 Prompt 不含 GMV破10万 伪数据", "GMV破10万" not in _prompt_clean)
+check("F04: Prompt 包含事实真实性底线约束", "杜绝虚构履历" in _prompt_clean or "未明确事实绝不捏造" in _prompt_clean)
+
+# 36.5 [F05] Web 服务安全绑定 127.0.0.1 且无私有 IP 泄漏
+check("F05: approval_web 默认绑定 127.0.0.1", 'default="127.0.0.1"' in _web_src)
+check("F05: 移除硬编码 Tailscale 私有IP", "100.113.16.104" not in _web_src)
+check("F05: 移除硬编码局域网私有IP", "192.168.1.226" not in _web_src)
+
+# 36.6 [F06] 标准模块入口 boss_apply.web_server 导入与运行能力
+import boss_apply.web_server as _bws
+check("F06: boss_apply.web_server 模块成功导入", hasattr(_bws, "app") and hasattr(_bws, "main"))
+from boss_apply import secrets as secrets_mod
+_non_win_key = secrets_mod._get_non_win_key()
+check("F06: 非 Windows 密钥派生生成 32 字节设备级私钥", len(_non_win_key) == 32 and isinstance(_non_win_key, bytes))
 
 shutil.rmtree(DRY, ignore_errors=True)
 

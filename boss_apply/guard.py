@@ -1,5 +1,13 @@
-"""安全护栏：限速、限次、城市配额、风控熔断。状态持久化，跨进程共享。"""
+"""安全护栏：限速、限次、城市配额、风控熔断。状态持久化，跨进程共享与事务一致性。
+
+F02 优化：
+- 引入跨平台原子文件锁（_guard_file_lock），确保多实例/多进程并发读写无竞争；
+- 每次检查配额前执行 reload() 确保读取最新磁盘数据，避免快照覆盖与漏计；
+- 提供 acquire_greet_slot 原子预占方法，在锁内完成检查与扣减，彻底杜绝并发超发。
+"""
+import contextlib
 import datetime
+import errno
 import json
 import os
 import time
@@ -22,15 +30,58 @@ def _today():
     return datetime.date.today().isoformat()
 
 
+@contextlib.contextmanager
+def _guard_file_lock(lock_path, timeout=5.0):
+    """跨平台原子文件排他锁，杜绝跨进程快照覆盖与并发超额投递。"""
+    start_time = time.time()
+    fd = None
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            break
+        except OSError as e:
+            if e.errno in (errno.EEXIST, 17):
+                # 检查陈旧孤儿锁（超过 10 秒自动清理）
+                try:
+                    if time.time() - os.path.getmtime(lock_path) > 10.0:
+                        os.remove(lock_path)
+                except OSError:
+                    pass
+                if time.time() - start_time > timeout:
+                    break
+                time.sleep(0.02)
+            else:
+                raise
+    try:
+        yield
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.remove(lock_path)
+            except OSError:
+                pass
+
+
 class Guard:
     def __init__(self, cfg):
         self.cfg = cfg
         self.path = cfgmod.state_path("guard_state.json")
+        self.lock_path = self.path + ".lock"
         self.s = dict(_DEFAULT)
+        self.reload()
+
+    def reload(self):
+        """从磁盘重载最新状态，保证多实例快照实时一致。"""
         if os.path.exists(self.path):
             try:
                 with open(self.path, "r", encoding="utf-8") as f:
-                    self.s.update(json.load(f))
+                    disk_data = json.load(f)
+                    if isinstance(disk_data, dict):
+                        self.s.update(disk_data)
             except Exception:
                 pass
         self._rollover()
@@ -45,25 +96,41 @@ class Guard:
             self.s["scan_done_today"] = False
             self.save()
 
+    def _save_unlocked(self):
+        """原子写入状态文件（临时文件替换），防止写一半崩溃。"""
+        if hasattr(cfgmod, "atomic_save_json"):
+            cfgmod.atomic_save_json(self.path, self.s, indent=2)
+        else:
+            tmp_path = self.path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(self.s, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, self.path)
+
     def save(self):
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self.s, f, ensure_ascii=False, indent=2)
+        """加文件锁持久化。"""
+        with _guard_file_lock(self.lock_path):
+            self._save_unlocked()
 
     # ---------- 风控熔断 ----------
     def pause(self, reason):
-        self.s["paused_reason"] = reason
-        self.save()
+        with _guard_file_lock(self.lock_path):
+            self.reload()
+            self.s["paused_reason"] = reason
+            self._save_unlocked()
 
     def resume(self):
-        self.s["paused_reason"] = None
-        self.save()
+        with _guard_file_lock(self.lock_path):
+            self.reload()
+            self.s["paused_reason"] = None
+            self._save_unlocked()
 
     @property
     def paused(self):
-        return self.s["paused_reason"]
+        return self.s.get("paused_reason")
 
     # ---------- 搜索（只读，低风险） ----------
     def check_search(self):
+        self.reload()
         if self.s["paused_reason"]:
             return False, "paused: %s" % self.s["paused_reason"]
         if self.s["search_count"] >= self.cfg.get("search_daily_limit", 600):
@@ -73,12 +140,14 @@ class Guard:
         return True, wait
 
     def record_search(self):
-        self.s["search_count"] += 1
-        self.s["last_search_ts"] = time.time()
-        self.save()
+        with _guard_file_lock(self.lock_path):
+            self.reload()
+            self.s["search_count"] += 1
+            self.s["last_search_ts"] = time.time()
+            self._save_unlocked()
 
     # ---------- 沟通（高风险） ----------
-    def check_greet(self, city=None):
+    def _check_greet_internal(self, city=None):
         if self.s["paused_reason"]:
             return False, "paused: %s (run resume_guard after manual check)" % self.s["paused_reason"]
         if self.s["greet_count"] >= self.cfg["daily_limit"]:
@@ -91,12 +160,35 @@ class Guard:
         wait = max(0.0, self.s["last_greet_ts"] + lo - time.time())
         return True, wait
 
+    def check_greet(self, city=None):
+        """检查是否允许发起打招呼（实时刷新最新磁盘数据）。"""
+        self.reload()
+        return self._check_greet_internal(city)
+
     def record_greet(self, city):
-        clean = (city or "").strip().rstrip("市")
-        self.s["greet_count"] += 1
-        self.s["city_counts"][clean] = self.s["city_counts"].get(clean, 0) + 1
-        self.s["last_greet_ts"] = time.time()
-        self.save()
+        """记录打招呼并持久化（带文件锁原子更新）。"""
+        with _guard_file_lock(self.lock_path):
+            self.reload()
+            clean = (city or "").strip().rstrip("市")
+            self.s["greet_count"] += 1
+            self.s["city_counts"][clean] = self.s["city_counts"].get(clean, 0) + 1
+            self.s["last_greet_ts"] = time.time()
+            self._save_unlocked()
+
+    def acquire_greet_slot(self, city=None):
+        """原子预占沟通配额：在文件锁保护下，重载最新状态、执行门禁校验并直接原子递增。
+        返回 (ok, info_or_wait)。彻底解决并发竞争与超额风险。"""
+        with _guard_file_lock(self.lock_path):
+            self.reload()
+            ok, res = self._check_greet_internal(city)
+            if not ok:
+                return False, res
+            clean = (city or "").strip().rstrip("市")
+            self.s["greet_count"] += 1
+            self.s["city_counts"][clean] = self.s["city_counts"].get(clean, 0) + 1
+            self.s["last_greet_ts"] = time.time()
+            self._save_unlocked()
+            return True, res
 
     def city_left(self, city):
         clean = (city or "").strip().rstrip("市")
@@ -115,6 +207,7 @@ class Guard:
         return max(0, quota - used)
 
     def summary(self):
+        self.reload()
         return {
             "date": self.s["date"],
             "greet_count": self.s["greet_count"],
@@ -127,8 +220,11 @@ class Guard:
 
     # ---------- 每日投递扫描标记 ----------
     def is_scan_done(self):
+        self.reload()
         return bool(self.s.get("scan_done_today", False))
 
     def mark_scan_done(self):
-        self.s["scan_done_today"] = True
-        self.save()
+        with _guard_file_lock(self.lock_path):
+            self.reload()
+            self.s["scan_done_today"] = True
+            self._save_unlocked()

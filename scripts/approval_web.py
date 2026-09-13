@@ -7483,7 +7483,7 @@ async def api_apply_now(request: Request, token: str = ""):
                     g.mark_scan_done()
                 _DAILY_APPLY_STATUS["last_report"] = report
             else:
-                exec_res = daily_apply.execute_daily_plan(cfg, g, top_n=top_n)
+                exec_res = daily_apply.execute_daily_plan(cfg, g, top_n=top_n, dry_run=dry_run)
                 if not dry_run and (exec_res.get("executed", 0) > 0 or not exec_res.get("error")):
                     g.mark_scan_done()
                 _DAILY_APPLY_STATUS["last_report"] = exec_res
@@ -7651,8 +7651,8 @@ async def api_auth_clear_key(request: Request, token: str = ""):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BOSS直聘求职守护审批台（局域网Web工作台）")
-    parser.add_argument("--host", default="0.0.0.0", help="绑定地址（默认 0.0.0.0 支持本机、局域网与 Tailscale 访问）")
+    parser = argparse.ArgumentParser(description="BOSS直聘求职守护审批台（Web工作台）")
+    parser.add_argument("--host", default="127.0.0.1", help="绑定地址（默认 127.0.0.1 本地回环安全监听；局域网协作需显式指定 0.0.0.0）")
     parser.add_argument("--port", type=int, default=8788)
     args = parser.parse_args()
     import uvicorn
@@ -7660,9 +7660,12 @@ def main():
     token = _web_cfg(cfg).get("token") or os.getenv("APPROVAL_TOKEN") or "boss-apply"
     print("=" * 62)
     print("  BOSS直聘求职守护 · 运营中枢 (Web工作台)")
-    print("  本机访问: http://127.0.0.1:%d/?token=%s" % (args.port, token))
-    print("  Tailscale 访问: http://100.113.16.104:%d/?token=%s" % (args.port, token))
-    print("  手机/局域网: http://192.168.1.226:%d/?token=%s" % (args.port, token))
+    print(f"  本机安全访问: http://127.0.0.1:{args.port}/?token={token}")
+    if args.host != "127.0.0.1":
+        print(f"  [远程监听] 当前已开放外部网络监听 ({args.host})")
+        if token == "boss-apply":
+            print("  ⚠️  [安全告警] 远程网络开启但仍在使用默认弱令牌 'boss-apply'！")
+            print("     建议在 config.local.json 的 web.token 中设置复杂密钥。")
     print("=" * 62)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 

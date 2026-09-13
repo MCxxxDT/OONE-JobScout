@@ -22,10 +22,21 @@ SECRETS_PATH = os.path.join(cfgmod.STATE_DIR, "secrets.json")
 _IS_WIN = sys.platform == "win32"
 
 
+def _get_non_win_key():
+    import getpass
+    import hashlib
+    import uuid
+    # 结合本机网卡MAC/设备指纹与当前登录用户名派生机器级私有密钥，杜绝跨设备复制直接解密
+    machine_id = str(uuid.getnode())
+    user = getpass.getuser()
+    salt = _ENTROPY.decode("ascii", errors="ignore")
+    return hashlib.sha256(f"{machine_id}:{user}:{salt}".encode("utf-8")).digest()
+
+
 def _dpapi_call(data, protect):
-    """ctypes 调 CryptProtectData/CryptUnprotectData。非 Windows（macOS/Linux）下基于应用盐混淆回退。"""
+    """ctypes 调 CryptProtectData/CryptUnprotectData。非 Windows（macOS/Linux）下基于设备与用户绑定的派生密钥混淆保护。"""
     if not _IS_WIN:
-        key = _ENTROPY
+        key = _get_non_win_key()
         return bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
     import ctypes
     import ctypes.wintypes as wt
