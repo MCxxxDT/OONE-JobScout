@@ -1,0 +1,17 @@
+[project]
+name = "oone-jobscout"
+version = "1.0.0"
+description = "BOSS直聘智能接管平台（基于真实 Chromium 远程调试协议 CDP）"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.40",
+    "fastmcp>=3.0",
+    "websocket-client>=1.6",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "requests>=2.31",
+    "python-multipart>=0.0.9",
+    "pymupdf>=1.24",
+    "python-docx>=1.1",
+]

@@ -15,8 +15,31 @@ git clone https://github.com/MCxxxDT/OONE-JobScout.git
 cd OONE-JobScout
 ```
 
-### 2. 初始化 Python 虚拟环境并安装依赖
-建议使用 **Python 3.10 ~ 3.13**。
+### 2. 初始化环境并安装依赖（支持 UV 或 PIP）
+建议使用 **Python 3.10 ~ 3.13**。你可以根据个人开发习惯选择以下任意一种方式：
+
+#### ⚡ 方式 A：使用 UV（极速推荐，依赖秒级解析与安装）
+> 如果尚未安装 `uv`，可一键安装：
+> - **Windows (PowerShell)**: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+> - **macOS / Linux**: `curl -LsSf https://astral.sh/uv/install.sh | sh` 或 `brew install uv`
+
+- **Windows (PowerShell)**:
+  ```powershell
+  uv venv
+  .\.venv\Scripts\Activate.ps1
+  uv pip install -r requirements.txt
+  ```
+
+- **macOS / Linux (Terminal)**:
+  ```bash
+  uv venv
+  source .venv/bin/activate
+  uv pip install -r requirements.txt
+  ```
+
+---
+
+#### 🐍 方式 B：使用标准 PIP（开箱即用，无需第三方管理工具）
 
 - **Windows (PowerShell)**:
   ```powershell
