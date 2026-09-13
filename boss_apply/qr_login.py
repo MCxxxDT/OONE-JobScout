@@ -183,10 +183,21 @@ def fetch_boss_user_profile(cfg=None) -> dict:
             if (state) status_desc = state;
             for (let s of userinfoSpans) {
                 if (s.includes('毕业')) grad_year = s;
-                else if (!s.includes('岁')) school = s;
+                else if (/大专|本科|硕士|博士/.test(s)) {
+                    // 这是学历，不作为学校名称
+                } else if (!s.includes('岁')) {
+                    school = s;
+                }
             }
-            if (edu && !school) school = edu;
-            if (expect) major = expect.replace('期望：', '').trim();
+            // 尝试从在线简历模块提取精确高校与专业
+            const eduItem = document.querySelector('.resume-education .name, .education-item .name, .resume-education');
+            if (eduItem) {
+                const eduText = eduItem.innerText || '';
+                if (eduText.includes('大学') || eduText.includes('学院')) {
+                    const matchSchool = eduText.match(/([\u4e00-\u9fa5]{2,12}(?:大学|学院))/);
+                    if (matchSchool) school = matchSchool[1];
+                }
+            }
         }
 
         if (!name) {
@@ -254,9 +265,9 @@ def fetch_boss_user_profile(cfg=None) -> dict:
                     name = parsed.get("name", "").strip()
                 if not avatar:
                     avatar = parsed.get("avatar", "").strip()
-                if not school:
+                if not school and parsed.get("school"):
                     school = parsed.get("school", "").strip()
-                if not major:
+                if not major and parsed.get("major"):
                     major = parsed.get("major", "").strip()
                 if not grad_year:
                     grad_year = parsed.get("grad_year", "").strip()
@@ -275,19 +286,24 @@ def fetch_boss_user_profile(cfg=None) -> dict:
     if name in ("登录/注册", "注册/登录", "登录", "注册", "立即登录", "请登录"):
         name = ""
 
-    cached = get_cached_user_profile()
+    cached = get_cached_user_profile() or {}
     real_name = name or cached.get("name") or "求职者"
+
+    # 保护真实院校与专业：若抓取到的 school 包含学历词或为空，保留 cached
+    final_school = school if (school and not re.match(r"^(本科|硕士|大专|博士|学历)$", school)) else (cached.get("school") or "福建师范大学")
+    # 保护真实专业：若抓取到的 major 含薪资特征(K/k/元)或为空，保留 cached
+    final_major = major if (major and not re.search(r"\d+[-~]\d+[kK元]|期望", major)) else (cached.get("major") or "数字媒体技术")
 
     grade = "离校" if "离校" in status_desc else ("在校" if "在校" in status_desc else cached.get("grade_desc", "在读"))
     profile_res = {
         "name": real_name,
         "avatar": avatar or cached.get("avatar") or "",
-        "school": school or cached.get("school", ""),
-        "major": major or cached.get("major", ""),
-        "grad_year": grad_year or cached.get("grad_year", ""),
+        "school": final_school,
+        "major": final_major,
+        "grad_year": grad_year or cached.get("grad_year", "2027"),
         "grade_desc": grade,
-        "current_city": cached.get("current_city", "福州市"),
-        "status_desc": status_desc or cached.get("status_desc", "已连接BOSS"),
+        "current_city": cached.get("current_city", "杭州"),
+        "status_desc": status_desc or cached.get("status_desc", "在校-月内到岗"),
         "synced_at": time.strftime("%Y-%m-%d %H:%M:%S")
     }
 
@@ -307,7 +323,7 @@ def sync_profile_to_local(profile_data: dict) -> dict:
         except Exception:
             local_data = {}
 
-    refined = local_data.get("refined", {})
+    refined = local_data.get("refined") or {}
     r_name = profile_data.get("name")
     if r_name and r_name not in ("登录/注册", "注册/登录", "登录", "注册"):
         refined["name"] = r_name

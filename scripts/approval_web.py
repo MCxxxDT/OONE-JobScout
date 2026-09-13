@@ -440,19 +440,49 @@ def api_profile_sync_boss_resume(token: str = ""):
     return {"ok": True, "resume_chars": len(text), "meta": meta}
 
 
-@app.post("/api/profile/sync_to_boss")
-async def api_profile_sync_to_boss(request: Request, token: str = ""):
-    """将工作台编辑的个人画像双向同步写回 BOSS 直聘（本地缓存与联系方式配置）。"""
+@app.post("/api/profile/update")
+async def api_profile_update(request: Request, token: str = ""):
+    """更新工作台个人求职画像并保存至本地缓存与 profile.local.json。"""
     cfg = cfgmod.load()
     if not _check_token(cfg, token):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     body = await request.json()
     user_profile = qr_login.get_cached_user_profile() or {}
-    for k in ("name", "school", "major", "grad_year", "grade_desc", "current_city", "status_desc"):
-        if k in body and body[k]:
+    for k in ("name", "school", "degree", "major", "grad_year", "grade_desc", "current_city", "expect_position", "advantage", "status_desc"):
+        if k in body and body[k] is not None:
             user_profile[k] = str(body[k]).strip()
     user_profile["synced_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cfgmod.atomic_save_json(qr_login.USER_PROFILE_CACHE, user_profile)
+
+    # 同步写入 profile.local.json 的 refined
+    qr_login.sync_profile_to_local(user_profile)
+
+    # 若有联系方式更新，写入 privacy_policy
+    priv_updates = {}
+    if "contact_wechat" in body:
+        priv_updates["contact_wechat"] = str(body["contact_wechat"]).strip()
+    if "contact_phone" in body:
+        priv_updates["contact_phone"] = str(body["contact_phone"]).strip()
+    if priv_updates:
+        _write_local("privacy_policy", priv_updates)
+
+    return {"ok": True, "message": "个人画像与联系方式已成功保存！", "user_profile": user_profile}
+
+
+@app.post("/api/profile/sync_to_boss")
+async def api_profile_sync_to_boss(request: Request, token: str = ""):
+    """将工作台编辑的个人画像双向同步写回 BOSS 直聘（本地持久化 + CDP 自动同步至微简历）。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    user_profile = qr_login.get_cached_user_profile() or {}
+    for k in ("name", "school", "degree", "major", "grad_year", "grade_desc", "current_city", "expect_position", "advantage", "status_desc"):
+        if k in body and body[k] is not None:
+            user_profile[k] = str(body[k]).strip()
+    user_profile["synced_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cfgmod.atomic_save_json(qr_login.USER_PROFILE_CACHE, user_profile)
+    qr_login.sync_profile_to_local(user_profile)
 
     priv_updates = {}
     if "contact_wechat" in body:
@@ -463,6 +493,7 @@ async def api_profile_sync_to_boss(request: Request, token: str = ""):
         _write_local("privacy_policy", priv_updates)
 
     cdp_status = "synced_local"
+    boss_sync_details = {}
     try:
         cdp_http = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
         from urllib.request import urlopen
@@ -470,16 +501,49 @@ async def api_profile_sync_to_boss(request: Request, token: str = ""):
         from boss_apply import rawcdp
         sess = rawcdp.RawCDP(cdp_http)
         try:
-            sess.open_tab("https://www.zhipin.com/web/geek/resume")
-            time.sleep(2)
+            sess.open_tab("https://www.zhipin.com/web/geek/resume", background=True)
+            time.sleep(2.5)
+
+            # 若有个人优势内容，尝试自动同步微简历自述
+            adv_text = (user_profile.get("advantage") or "").strip()
+            sync_js = """
+(() => {
+    let updated = [];
+    const advantage = %s;
+    if (advantage && advantage.length >= 5) {
+        const sumItem = document.querySelector('.resume-summary, .resume-userDesc');
+        if (sumItem) {
+            const editBtn = sumItem.querySelector('.link-edit, .icon-edit, .op a');
+            if (editBtn) {
+                editBtn.click();
+                const ta = sumItem.querySelector('textarea');
+                if (ta) {
+                    ta.value = advantage;
+                    ta.dispatchEvent(new Event('input', {bubbles: true}));
+                    ta.dispatchEvent(new Event('change', {bubbles: true}));
+                    const saveBtn = sumItem.querySelector('.btn-primary, button[type="submit"], .btn-sure');
+                    if (saveBtn) {
+                        saveBtn.click();
+                        updated.push('advantage');
+                    }
+                }
+            }
+        }
+    }
+    const title = document.title || '';
+    return JSON.stringify({ok: true, title: title, updated: updated});
+})()
+""" % json.dumps(adv_text, ensure_ascii=False)
+            res_eval = sess.eval(sync_js)
             cdp_status = "synced_boss_online"
+            boss_sync_details = json.loads(res_eval) if res_eval else {}
         finally:
             sess.close_tab()
             sess.close()
-    except Exception:
-        pass
+    except Exception as ex:
+        boss_sync_details = {"error": str(ex)[:200]}
 
-    return {"ok": True, "message": "个人画像已保存并同步", "user_profile": user_profile, "cdp_status": cdp_status}
+    return {"ok": True, "message": "个人画像已保存并同步至底座与 BOSS 直聘", "user_profile": user_profile, "cdp_status": cdp_status, "details": boss_sync_details}
 
 
 @app.post("/api/playground/simulate")
@@ -2881,6 +2945,9 @@ PAGE = """<!DOCTYPE html>
             </div>
 
             <div class="d-flex flex-column gap-2">
+              <button class="btn-action-light w-100 justify-content-center" style="padding:8px 12px;font-size:12px;border-radius:10px;font-weight:600;color:#6366f1" onclick="openEditProfileModal()">
+                ✏️ 编辑个人求职画像
+              </button>
               <button class="btn-action-light w-100 justify-content-center" style="padding:8px 12px;font-size:12px;border-radius:10px;font-weight:600;color:#0284c7" onclick="syncBossProfile()">
                 🔄 重新从 BOSS 同步资料
               </button>
@@ -3654,6 +3721,84 @@ PAGE = """<!DOCTYPE html>
         <span id="resProfile" style="font-size:12px;margin-right:auto"></span>
         <button type="button" class="btn-action-light" onclick="closeSettingModal('modalResume')">取消</button>
         <button type="button" class="btn-black" onclick="saveProfile()">保存并提炼画像</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7: 个人求职画像编辑弹窗 -->
+  <div class="modal-overlay" id="modalEditProfile" onclick="if(event.target === this) closeSettingModal('modalEditProfile')">
+    <div class="setting-modal-card" style="max-width:650px">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title">✏️ 编辑个人求职画像与联系方式</div>
+          <div class="setting-modal-subtitle">校准您的院校、专业、期望岗位及联系方式，支持双向写回 BOSS 在线简历</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalEditProfile')">✕</button>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-12 col-sm-6">
+          <label class="form-label" style="font-size:12px;font-weight:700">真实姓名</label>
+          <input type="text" id="editProfName" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：张烨韬">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label" style="font-size:12px;font-weight:700">就读院校</label>
+          <input type="text" id="editProfSchool" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：福建师范大学">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label" style="font-size:12px;font-weight:700">所学专业</label>
+          <input type="text" id="editProfMajor" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：数字媒体技术">
+        </div>
+        <div class="col-6 col-sm-3">
+          <label class="form-label" style="font-size:12px;font-weight:700">最高学历</label>
+          <select id="editProfDegree" class="form-select" style="border-radius:10px;font-size:13px">
+            <option value="本科">本科</option>
+            <option value="硕士">硕士</option>
+            <option value="博士">博士</option>
+            <option value="大专">大专</option>
+          </select>
+        </div>
+        <div class="col-6 col-sm-3">
+          <label class="form-label" style="font-size:12px;font-weight:700">毕业届别</label>
+          <input type="text" id="editProfGradYear" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：2027">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label" style="font-size:12px;font-weight:700">求职状态</label>
+          <select id="editProfStatus" class="form-select" style="border-radius:10px;font-size:13px">
+            <option value="在校-月内到岗">在校-月内到岗</option>
+            <option value="在校-随时到岗">在校-随时到岗</option>
+            <option value="离校-随时到岗">离校-随时到岗</option>
+            <option value="在职-月内到岗">在职-月内到岗</option>
+            <option value="在校-看看机会">在校-看看机会</option>
+          </select>
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label" style="font-size:12px;font-weight:700">常驻城市</label>
+          <input type="text" id="editProfCity" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：杭州">
+        </div>
+        <div class="col-12">
+          <label class="form-label" style="font-size:12px;font-weight:700">期望职位 / 求职意向</label>
+          <input type="text" id="editProfExpect" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：产品运营 / AI产品经理">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label" style="font-size:12px;font-weight:700">联系微信（外发与换微信凭证）</label>
+          <input type="text" id="editProfWechat" class="form-control" style="border-radius:10px;font-size:13px" placeholder="微信号">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label" style="font-size:12px;font-weight:700">联系电话（联系方式安全凭证）</label>
+          <input type="text" id="editProfPhone" class="form-control" style="border-radius:10px;font-size:13px" placeholder="手机号">
+        </div>
+        <div class="col-12">
+          <label class="form-label" style="font-size:12px;font-weight:700">个人优势 / 亮点简述（将回写至在线微简历）</label>
+          <textarea id="editProfAdvantage" class="form-control" rows="3" style="border-radius:10px;font-size:13px" placeholder="如：福建师大2027届在读，独立做过自媒体Agent生产流（FastMCP+Trae），月操盘10万GMV…"></textarea>
+        </div>
+      </div>
+
+      <div class="setting-modal-footer">
+        <span id="resEditProfile" style="font-size:12px;margin-right:auto"></span>
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalEditProfile')">取消</button>
+        <button type="button" class="btn-action-light" style="color:#0284c7;font-weight:600" onclick="saveProfileEdit(false)">💾 保存至本地画像</button>
+        <button type="button" class="btn-black" style="background:#10b981;border-color:#10b981" onclick="saveProfileEdit(true)">🔄 保存并同步回写 BOSS</button>
       </div>
     </div>
   </div>
@@ -5415,7 +5560,9 @@ function scrollSettingsSection(sec) {
     privacy: 'modalPrivacy',
     auto: 'modalAutoApply',
     browser: 'modalBrowser',
-    resume: 'modalResume'
+    resume: 'modalResume',
+    profile: 'modalEditProfile',
+    editProfile: 'modalEditProfile'
   };
   const modalId = modalMap[sec];
   if (modalId) {
@@ -6165,6 +6312,84 @@ async function clearSavedResume() {
       showToast('网络错误: ' + e.message, 'error');
     }
   });
+}
+
+function openEditProfileModal() {
+  const prof = window.__cachedUserProfile || {};
+  const priv = (window.__cachedSettings && window.__cachedSettings.privacy_policy) || {};
+  
+  const elName = document.getElementById('editProfName');
+  const elSchool = document.getElementById('editProfSchool');
+  const elMajor = document.getElementById('editProfMajor');
+  const elDegree = document.getElementById('editProfDegree');
+  const elGradYear = document.getElementById('editProfGradYear');
+  const elStatus = document.getElementById('editProfStatus');
+  const elCity = document.getElementById('editProfCity');
+  const elExpect = document.getElementById('editProfExpect');
+  const elWechat = document.getElementById('editProfWechat');
+  const elPhone = document.getElementById('editProfPhone');
+  const elAdvantage = document.getElementById('editProfAdvantage');
+  const elRes = document.getElementById('resEditProfile');
+
+  if (elName) elName.value = prof.name || '';
+  if (elSchool) elSchool.value = prof.school || '福建师范大学';
+  if (elMajor) elMajor.value = prof.major || '数字媒体技术';
+  if (elDegree) elDegree.value = prof.degree || '本科';
+  if (elGradYear) elGradYear.value = prof.grad_year || '2027';
+  if (elStatus) elStatus.value = prof.status_desc || '在校-月内到岗';
+  if (elCity) elCity.value = prof.current_city || '杭州';
+  if (elExpect) elExpect.value = prof.expect_position || '产品运营 / AI产品经理';
+  if (elWechat) elWechat.value = priv.contact_wechat || '';
+  if (elPhone) elPhone.value = priv.contact_phone || '';
+  if (elAdvantage) elAdvantage.value = prof.advantage || '';
+  if (elRes) elRes.textContent = '';
+
+  // 关闭下拉 popover
+  const dd = document.getElementById('profileDropdown');
+  if (dd) dd.style.display = 'none';
+
+  openSettingModal('modalEditProfile');
+}
+
+async function saveProfileEdit(syncToBoss = false) {
+  const elRes = document.getElementById('resEditProfile');
+  if (elRes) { elRes.style.color = '#64748b'; elRes.textContent = syncToBoss ? '⏳ 正在保存并双向写回 BOSS 直聘…' : '⏳ 正在保存至本地…'; }
+  
+  const body = {
+    name: (document.getElementById('editProfName') ? document.getElementById('editProfName').value : '').trim(),
+    school: (document.getElementById('editProfSchool') ? document.getElementById('editProfSchool').value : '').trim(),
+    major: (document.getElementById('editProfMajor') ? document.getElementById('editProfMajor').value : '').trim(),
+    degree: (document.getElementById('editProfDegree') ? document.getElementById('editProfDegree').value : '本科').trim(),
+    grad_year: (document.getElementById('editProfGradYear') ? document.getElementById('editProfGradYear').value : '').trim(),
+    status_desc: (document.getElementById('editProfStatus') ? document.getElementById('editProfStatus').value : '在校-月内到岗').trim(),
+    current_city: (document.getElementById('editProfCity') ? document.getElementById('editProfCity').value : '杭州').trim(),
+    expect_position: (document.getElementById('editProfExpect') ? document.getElementById('editProfExpect').value : '').trim(),
+    contact_wechat: (document.getElementById('editProfWechat') ? document.getElementById('editProfWechat').value : '').trim(),
+    contact_phone: (document.getElementById('editProfPhone') ? document.getElementById('editProfPhone').value : '').trim(),
+    advantage: (document.getElementById('editProfAdvantage') ? document.getElementById('editProfAdvantage').value : '').trim()
+  };
+
+  try {
+    const ep = syncToBoss ? '/api/profile/sync_to_boss' : '/api/profile/update';
+    const res = await api(ep, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (res.ok) {
+      if (elRes) { elRes.style.color = 'var(--ok)'; elRes.textContent = '✅ ' + (res.message || '保存成功！'); }
+      showToast(syncToBoss ? '个人画像已保存并成功写回 BOSS 直聘！' : '个人求职画像已成功保存至本地！', 'success');
+      load(false);
+      setTimeout(() => closeSettingModal('modalEditProfile'), 1000);
+    } else {
+      if (elRes) { elRes.style.color = 'var(--dan)'; elRes.textContent = '❌ ' + (res.error || '保存失败'); }
+      showToast('保存失败: ' + (res.error || '未知错误'), 'error');
+    }
+  } catch(e) {
+    if (elRes) { elRes.style.color = 'var(--dan)'; elRes.textContent = '❌ ' + e.message; }
+    showToast('网络或操作异常: ' + e.message, 'error');
+  }
 }
 
 async function syncProfileToBoss() {
