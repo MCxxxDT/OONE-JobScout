@@ -46,6 +46,10 @@ def ensure_chrome_running(cfg=None) -> bool:
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
         os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium-browser",
     ]
     chrome_exe = None
     for cand in chrome_candidates:
@@ -56,7 +60,7 @@ def ensure_chrome_running(cfg=None) -> bool:
     if not chrome_exe:
         return False
 
-    profile_dir = os.path.expandvars(r"C:\Users\LENOVO\chrome-cdp-profile")
+    profile_dir = os.path.expanduser("~/chrome-cdp-profile")
     if not os.path.exists(profile_dir):
         try:
             os.makedirs(profile_dir, exist_ok=True)

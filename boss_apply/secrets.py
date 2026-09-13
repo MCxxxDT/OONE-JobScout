@@ -23,9 +23,10 @@ _IS_WIN = sys.platform == "win32"
 
 
 def _dpapi_call(data, protect):
-    """ctypes 调 CryptProtectData/CryptUnprotectData。返回 bytes，失败抛 RuntimeError。"""
+    """ctypes 调 CryptProtectData/CryptUnprotectData。非 Windows（macOS/Linux）下基于应用盐混淆回退。"""
     if not _IS_WIN:
-        raise RuntimeError("DPAPI 仅支持 Windows")
+        key = _ENTROPY
+        return bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
     import ctypes
     import ctypes.wintypes as wt
 
