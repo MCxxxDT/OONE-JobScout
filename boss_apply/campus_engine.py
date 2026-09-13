@@ -47,13 +47,14 @@ class HiringClock:
         year = dt.year
         stage = cls.get_current_stage(dt)
 
+        grad_year = (year + 1) if month >= 6 else year
         if stage == cls.AUTUMN_FORMAL:
             stage_name = "秋招正式批黄金期"
             rec_mode = "mix"
             campus_ratio = 0.70
             intern_ratio = 0.30
-            urgency_modifier = "【秋招黄金档·直通2027正编】"
-            desc = "9-10月为秋招正式批与秋招黄金期，核心推荐70% 2027届校招正编 + 30% 大厂转正实习。"
+            urgency_modifier = f"【秋招黄金档·直通{grad_year}正编】"
+            desc = f"9-10月为秋招正式批与秋招黄金期，核心推荐70% {grad_year}届校招正编 + 30% 大厂转正实习。"
         elif stage == cls.AUTUMN_SUPPLEMENT:
             stage_name = "秋招补录期"
             rec_mode = "mix"

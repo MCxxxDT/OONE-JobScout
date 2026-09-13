@@ -3034,10 +3034,6 @@ PAGE = """<!DOCTYPE html>
           </div>
         </section>
 
-        <!-- Top Sub-nav -->
-        <div class="sub-nav-bar mb-3">
-          <div class="sub-nav-pill active">⚡ 待人工决策（needs_human）</div>
-        </div>
         <div class="panel-card mb-4">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-bold mb-0 d-flex align-items-center panel-card-title">
@@ -3069,11 +3065,6 @@ PAGE = """<!DOCTYPE html>
 
       <!-- Tab: 运行监控 (守护进程一键启停与实时运行状态) -->
       <main id="tab-monitor" class="tab-content">
-        <!-- Top Sub-nav -->
-        <div class="sub-nav-bar mb-3">
-          <div class="sub-nav-pill active">⚡ 守护进程实时控制与环境感知</div>
-        </div>
-
         <div class="row g-4">
           <!-- Col 1: 守护进程一键启停 -->
           <div class="col-lg-6">
@@ -3257,17 +3248,6 @@ PAGE = """<!DOCTYPE html>
 
   <!-- Tab 3: 系统设置 (高端简约 · 拟态卡片入口与沉浸式弹窗架构) -->
   <main id="tab-settings" class="tab-content">
-    <!-- Top Sub-nav Bar -->
-    <div class="sub-nav-bar mb-3" id="settingsSubNav">
-      <button type="button" class="sub-nav-pill active" data-sec="all" onclick="scrollSettingsSection('all')">⚙️ 全部概览</button>
-      <button type="button" class="sub-nav-pill" data-sec="llm" onclick="openSettingModal('modalLLM')">🤖 大模型LLM</button>
-      <button type="button" class="sub-nav-pill" data-sec="prefs" onclick="openSettingModal('modalPrefs')">🎯 求职偏好</button>
-      <button type="button" class="sub-nav-pill" data-sec="privacy" onclick="openSettingModal('modalPrivacy')">🛡️ 隐私权限</button>
-      <button type="button" class="sub-nav-pill" data-sec="auto" onclick="openSettingModal('modalAutoApply')">🚀 自动投递</button>
-      <button type="button" class="sub-nav-pill" data-sec="browser" onclick="openSettingModal('modalBrowser')">🌐 浏览器模式</button>
-      <button type="button" class="sub-nav-pill" data-sec="resume" onclick="openSettingModal('modalResume')">📄 简历画像</button>
-    </div>
-
     <div class="panel-card mb-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
@@ -3451,7 +3431,7 @@ PAGE = """<!DOCTYPE html>
         <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">🎯 求职定向模态 (Job Mode)</label>
         <select id="inJobMode" style="width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;font-weight:700;background:#fff;color:#111">
           <option value="intern">🎯 大厂高薪实习 (在校生专属 · experience=108)</option>
-          <option value="campus">🎓 2027届秋招正式批 (应届生专属 · experience=102)</option>
+          <option value="campus">🎓 应届校招正式批 (应届生专属 · experience=102)</option>
           <option value="mix">⚡ 并驾齐驱混合模式 (实习与校招交替轮巡)</option>
           <option value="all">🌐 全网不限经验 (历史向下兼容模式)</option>
         </select>
@@ -3760,13 +3740,13 @@ PAGE = """<!DOCTYPE html>
         </div>
         <div class="col-6 col-sm-3">
           <label class="form-label" style="font-size:12px;font-weight:700">毕业届别</label>
-          <input type="text" id="editProfGradYear" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：2027">
+          <input type="text" id="editProfGradYear" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：2026 / 2027">
         </div>
         <div class="col-12 col-sm-6">
           <label class="form-label" style="font-size:12px;font-weight:700">求职状态</label>
           <select id="editProfStatus" class="form-select" style="border-radius:10px;font-size:13px">
-            <option value="在校-月内到岗">在校-月内到岗</option>
             <option value="在校-随时到岗">在校-随时到岗</option>
+            <option value="在校-月内到岗">在校-月内到岗</option>
             <option value="离校-随时到岗">离校-随时到岗</option>
             <option value="在职-月内到岗">在职-月内到岗</option>
             <option value="在校-看看机会">在校-看看机会</option>
@@ -3774,11 +3754,11 @@ PAGE = """<!DOCTYPE html>
         </div>
         <div class="col-12 col-sm-6">
           <label class="form-label" style="font-size:12px;font-weight:700">常驻城市</label>
-          <input type="text" id="editProfCity" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：杭州">
+          <input type="text" id="editProfCity" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：北京 / 上海 / 杭州">
         </div>
         <div class="col-12">
           <label class="form-label" style="font-size:12px;font-weight:700">期望职位 / 求职意向</label>
-          <input type="text" id="editProfExpect" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：产品运营 / AI产品经理">
+          <input type="text" id="editProfExpect" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：AI产品经理 / 算法工程师 / 前端全栈">
         </div>
         <div class="col-12 col-sm-6">
           <label class="form-label" style="font-size:12px;font-weight:700">联系微信（外发与换微信凭证）</label>
@@ -3790,7 +3770,7 @@ PAGE = """<!DOCTYPE html>
         </div>
         <div class="col-12">
           <label class="form-label" style="font-size:12px;font-weight:700">个人优势 / 亮点简述（将回写至在线微简历）</label>
-          <textarea id="editProfAdvantage" class="form-control" rows="3" style="border-radius:10px;font-size:13px" placeholder="如：福建师大2027届在读，独立做过自媒体Agent生产流（FastMCP+Trae），月操盘10万GMV…"></textarea>
+          <textarea id="editProfAdvantage" class="form-control" rows="3" style="border-radius:10px;font-size:13px" placeholder="如：具备大模型应用与全栈开发实践，熟悉各类智能体工作流编排与自动化工具链，具备优秀的自驱力与工程落地能力…"></textarea>
         </div>
       </div>
 
@@ -5546,9 +5526,12 @@ function closeSettingModal(id) {
 }
 
 function scrollSettingsSection(sec) {
-  document.querySelectorAll('#settingsSubNav .sub-nav-pill').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-sec') === sec);
-  });
+  const pills = document.querySelectorAll('#settingsSubNav .sub-nav-pill');
+  if (pills && pills.length) {
+    pills.forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-sec') === sec);
+    });
+  }
   if (sec === 'all') {
     const box = document.getElementById('settingsBox');
     if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -6141,7 +6124,7 @@ async function loadSettings() {
   const hJobMode = document.getElementById('hubBadgeJobMode');
   if (hJobMode) {
     const jm = s.job_mode || 'intern';
-    hJobMode.textContent = jm === 'intern' ? '🎯 大厂实习 (108)' : (jm === 'campus' ? '🎓 2027校招 (102)' : (jm === 'mix' ? '⚡ 混合双模' : '🌐 全量不限'));
+    hJobMode.textContent = jm === 'intern' ? '🎯 大厂实习 (108)' : (jm === 'campus' ? '🎓 应届校招 (102)' : (jm === 'mix' ? '⚡ 混合双模' : '🌐 全量不限'));
   }
   const hRoles = document.getElementById('hubBadgeRoles');
   if (hRoles) hRoles.textContent = (s.prefs.want_jobs || []).slice(0, 2).join(' / ') || '大模型自主决断';
@@ -6351,13 +6334,13 @@ function openEditProfileModal() {
   const elRes = document.getElementById('resEditProfile');
 
   if (elName) elName.value = prof.name || '';
-  if (elSchool) elSchool.value = prof.school || '福建师范大学';
-  if (elMajor) elMajor.value = prof.major || '数字媒体技术';
+  if (elSchool) elSchool.value = prof.school || '';
+  if (elMajor) elMajor.value = prof.major || '';
   if (elDegree) elDegree.value = prof.degree || '本科';
-  if (elGradYear) elGradYear.value = prof.grad_year || '2027';
-  if (elStatus) elStatus.value = prof.status_desc || '在校-月内到岗';
-  if (elCity) elCity.value = prof.current_city || '杭州';
-  if (elExpect) elExpect.value = prof.expect_position || '产品运营 / AI产品经理';
+  if (elGradYear) elGradYear.value = prof.grad_year || '';
+  if (elStatus) elStatus.value = prof.status_desc || '在校-随时到岗';
+  if (elCity) elCity.value = prof.current_city || '';
+  if (elExpect) elExpect.value = prof.expect_position || '';
   if (elWechat) elWechat.value = priv.contact_wechat || '';
   if (elPhone) elPhone.value = priv.contact_phone || '';
   if (elAdvantage) elAdvantage.value = prof.advantage || '';

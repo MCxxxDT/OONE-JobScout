@@ -348,9 +348,9 @@ def fetch_boss_user_profile(cfg=None) -> dict:
     real_name = name or cached.get("name") or "求职者"
 
     # 保护真实院校与专业：若抓取到的 school 包含学历词或为空，保留 cached
-    final_school = school if (school and not re.match(r"^(本科|硕士|大专|博士|学历)$", school)) else (cached.get("school") or "福建师范大学")
+    final_school = school if (school and not re.match(r"^(本科|硕士|大专|博士|学历)$", school)) else (cached.get("school") or "")
     # 保护真实专业：若抓取到的 major 含薪资特征(K/k/元)或为空，保留 cached
-    final_major = major if (major and not re.search(r"\d+[-~]\d+[kK元]|期望", major)) else (cached.get("major") or "数字媒体技术")
+    final_major = major if (major and not re.search(r"\d+[-~]\d+[kK元]|期望", major)) else (cached.get("major") or "")
 
     grade = "离校" if "离校" in status_desc else ("在校" if "在校" in status_desc else cached.get("grade_desc", "在读"))
     profile_res = {
@@ -358,10 +358,10 @@ def fetch_boss_user_profile(cfg=None) -> dict:
         "avatar": avatar or cached.get("avatar") or "",
         "school": final_school,
         "major": final_major,
-        "grad_year": grad_year or cached.get("grad_year", "2027"),
+        "grad_year": grad_year or cached.get("grad_year", ""),
         "grade_desc": grade,
-        "current_city": cached.get("current_city", "杭州"),
-        "status_desc": status_desc or cached.get("status_desc", "在校-月内到岗"),
+        "current_city": cached.get("current_city", ""),
+        "status_desc": status_desc or cached.get("status_desc", ""),
         "synced_at": time.strftime("%Y-%m-%d %H:%M:%S")
     }
 

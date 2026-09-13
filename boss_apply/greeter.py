@@ -37,6 +37,13 @@ def privacy_blocked(text):
 # BOSS 账号原生默认招呼（不在 config 模板中：点击"立即沟通"时平台自动发出，
 # 会成为新会话的最后一条消息，必须保底识别为自家发言，否则被误判待回复）。
 NATIVE_DEFAULT_OPENER = "您好，我是27年毕业生"
+DEFAULT_NATIVE_OPENERS = (
+    "您好，我是应届毕业生",
+    "您好，我是27年毕业生",
+    "您好，我对该岗位很感兴趣",
+    "您好，看到贵司正在招聘",
+    "您好，想与您沟通一下",
+)
 
 
 def self_openers(cfg, head_len=14):
@@ -53,10 +60,15 @@ def self_openers(cfg, head_len=14):
     for r in ledger.load_all():
         if r.get("action") == "reply" and r.get("text_head"):
             ops.add(r["text_head"].strip()[:head_len])
+    for default_op in DEFAULT_NATIVE_OPENERS:
+        ops.add(default_op[:head_len])
     ops.add(NATIVE_DEFAULT_OPENER[:head_len])
     custom_opener = (cfg.get("native_opener") or "").strip()
     if custom_opener:
         ops.add(custom_opener[:head_len])
+    for cop in cfg.get("native_openers") or []:
+        if cop and cop.strip():
+            ops.add(cop.strip()[:head_len])
     return tuple(o for o in ops if o)
 
 
