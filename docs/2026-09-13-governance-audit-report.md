@@ -152,7 +152,7 @@ scripts/approval_web.py:
 python scratch/test_11_governance_audit.py (11 项全部通过)
 
 # 3. Git Commit 归档
-git -c user.name="zhangyetao" -c user.email="mcdt888888@163.com" commit -m "fix(web): 修复showConfirm弹窗未定义别名并将已处理归档容器展示于待办流下方（测试：Playwright 11项E2E全量实操验证通过）"
+git -c user.name="MCxxxDT" -c user.email="MCxxxDT@users.noreply.github.com" commit -m "fix(web): 修复showConfirm弹窗未定义别名并将已处理归档容器展示于待办流下方（测试：Playwright 11项E2E全量实操验证通过）"
 Commit ID: 591b57a
 ```
 

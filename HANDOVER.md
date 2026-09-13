@@ -7,17 +7,17 @@
 
 ## 1. 一句话项目概述
 
-为用户张烨韬（2027 届，求职 AI/Agent 产品经理实习）建成的 **BOSS直聘自动投递工具链**：
+面向求职 AI/Agent 产品经理实习的 **BOSS直聘自动投递工具链**：
 裸 CDP 接管已登录的真实 Chrome → 搜索岗位 → 打分筛选 → 自动打招呼 → 台账审计 + 护栏熔断。
 **T0/T1/T2/T3 四级验收 + 频率探针已全部通过，工具链可用，等待放量。**
 
-## 2. 用户背景（必读）
+## 2. 用户背景与画像约定
 
-- 张烨韬，福建师范大学 · 数字媒体技术 · **2027 届在读（学信网在籍，预计 2027 拿双证）**。沟通口径勿写"已毕业"。
+- 求职者画像：高校在读（预计 2027 拿双证）。沟通口径勿写"已毕业"。
 - 方向：AI / Agent 产品经理 / 商业化产品经理 实习。差异化卖点："能写代码的商业化 PM"。
-- 已掌握 Chrome CDP 自动化、FastMCP 封装 → 方案按他熟悉的技术形态交付。
-- 地域指令（用户明确）：**优先江浙沪，不去北京**；城市配额 杭州25/上海25/深圳15/广州10/成都10/武汉8/长沙7 = 100/日。
-- 当前 `profile: "test"`（测试小号，中性文案无个人信息）。**切 `"real"` 才启用三段个人打招呼文案，切换前脚本有 y/N 确认闸，必须用户明确指令后才切。**
+- 核心能力：Chrome CDP 自动化、FastMCP 封装、业务落地。
+- 地域策略：优先江浙沪核心城市，配额在 `config.json` 或 `config.local.json` 维护。
+- 模式约定：默认支持测试模式（中性文案）与实操模式，真实打招呼在本地 `config.local.json` 注入。
 
 ## 3. 当前状态（截至交接）
 
@@ -123,4 +123,4 @@ $PY scripts/t3_single_greet.py       # 单次沟通验证（有 y/N 闸）
    - 测试**通过** → 存档：`git add -A && git commit -m "<改动一句话>（测试：compileall+t0+<专项> 通过）"`
    - 测试**不通过** → 回滚：`git restore .`（必要时 `git restore --staged .` 先），回滚后重新排查，**禁止把失败状态留在工作区或带病 commit**。
 
-仓库现状：已 `git init`（main 分支），基线 commit = `3236374`（T0-T3 验收+探针通过的稳定态）。commit 身份用 `git -c user.name="zhangyetao" -c user.email="mcdt888888@163.com"`（机器未配全局身份）。运行时状态（guard_state.json/截图）在 .gitignore 里，不入库。
+仓库现状：已 `git init`（main 分支），基线 commit = `3236374`（T0-T3 验收+探针通过的稳定态）。commit 身份统一使用 GitHub 账号配置（`git -c user.name="MCxxxDT" -c user.email="MCxxxDT@users.noreply.github.com"`）。运行时状态（guard_state.json/截图/本地隐私配置）均在 .gitignore 里，不入库。

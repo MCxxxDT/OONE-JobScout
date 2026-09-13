@@ -3739,15 +3739,15 @@ PAGE = """<!DOCTYPE html>
       <div class="row g-3 mb-3">
         <div class="col-12 col-sm-6">
           <label class="form-label" style="font-size:12px;font-weight:700">真实姓名</label>
-          <input type="text" id="editProfName" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：张烨韬">
+          <input type="text" id="editProfName" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：张三">
         </div>
         <div class="col-12 col-sm-6">
           <label class="form-label" style="font-size:12px;font-weight:700">就读院校</label>
-          <input type="text" id="editProfSchool" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：福建师范大学">
+          <input type="text" id="editProfSchool" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：浙江大学">
         </div>
         <div class="col-12 col-sm-6">
           <label class="form-label" style="font-size:12px;font-weight:700">所学专业</label>
-          <input type="text" id="editProfMajor" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：数字媒体技术">
+          <input type="text" id="editProfMajor" class="form-control" style="border-radius:10px;font-size:13px" placeholder="如：计算机科学与技术">
         </div>
         <div class="col-6 col-sm-3">
           <label class="form-label" style="font-size:12px;font-weight:700">最高学历</label>

@@ -16,11 +16,11 @@ from typing import Any, Dict, Optional, Tuple
 
 from . import config as cfgmod, greeter, ledger
 
-# 候选人真实画像配置
+# 候选人画像基线配置（支持通过本地 config.local.json 或 profile_store.json 动态覆写）
 CANDIDATE_PROFILE = {
-    "name": "张烨韬",
-    "school": "福建师范大学",
-    "major": "数字媒体技术",
+    "name": "求职者",
+    "school": "高校在读",
+    "major": "计算机/数字媒体技术",
     "grad_year": 2027,
     "grade_desc": "2027届应届在读生（毕业班）",
     "birth_month": "8月",
@@ -408,7 +408,7 @@ class AIReplyEngine:
 
         return (
             f"【候选人真实画像】\n"
-            f"- 姓名：{self.profile.get('name', '张烨韬')}\n"
+            f"- 姓名：{self.profile.get('name', '求职者')}\n"
             f"- 出生年月与生日：{self.profile.get('birthday', '2004年8月')}（生日月份：{self.profile.get('birth_month', '8月')}）\n"
             f"- 学历与专业：{self.profile.get('school', '')} · {self.profile.get('major', '')}\n"
             f"- 毕业届别与状态：{grade_desc}（{status_desc}）\n"
