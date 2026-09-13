@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from .browser import check_risk
 
-LIST_URL = "https://www.zhipin.com/web/geek/job?query={q}&city={c}&page={p}"
+LIST_URL = "https://www.zhipin.com/web/geek/jobs?query={q}&city={c}&page={p}"
 BASE = "https://www.zhipin.com"
 
 ACTIVE_RE = re.compile(r"(刚刚活跃|今日活跃|\d+日内活跃|本周活跃|本月活跃|月内活跃|在线)")

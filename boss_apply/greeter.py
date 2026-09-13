@@ -153,7 +153,8 @@ def _probe_js():
     return """
 (() => {
   if (location.href.includes('/web/geek/chat')) {
-    const hasConv = Boolean(document.querySelector('.chat-conversation .top-info-content, .top-info-content, .chat-title, .user-name, .base-info, .chat-message .im-list, .chat-op'));
+    const conv = document.querySelector('.chat-conversation');
+    const hasConv = conv && Boolean(conv.querySelector('.top-info-content, .chat-title, .user-name, .base-info, .chat-message, .im-list, .chat-op, .chat-editor, textarea'));
     if (!hasConv) {
       return JSON.stringify({
         href: location.href.slice(0, 100),
@@ -167,19 +168,26 @@ def _probe_js():
   }
 
   const pick = () => {
-    let el = document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-im.chat-editor, .chat-editor, .chat-conversation textarea, .input-wrap-textarea textarea, textarea.input');
+    const conv = document.querySelector('.chat-conversation');
+    if (location.href.includes('/web/geek/chat')) {
+      if (!conv) return null;
+      return conv.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-im.chat-editor, .chat-editor, textarea.input, textarea, [contenteditable="true"]');
+    }
+    let el = document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-im.chat-editor, .chat-editor, .chat-conversation textarea, textarea.input');
     if (!el) {
       const cands = document.querySelectorAll('textarea, [contenteditable="true"], div[contenteditable="true"]');
       for (const e of cands) {
         const cls = String(e.className || '');
-        if (/search/i.test(cls)) continue;
+        if (/search|filter/i.test(cls)) continue;
+        if (e.closest('.ai-filter-wrap, .ai-filter-panel, .user-list, .chat-user')) continue;
         if (/chat|message|edit|input/i.test(cls)) { el = e; break; }
       }
     }
     return el;
   };
   const inp = pick();
-  const send = document.querySelector('.btn-send, .btn-sendmsg, .chat-op button, button[type="send"]');
+  const conv = document.querySelector('.chat-conversation');
+  const send = (conv || document).querySelector('.btn-send, .btn-sendmsg, .chat-op button, button[type="send"]');
   const hasSureDialog = () => {
     const dialogs = document.querySelectorAll('.dialog-wrap, .boss-dialog, .dialog-container');
     for (const d of dialogs) {
@@ -230,12 +238,21 @@ def _pick_conversation_js(company, extra_kw=""):
     }
   }
 
-  // 2. 遍历左侧会话列表（优先匹配 2026 Vue 3 的 .friend-content-warp，排除顶部导航 li）
-  const items = Array.from(document.querySelectorAll('.user-list .friend-content-warp, .friend-content-warp, .user-list .friend-content, .chat-user li, ul.user-list li'));
-  const validLis = items.filter(li => {
-    const t = li.innerText || '';
-    return t.length > 8 && !['全部', '未读', '新招呼', '仅沟通', '更多', '有交换', '有面试', '不感兴趣'].includes(t.trim());
+  // 2. 遍历左侧会话列表（优先匹配 2026 Vue 3 的 .friend-content-warp / .friend-content，排除顶部导航与AI筛选等下拉）
+  const items = Array.from(document.querySelectorAll('.user-list .friend-content-warp, .friend-content-warp, .user-list .friend-content'));
+  let validLis = items.filter(el => {
+    if (el.closest('.ai-filter-wrap, .ai-filter-panel, .filter-item, .label-list')) return false;
+    const t = el.innerText || '';
+    return t.length > 4 && !['全部', '未读', '新招呼', '仅沟通', '更多', '有交换', '有面试', '不感兴趣', 'AI筛选'].includes(t.trim());
   });
+  if (validLis.length === 0) {
+    const rawLis = Array.from(document.querySelectorAll('.chat-user li, ul.user-list li'));
+    validLis = rawLis.filter(li => {
+      if (li.querySelector('.ai-filter-wrap, .ai-filter-panel')) return false;
+      const t = li.innerText || '';
+      return t.length > 8 && !['全部', '未读', '新招呼', '仅沟通', '更多', '有交换', '有面试', '不感兴趣', 'AI筛选'].includes(t.trim());
+    });
+  }
 
   let target = null, picked = 'none', bestScore = 0;
   if (qClean || extraClean) {
@@ -317,7 +334,11 @@ def _fill_js(text):
     return """
 (() => {
   const TEXT = %s;
-  const inp = (window.__pickChatInput || (() => document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-conversation textarea, .input-wrap-textarea textarea, textarea.input, textarea')))();
+  const inp = (window.__pickChatInput || (() => {
+    const conv = document.querySelector('.chat-conversation');
+    return (conv ? conv.querySelector('.chat-input[contenteditable="true"], .chat-input, textarea.input, textarea') : null)
+      || document.querySelector('.chat-conversation textarea, textarea.input, textarea');
+  }))();
   if (!inp) return JSON.stringify({r: 'noinput'});
   inp.focus();
   const tag = inp.tagName.toLowerCase();
@@ -325,7 +346,14 @@ def _fill_js(text):
     const proto = tag === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
     setter.call(inp, TEXT);
+    try {
+      document.execCommand('selectAll', false, null);
+      document.execCommand('insertText', false, TEXT);
+    } catch(e) {}
     inp.dispatchEvent(new Event('input', {bubbles: true}));
+    inp.dispatchEvent(new Event('change', {bubbles: true}));
+    try { inp.dispatchEvent(new InputEvent('input', {bubbles: true, data: TEXT, inputType: 'insertText'})); } catch(e) {}
+    try { inp.dispatchEvent(new Event('compositionend', {bubbles: true})); } catch(e) {}
   } else {
     document.execCommand('selectAll', false, null);
     document.execCommand('insertText', false, TEXT);
@@ -338,7 +366,9 @@ def _fill_js(text):
 
 _SEND_JS = """
 (() => {
-  const send = document.querySelector('.btn-send, .btn-sendmsg, .chat-op button, button[type="send"]');
+  const conv = document.querySelector('.chat-conversation');
+  const root = conv || document;
+  const send = root.querySelector('.btn-send, .btn-sendmsg, .chat-op button, button[type="send"]');
   if (send && !/disabled/.test(String(send.className))) {
     send.click();
     return JSON.stringify({r: 'sent', via: 'btn', cls: String(send.className || '').slice(0, 40)});
@@ -349,9 +379,13 @@ _SEND_JS = """
 
 _ENTER_JS = """
 (() => {
-  let inp = document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-conversation textarea, .input-wrap-textarea textarea, textarea.input, textarea');
+  const conv = document.querySelector('.chat-conversation');
+  const root = conv || document;
+  let inp = root.querySelector('.chat-input[contenteditable="true"], .chat-input, textarea.input, textarea');
   if (!inp) return JSON.stringify({r: 'nosend'});
-  inp.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+  inp.focus();
+  inp.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true}));
+  inp.dispatchEvent(new KeyboardEvent('keyup', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true}));
   return JSON.stringify({r: 'sent', via: 'enter'});
 })()
 """

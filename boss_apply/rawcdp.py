@@ -32,7 +32,7 @@ import websocket
 from .browser import RiskControl
 
 BASE = "https://www.zhipin.com"
-LIST_URL = BASE + "/web/geek/job?query={q}&city={c}&page={p}"
+LIST_URL = BASE + "/web/geek/jobs?query={q}&city={c}&page={p}"
 
 API_JOB_LIST_PATH = "/wapi/zpgeek/search/joblist.json"
 
