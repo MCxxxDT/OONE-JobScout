@@ -152,20 +152,34 @@ def _ev(sess, js):
 def _probe_js():
     return """
 (() => {
+  if (location.href.includes('/web/geek/chat')) {
+    const hasConv = Boolean(document.querySelector('.chat-conversation .top-info-content, .top-info-content, .chat-title, .user-name, .base-info, .chat-message .im-list, .chat-op'));
+    if (!hasConv) {
+      return JSON.stringify({
+        href: location.href.slice(0, 100),
+        inputTag: null,
+        inputLen: -1,
+        sendDisabled: null,
+        sureBtn: false,
+        bodyLen: document.body ? document.body.innerText.length : 0
+      });
+    }
+  }
+
   const pick = () => {
-    let el = document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-im.chat-editor, .chat-editor');
+    let el = document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-im.chat-editor, .chat-editor, .chat-conversation textarea, .input-wrap-textarea textarea, textarea.input');
     if (!el) {
       const cands = document.querySelectorAll('textarea, [contenteditable="true"], div[contenteditable="true"]');
       for (const e of cands) {
         const cls = String(e.className || '');
         if (/search/i.test(cls)) continue;
-        if (/chat|message|edit/i.test(cls)) { el = e; break; }
+        if (/chat|message|edit|input/i.test(cls)) { el = e; break; }
       }
     }
     return el;
   };
   const inp = pick();
-  const send = document.querySelector('.btn-send, .btn-sendmsg');
+  const send = document.querySelector('.btn-send, .btn-sendmsg, .chat-op button, button[type="send"]');
   const hasSureDialog = () => {
     const dialogs = document.querySelectorAll('.dialog-wrap, .boss-dialog, .dialog-container');
     for (const d of dialogs) {
@@ -270,6 +284,14 @@ def _pick_conversation_js(company, extra_kw=""):
   target.scrollIntoView({behavior: 'instant', block: 'center'});
   const innerClickable = target.querySelector('.friend-content, .friend-content-warp, div') || target;
   try {
+    const liEl = target.closest('li') || target;
+    const realFc = liEl.querySelector('.friend-content') || innerClickable;
+    realFc.click();
+  } catch(e) {}
+  try {
+    innerClickable.click();
+  } catch(e) {}
+  try {
     ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
       innerClickable.dispatchEvent(new MouseEvent(evt, {bubbles: true, cancelable: true, view: window}));
     });
@@ -295,7 +317,7 @@ def _fill_js(text):
     return """
 (() => {
   const TEXT = %s;
-  const inp = (window.__pickChatInput || (() => document.querySelector('.chat-input[contenteditable="true"], .chat-input')))();
+  const inp = (window.__pickChatInput || (() => document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-conversation textarea, .input-wrap-textarea textarea, textarea.input, textarea')))();
   if (!inp) return JSON.stringify({r: 'noinput'});
   inp.focus();
   const tag = inp.tagName.toLowerCase();
@@ -316,7 +338,7 @@ def _fill_js(text):
 
 _SEND_JS = """
 (() => {
-  const send = document.querySelector('.btn-send, .btn-sendmsg');
+  const send = document.querySelector('.btn-send, .btn-sendmsg, .chat-op button, button[type="send"]');
   if (send && !/disabled/.test(String(send.className))) {
     send.click();
     return JSON.stringify({r: 'sent', via: 'btn', cls: String(send.className || '').slice(0, 40)});
@@ -327,7 +349,7 @@ _SEND_JS = """
 
 _ENTER_JS = """
 (() => {
-  let inp = document.querySelector('.chat-input[contenteditable="true"], .chat-input');
+  let inp = document.querySelector('.chat-input[contenteditable="true"], .chat-input, .chat-conversation textarea, .input-wrap-textarea textarea, textarea.input, textarea');
   if (!inp) return JSON.stringify({r: 'nosend'});
   inp.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
   return JSON.stringify({r: 'sent', via: 'enter'});
@@ -484,12 +506,13 @@ TOOLBAR_BTN_POS_JS = """
 
 VISIBLE_SURE_DIALOG_JS = """
 (() => {
-  for (const p of document.querySelectorAll('.panel-contact, .boss-dialog, .sentence-popover, .dialog-container')) {
+  for (const p of document.querySelectorAll('.panel-contact, .boss-dialog, .sentence-popover, .dialog-container, .dialog-wrap')) {
     const rect = p.getBoundingClientRect();
     const style = window.getComputedStyle(p);
     if (rect.width <= 0 || style.display === 'none' || style.visibility === 'hidden') continue;
-    const sure = p.querySelector('.btn-sure, .btn-sure-v2');
+    const sure = p.querySelector('.btn-sure, .btn-sure-v2, button.sure, .btn-confirm');
     if (!sure) continue;
+    try { sure.click(); } catch(e) {}
     const sr = sure.getBoundingClientRect();
     const title = (p.innerText || '').replace(/\\n/g, '|').slice(0, 60);
     return JSON.stringify({r: 'dialog', title: title,
@@ -613,28 +636,48 @@ def send_resume_via_chat(sess, company, poll_s=12):
         return (r or {}).get("n", -1)
 
     before = total_msgs()
-    # 发简历按钮无独立 class，按文本精确定位（受信任点击）
-    pos = _ev(sess, """
+    pos = None
+    for _ in range(8):
+        pos = _ev(sess, """
 (() => {
-  const btns = Array.from(document.querySelectorAll('.toolbar-btn'));
-  const btn = btns.find(b => (b.innerText || '').trim() === '发简历');
+  const btns = Array.from(document.querySelectorAll('.toolbar-btn, .chat-op button, .chat-op div, [class*="toolbar"] *'));
+  const btn = btns.find(b => {
+    const t = (b.innerText || '').trim();
+    return t === '发简历' || t === '发送简历';
+  });
   if (!btn) return JSON.stringify({r: 'notfound'});
-  if (btn.classList.contains('unable')) return JSON.stringify({r: 'unable'});
+  if (btn.classList.contains('unable') || btn.classList.contains('disabled')) return JSON.stringify({r: 'unable'});
+  try { btn.click(); } catch(e) {}
   const rect = btn.getBoundingClientRect();
-  if (rect.width <= 0) return JSON.stringify({r: 'notfound'});
+  if (rect.width <= 0) return JSON.stringify({r: 'clicked_dom'});
   return JSON.stringify({r: 'found', x: Math.round(rect.left + rect.width / 2),
                          y: Math.round(rect.top + rect.height / 2)});
 })()
 """)
+        if isinstance(pos, dict) and pos.get("r") in ("found", "unable", "clicked_dom"):
+            break
+        time.sleep(0.5)
+
     if isinstance(pos, dict) and pos.get("r") == "unable":
         return {"status": "already_sent", "company": company, "conv": head}
-    if not (isinstance(pos, dict) and pos.get("r") == "found"):
+    if not (isinstance(pos, dict) and pos.get("r") in ("found", "clicked_dom")):
         raise RuntimeError("send_resume button not clickable: %r" % (pos,))
-    _trusted_click(sess, int(pos["x"]), int(pos["y"]))
+    if pos.get("r") == "found":
+        _trusted_click(sess, int(pos["x"]), int(pos["y"]))
 
-    # 轮询可见确认弹窗（最多 ~3s，发简历可能直接发送无弹窗）
-    for _ in range(6):
+    # 轮询可见确认弹窗（最多 ~4s，发简历可能直接发送无弹窗）
+    for _ in range(8):
         time.sleep(0.5)
+        # 若为选择简历弹窗，先确保列表条目被激活选中
+        sess.eval("""
+(() => {
+  const dlg = document.querySelector('.choose-resume-dialog, [class*="choose-resume"]');
+  if (dlg) {
+    const item = dlg.querySelector('li.list-item, .list-item, .item-body, .resume-choose-container li');
+    if (item) try { item.click(); } catch(e) {}
+  }
+})()
+""")
         dlg = _ev(sess, VISIBLE_SURE_DIALOG_JS)
         if isinstance(dlg, dict) and dlg.get("r") == "dialog":
             _trusted_click(sess, int(dlg["x"]), int(dlg["y"]))
@@ -646,7 +689,7 @@ def send_resume_via_chat(sess, company, poll_s=12):
         if total_msgs() > before:
             return {"status": "ok", "action": "send_resume", "company": company, "conv": head}
     # 历史核验：若已有发送简历痕迹，判定为 already_sent，避免无谓转人工死锁
-    resume_cnt = _chat_msg_count(sess, "/(?:已发送附件简历|已发送简历|向对方发送了简历|简历已发送)/")
+    resume_cnt = _chat_msg_count(sess, "/(?:已发送附件简历|已发送简历|向对方发送了简历|简历已发送|附件简历请求已发送|这是我的简历)/")
     if resume_cnt > 0:
         return {"status": "already_sent", "company": company, "conv": head, "note": "chat already contains sent resume"}
     return {"status": "no_verify", "company": company, "conv": head,

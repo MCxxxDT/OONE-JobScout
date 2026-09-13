@@ -5258,8 +5258,9 @@ async function actWithText(i, action) {
       renderPending();
       updatePendingBadges(pendingData.length);
     } else {
-      showToast('执行失败: ' + (d.error || '未知错误'), 'error');
-      if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + (d.error || '失败'); }
+      const errMsg = d.error || (d.result && (d.result.error || d.result.reason)) || '未知错误';
+      showToast('执行失败: ' + errMsg, 'error');
+      if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + errMsg; }
     }
   } catch(e) {
     showToast('网络或执行异常: ' + e, 'error');
@@ -5291,8 +5292,9 @@ async function act(i, action) {
       renderPending();
       updatePendingBadges(pendingData.length);
     } else {
-      showToast('操作失败: ' + (d.error || '未知'), 'error');
-      if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + (d.error || '失败'); }
+      const errMsg = d.error || (d.result && (d.result.error || d.result.reason)) || '未知';
+      showToast('操作失败: ' + errMsg, 'error');
+      if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ ' + errMsg; }
     }
   } catch(e) {
     showToast('异常: ' + e, 'error');

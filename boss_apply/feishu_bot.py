@@ -355,23 +355,55 @@ def handle_card_action(cfg: dict, action_payload: dict) -> dict:
             res = flows.chat_reply(cfg, company, text, force=True)
         except TypeError:
             res = flows.chat_reply(cfg, company, text)
-        return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
+        err = res.get("error") or res.get("reason")
+        return {
+            "ok": res.get("ok", False),
+            "action": act,
+            "company": company,
+            "error": err,
+            "status": res.get("status"),
+            "result": res,
+        }
 
     text = (action_payload.get("text") or "").strip()
     if act == "exchange_wechat":
         res = flows.chat_exchange_wechat(cfg, company, reply_text=text, force=True) if text else flows.chat_exchange_wechat(cfg, company, force=True)
-        return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
+        err = res.get("error") or res.get("reason")
+        return {
+            "ok": res.get("ok", False),
+            "action": act,
+            "company": company,
+            "error": err,
+            "status": res.get("status"),
+            "result": res,
+        }
 
     if act == "send_resume":
         res = flows.chat_send_resume(cfg, company, reply_text=text, force=True) if text else flows.chat_send_resume(cfg, company, force=True)
-        return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
+        err = res.get("error") or res.get("reason")
+        return {
+            "ok": res.get("ok", False),
+            "action": act,
+            "company": company,
+            "error": err,
+            "status": res.get("status"),
+            "result": res,
+        }
 
     if act == "agree_wechat":
         try:
             res = flows.chat_agree_wechat(cfg, company, reply_text=text, force=True) if text else flows.chat_agree_wechat(cfg, company, force=True)
         except TypeError:
             res = flows.chat_agree_wechat(cfg, company, text) if text else flows.chat_agree_wechat(cfg, company)
-        return {"ok": res.get("ok", False), "action": act, "company": company, "result": res}
+        err = res.get("error") or res.get("reason")
+        return {
+            "ok": res.get("ok", False),
+            "action": act,
+            "company": company,
+            "error": err,
+            "status": res.get("status"),
+            "result": res,
+        }
 
     if act in ("ignore", "mark_handled"):
         action_name = "card_ignore" if act == "ignore" else "mark_handled"
