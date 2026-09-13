@@ -1,22 +1,31 @@
-# 运行时状态（日切自动重置，不入库）
-state/guard_state.json
-state/daily_plan.json
-state/daemon_heartbeat.json
-state/user_profile.json
-# 截图/二维码（可能含登录态敏感信息）
-state/*.png
-# 运行日志（不入库）
+# 运行时状态与日志台账（严禁入库，包含HR真实对话与投递留痕）
+state/*.json
+state/*.jsonl
 state/*.log
+state/*.png
+state/*.md
+!state/.gitkeep
+
 # 飞书卡片运行时留痕（与台账 human_alert_card 记录冗余）
 state/feishu_cards.jsonl
-# 本地敏感覆盖层（api_key 等，绝不入库）
+# 本地敏感覆盖层（api_key、微信号、手机号等，绝不入库）
 config.local.json
-# 简历本地数据（含隐私，不入库）
+# 简历本地数据（含真实姓名与经历，不入库）
 profile.local.json
 # DPAPI 加密密文存储（绑定本机）
 state/secrets.json
-# Python
+
+# 办公与简历原始文件
+*.pdf
+*.docx
+*.doc
+*.xlsx
+.env
+.env.*
+
+# Python & 环境
 __pycache__/
 *.pyc
 .venv/
 state_dryrun/
+

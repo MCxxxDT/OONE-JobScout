@@ -1,0 +1,35 @@
+{
+  "_comment": "本地开发环境配置覆盖层样例。请复制本文件为 config.local.json 并填入自己的大模型与飞书配置，该文件已被 .gitignore 忽略，不会提交上云。",
+  "llm": {
+    "provider": "DeepSeek / OpenAI / Custom",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "api_key": "YOUR_LLM_API_KEY_HERE"
+  },
+  "notify": {
+    "feishu_webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_WEBHOOK_UUID_HERE"
+  },
+  "web": {
+    "base_url": "http://127.0.0.1:8788",
+    "token": "boss-apply"
+  },
+  "online_reply_enabled": false,
+  "privacy_policy": {
+    "exchange_wechat": "auto",
+    "send_resume": "auto",
+    "exchange_phone": "manual",
+    "contact_phone": "13800000000",
+    "contact_wechat": "your_wechat_id"
+  },
+  "daemon": {
+    "auto_apply": true,
+    "apply_window": "09:30-14:00",
+    "apply_max_pages": 3,
+    "apply_top_n": 30,
+    "apply_fetch_detail": true
+  },
+  "browser": {
+    "silent_mode": false,
+    "minimize_on_start": false
+  }
+}

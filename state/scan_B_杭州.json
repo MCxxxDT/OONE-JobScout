@@ -1,8 +1,0 @@
-{
-  "city": "杭州",
-  "found": 0,
-  "scored": 0,
-  "stopped": "paused: risk: search page not ready: https://www.zhipin.com/web/geek/job?query=%E5%A4%A7%E6%A8%A1%E5%9E%8B%20%E4%BA%A7%E5%93%81"
-}
-
-T2 通过标准：found>0 且无 PAUSED。然后人工翻阅台账 state/ledger.jsonl，检查打分是否合理。
