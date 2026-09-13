@@ -3798,13 +3798,14 @@ PAGE = """<!DOCTYPE html>
         <div class="chat-arena-card">
           <!-- Chat Header -->
           <div class="chat-arena-header">
-            <div class="d-flex align-items-center gap-3">
-              <div class="chat-avatar hr" id="chatTargetAvatar" style="cursor:pointer;position:relative" onclick="openSettingModal('modalPgSettings')" title="点击修改目标岗位与JD描述">HR</div>
+            <div class="d-flex align-items-center gap-3" onclick="openSettingModal('modalPgSettings')" style="cursor:pointer;padding:4px 8px;border-radius:12px;transition:background 0.15s" onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background='transparent'" title="点击切换或修改目标岗位与JD描述">
+              <div class="chat-avatar hr" id="chatTargetAvatar" style="position:relative">HR</div>
               <div>
                 <div style="font-size:15px;font-weight:800;color:var(--txt);display:flex;align-items:center;gap:6px">
                   <span id="chatTargetCompany">收钱吧</span>
                   <span style="color:var(--mut-dark);margin:0 2px">·</span>
                   <span id="chatTargetJob" style="color:var(--mut);font-weight:600;font-size:13px">Ai产品经理（J11304）</span>
+                  <span style="font-size:11px;color:#6366f1;background:rgba(99,102,241,0.08);padding:1px 6px;border-radius:6px;font-weight:700">✏️ 设定</span>
                 </div>
                 <div style="font-size:11px;color:var(--ok);font-weight:600;display:flex;align-items:center;gap:4px">
                   <span class="pulse-dot dot-green" style="width:6px;height:6px"></span>
@@ -3813,9 +3814,6 @@ PAGE = """<!DOCTYPE html>
               </div>
             </div>
             <div class="d-flex align-items-center gap-2">
-              <button type="button" class="btn-action-light d-flex align-items-center gap-1" style="padding:4px 10px;font-size:11px;border-radius:12px;font-weight:600" onclick="openSettingModal('modalPgSettings')">
-                <span>🎯 目标岗位/JD设定</span>
-              </button>
               <button type="button" class="btn-action-light d-flex align-items-center gap-1" style="padding:4px 10px;font-size:11px;border-radius:12px;font-weight:600" onclick="openSettingModal('modalPgInspect')">
                 <span>🔍 决策与安全审查</span>
               </button>
@@ -3845,7 +3843,7 @@ PAGE = """<!DOCTYPE html>
                 在此模拟 HR 与候选人的真实对话。大模型将根据您设定的候选人画像、目标岗位 JD 与防套话铁律，实时推演并生成真人口语化回复。
               </div>
               <div style="font-size:12px;color:var(--txt);font-weight:600;margin-top:14px;background:#f1f5f9;padding:8px 14px;border-radius:10px;display:inline-block">
-                💡 点击上方 HR 头像或【🎯 目标岗位/JD设定】可随时切换行业预设或微调JD要求。在下方输入消息即可开始推演！
+                💡 点击上方 HR 头像名片可随时切换行业预设或微调目标 JD。在下方输入消息即可开始推演！
               </div>
             </div>
           </div>
@@ -3872,7 +3870,7 @@ PAGE = """<!DOCTYPE html>
 
   <!-- Modal: 演练场目标岗位与背景设定 -->
   <div class="modal-overlay" id="modalPgSettings" onclick="if(event.target === this) closeSettingModal('modalPgSettings')">
-    <div class="setting-modal-card" style="max-width:680px">
+    <div class="setting-modal-card" style="max-width:720px;max-height:90vh;overflow-y:auto">
       <div class="setting-modal-header">
         <div>
           <div class="setting-modal-title">🎯 目标岗位与背景设定</div>
@@ -3880,72 +3878,79 @@ PAGE = """<!DOCTYPE html>
         </div>
         <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalPgSettings')">✕</button>
       </div>
-      <div id="pgSettingsCol">
-        <!-- Presets -->
-        <div class="mb-3">
-          <label style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:4px;display:block">
-            🎯 行业名企真实岗位预设（一键切换各行业）：
-          </label>
-          <select id="pgIndustrySelect" class="form-select form-select-sm" style="font-size:12px;border-radius:10px" onchange="onSelectIndustryPreset(this.value)">
-            <option value="ai_product" selected>🤖 人工智能 · 收钱吧 · Ai产品经理 (20-35K·14薪)</option>
-            <option value="ev_auto">🚗 智能制造/新能源 · 广志信息 · 智能座舱稳定性测试-沃尔沃 (10-12K)</option>
-            <option value="java_dev">💻 计算机软件/IT · 某大厂 · Java开发工程师 (15-30K·14薪)</option>
-            <option value="fin_quant">📈 金融证券/量化 · 某基金公司 · 期权量化研究员 (15-30K)</option>
-            <option value="cross_border">🌍 跨境电商/出海 · 睿联 · 跨境电商运营27届校招 (11-18K·14薪)</option>
-            <option value="robotics">🦾 具身智能/硬件 · 某知名AI企业 · 机器人运控算法 (100-200K·14薪)</option>
-            <option value="biomed">🧬 生物医药/医疗 · 吃货妞妞 · 生物信息工程师 (5-8K)</option>
-            <option value="custom">✏️ 自定义岗位与JD (手动输入)</option>
-          </select>
-        </div>
+      <div id="pgSettingsCol" class="p-1">
+        <div class="row g-3">
+          <!-- Presets -->
+          <div class="col-12">
+            <label class="form-label" style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px">
+              🎯 行业名企真实岗位预设（一键快速载入）
+            </label>
+            <select id="pgIndustrySelect" class="form-select" style="border-radius:10px;font-size:13px;font-weight:600;padding:8px 12px;border:1.5px solid #e2e8f0;background:#f8fafc" onchange="onSelectIndustryPreset(this.value)">
+              <option value="ai_product" selected>🤖 人工智能 · 收钱吧 · Ai产品经理 (20-35K·14薪)</option>
+              <option value="ev_auto">🚗 智能制造/新能源 · 广志信息 · 智能座舱稳定性测试-沃尔沃 (10-12K)</option>
+              <option value="java_dev">💻 计算机软件/IT · 某大厂 · Java开发工程师 (15-30K·14薪)</option>
+              <option value="fin_quant">📈 金融证券/量化 · 某基金公司 · 期权量化研究员 (15-30K)</option>
+              <option value="cross_border">🌍 跨境电商/出海 · 睿联 · 跨境电商运营校招 (11-18K·14薪)</option>
+              <option value="robotics">🦾 具身智能/硬件 · 某知名AI企业 · 机器人运控算法 (100-200K·14薪)</option>
+              <option value="biomed">🧬 生物医药/医疗 · 吃货妞妞 · 生物信息工程师 (5-8K)</option>
+              <option value="custom">✏️ 自定义岗位与JD (手动输入)</option>
+            </select>
+          </div>
 
-        <div class="row g-2 mb-2">
-          <div class="col-6">
-            <label style="margin:0 0 2px">公司名称</label>
-            <input type="text" id="pgCompany" value="收钱吧" style="height:32px;font-size:12px" oninput="syncChatHeader()">
+          <!-- Metadata 2x2 Grid -->
+          <div class="col-12 col-sm-6">
+            <label class="form-label" style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px">公司名称</label>
+            <input type="text" id="pgCompany" class="form-control" value="收钱吧" style="border-radius:10px;font-size:13px;padding:8px 12px;border:1.5px solid #e2e8f0" oninput="syncChatHeader()" placeholder="如：收钱吧">
           </div>
-          <div class="col-6">
-            <label style="margin:0 0 2px">岗位名称</label>
-            <input type="text" id="pgJobTitle" value="Ai产品经理（J11304）" style="height:32px;font-size:12px" oninput="syncChatHeader()">
+          <div class="col-12 col-sm-6">
+            <label class="form-label" style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px">岗位名称</label>
+            <input type="text" id="pgJobTitle" class="form-control" value="Ai产品经理（J11304）" style="border-radius:10px;font-size:13px;padding:8px 12px;border:1.5px solid #e2e8f0" oninput="syncChatHeader()" placeholder="如：AI产品经理">
           </div>
-        </div>
-        <div class="row g-2 mb-2">
-          <div class="col-6">
-            <label style="margin:0 0 2px">薪资范围</label>
-            <input type="text" id="pgSalary" value="20-35K·14薪" style="height:32px;font-size:12px">
+          <div class="col-12 col-sm-6">
+            <label class="form-label" style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px">薪资范围</label>
+            <input type="text" id="pgSalary" class="form-control" value="20-35K·14薪" style="border-radius:10px;font-size:13px;padding:8px 12px;border:1.5px solid #e2e8f0" placeholder="如：20-35K·14薪">
           </div>
-          <div class="col-6">
-            <label style="margin:0 0 2px">工作地点</label>
-            <input type="text" id="pgCity" value="上海" style="height:32px;font-size:12px">
+          <div class="col-12 col-sm-6">
+            <label class="form-label" style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px">工作地点</label>
+            <input type="text" id="pgCity" class="form-control" value="上海" style="border-radius:10px;font-size:13px;padding:8px 12px;border:1.5px solid #e2e8f0" placeholder="如：上海">
           </div>
-        </div>
-        <div class="mb-2">
-          <label style="margin:0 0 2px">岗位 JD 详细描述（来自BOSS直聘真实抓取）</label>
-          <textarea id="pgJd" style="height:95px;font-size:11px" placeholder="在此粘贴目标岗位JD…">【岗位职责】
+
+          <!-- Full Width JD Area -->
+          <div class="col-12">
+            <label class="form-label" style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px">岗位 JD 详细描述（来自BOSS直聘真实抓取或自定义）</label>
+            <textarea id="pgJd" class="form-control" rows="5" style="border-radius:10px;font-size:12px;line-height:1.6;border:1.5px solid #e2e8f0;min-height:130px;resize:vertical;background:#fafbfc" placeholder="在此粘贴目标岗位JD…">【岗位职责】
 1. AI 应用从 0 到 1 落地：围绕真实业务场景，负责 AI 应用的需求调研、方案设计、技术可行性判断、上线验证与持续迭代；可涉及上下文工程、RAG、Agent 等技术在产品中的应用。
 2. 快速验证与产品打磨：能够运用 AI Coding 等方式，亲自完成原型、工作流或 Demo 的快速搭建与调试，验证方案可行性，并与研发团队共同推进正式落地。
 3. 跨团队协同与流程建设：熟悉 AI 产品从需求评审、研发排期、测试验收至上线复盘的协作过程，协调产品、研发、算法、设计及业务等角色，高效推动项目交付。
 4. 持续探索：持续关注大模型及 AI 应用的新能力，将技术边界转化为可验证、可落地的业务产品方案。
 【任职资格】
 1. 统招本科及以上学历，具备真实 AI 项目落地能力；了解大模型、RAG、上下文工程、Agent 等常见应用方式。</textarea>
-        </div>
-        <div class="mb-2">
-          <div class="d-flex justify-content-between align-items-center">
-            <label style="margin:0 0 2px">前序对话历史（格式：我方:... 或 HR:...）</label>
-            <button type="button" class="btn-action-light" style="font-size:10px;padding:1px 6px" onclick="document.getElementById('pgHistory').value='';pgConversationHistory=[];">清空历史</button>
           </div>
-          <textarea id="pgHistory" style="height:60px;font-size:11px" placeholder="空 = 首轮沟通。多轮沟通示例：&#10;HR: 在吗？&#10;我方: 您好，在的！"></textarea>
-        </div>
 
-        <!-- Collapsible Advanced Settings (Prompt overrides) -->
-        <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px dashed #e2e8f0;cursor:pointer" onclick="togglePlaygroundAdv()">
-          <span style="font-size:11px;font-weight:700;color:var(--mut)">⚙️ 高级人设与 Prompt 自定义</span>
-          <span style="font-size:11px;color:var(--mut)" id="pgAdvArrow">▼ 展开</span>
-        </div>
-        <div id="pgAdvBlock" style="display:none;margin-top:8px">
-          <label style="margin:2px 0 3px">自定义 System Prompt（留空使用默认人设约束）</label>
-          <textarea id="pgCustomSys" style="height:50px;font-size:11px" placeholder="留空使用系统默认人设与三不原则"></textarea>
-          <label style="margin:4px 0 3px">自定义 User Prompt 覆盖（留空根据画像与JD组装）</label>
-          <textarea id="pgCustomUser" style="height:60px;font-size:11px" placeholder="留空自动由系统画像与上下文动态组装"></textarea>
+          <!-- Full Width History Area -->
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label mb-0" style="font-size:12px;font-weight:700;color:var(--txt)">前序对话历史（可选，留空 = 首轮沟通）</label>
+              <button type="button" class="btn-action-light" style="font-size:11px;padding:2px 8px;border-radius:6px" onclick="document.getElementById('pgHistory').value='';pgConversationHistory=[];">🧹 清空历史</button>
+            </div>
+            <textarea id="pgHistory" class="form-control" rows="3" style="border-radius:10px;font-size:12px;line-height:1.5;border:1.5px solid #e2e8f0;min-height:70px;resize:vertical" placeholder="留空为首轮沟通。多轮沟通示例：&#10;HR: 在吗？&#10;我方: 您好，在的！"></textarea>
+          </div>
+
+          <!-- Collapsible Advanced Settings (Prompt overrides) -->
+          <div class="col-12">
+            <div class="p-3 rounded-3" style="background:#f8fafc;border:1px solid #e2e8f0">
+              <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" onclick="togglePlaygroundAdv()">
+                <span style="font-size:12px;font-weight:700;color:var(--txt)">⚙️ 高级人设与 Prompt 自定义</span>
+                <span style="font-size:11px;color:var(--mut);font-weight:600" id="pgAdvArrow">▼ 展开</span>
+              </div>
+              <div id="pgAdvBlock" style="display:none;margin-top:10px">
+                <label class="form-label" style="font-size:11px;font-weight:700;color:var(--txt-dark);margin-bottom:4px">自定义 System Prompt（留空使用系统默认人设约束）</label>
+                <textarea id="pgCustomSys" class="form-control mb-2" rows="2" style="border-radius:8px;font-size:12px;border:1.5px solid #e2e8f0" placeholder="留空使用系统默认人设与三不原则"></textarea>
+                <label class="form-label" style="font-size:11px;font-weight:700;color:var(--txt-dark);margin-bottom:4px">自定义 User Prompt 覆盖（留空根据画像与JD组装）</label>
+                <textarea id="pgCustomUser" class="form-control" rows="2" style="border-radius:8px;font-size:12px;border:1.5px solid #e2e8f0" placeholder="留空自动由系统画像与上下文动态组装"></textarea>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="setting-modal-footer">
