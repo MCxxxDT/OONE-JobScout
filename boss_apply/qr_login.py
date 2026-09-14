@@ -159,6 +159,12 @@ def ensure_chrome_running(cfg=None) -> bool:
         time.sleep(0.5)
         try:
             urlopen(cdp_http + "/json/version", timeout=1)
+            if is_silent:
+                try:
+                    from boss_apply import rawcdp
+                    rawcdp.set_win32_browser_visibility(port=9335, visible=False)
+                except Exception:
+                    pass
             return True
         except Exception:
             continue
