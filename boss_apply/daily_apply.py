@@ -151,6 +151,7 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True, initial_candidate
         stats["cities"] += 1
         print(f"  [城市扫描] 正在扫描城市: {city} (关键词: {len(kws)} 个, 最大页数: {max_pages} 页)...")
         sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
+        risk_interrupted = False
         try:
             sess.open_tab(background=is_silent)
             city_kws = list(kws)
@@ -161,11 +162,15 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True, initial_candidate
                         city_kws.append(combo)
 
             for kw in city_kws:
+                if risk_interrupted or g.paused:
+                    break
                 for p in range(1, max_pages + 1):
                     ok, info = g.check_search()
                     if not ok:
                         print(f"    ! [{city}] 搜索门禁拦截: {info}")
                         stats["errors"].append("search limit: %s" % info)
+                        if "paused" in str(info):
+                            risk_interrupted = True
                         break
                     # experience 门禁参数
                     if job_mode == "intern":
@@ -179,9 +184,24 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True, initial_candidate
                     try:
                         jobs = sess.search_jobs(kw, code, p, experience=exp_code)
                     except browser.RiskControl as e:
-                        g.pause("risk: %s" % e)
-                        stats["errors"].append("risk_control: %s" % str(e)[:100])
-                        print(f"    ! [{city}] 遭遇风控: {e}")
+                        g.pause("security_verification: %s" % e)
+                        stats["errors"].append("security_verification: %s" % str(e)[:100])
+                        print(f"\n🚨 [风控熔断] Phase 1 岗位搜索遭遇 BOSS 安全验证/滑块拦截: {e}！")
+                        print("👉 已紧急挂起所有自动化请求，并将 Chrome 调至前台可视，等待人工完成安全验证！\n")
+                        try:
+                            sess.restore_window()
+                            sess.activate_tab()
+                        except Exception:
+                            pass
+                        try:
+                            from . import feishu_bot
+                            feishu_bot.send_text_or_webhook(
+                                cfg,
+                                f"🚨【BOSS直聘风控安全验证预警】\n岗位搜索时遭遇平台安全验证/风控拦截，所有后续请求已自动熔断挂起！\n请前往桌面在已调至前台的 Chrome 浏览器中完成滑块验证后，在 Web 控制台点击恢复运行。"
+                            )
+                        except Exception:
+                            pass
+                        risk_interrupted = True
                         break
                     except Exception as e:
                         stats["errors"].append("search_error: %s" % str(e)[:100])
@@ -237,8 +257,16 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True, initial_candidate
             except Exception:
                 pass
 
+        if risk_interrupted or g.paused:
+            print(f"  [城市扫描中止] 检测到风控熔断暂停 ({g.paused})，立即停止后续城市扫描！")
+            break
+
     # Phase 2: JD 精读（可选）
     if fetch_detail and candidates:
+        if g.paused:
+            print(f"  [Phase 2 跳过] 护栏处于暂停熔断状态 ({g.paused})，跳过 JD 精读。")
+            return candidates, stats
+
         top_n_cfg = int((cfg.get("daemon") or {}).get("apply_top_n", 50))
         max_details = max(75, top_n_cfg + 25)
         # 只针对尚无 detail 的候选精读，已缓存详情的跳过二次抓取
@@ -250,6 +278,9 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True, initial_candidate
             try:
                 sess.open_tab(background=is_silent)
                 for idx, item in enumerate(detail_targets, 1):
+                    if g.paused:
+                        print(f"  [Phase 2 中止] 护栏已被暂停 ({g.paused})，立即中止后续岗位精读！")
+                        break
                     try:
                         detail, active = sess.fetch_detail(item["job"])
                         item["detail"] = detail or ""
@@ -283,7 +314,29 @@ def collect_candidates(cfg, g, max_pages=3, fetch_detail=True, initial_candidate
                         stats["details_fetched"] += 1
                         if idx % 10 == 0 or idx == len(detail_targets):
                             print(f"    > JD 精读进度: [{idx}/{len(detail_targets)}] ({item['job'].get('company')})")
-                    except Exception:
+                    except browser.RiskControl as e:
+                        # 🚨 核心熔断点：遭遇安全验证/滑块拦截！
+                        g.pause("security_verification: %s" % e)
+                        stats["errors"].append("security_verification: %s" % str(e)[:100])
+                        print(f"\n🚨 [风控熔断] Phase 2 岗位精读遭遇 BOSS 安全验证/滑块拦截: {e}！")
+                        print("👉 已紧急挂起所有自动化请求，并将 Chrome 调至前台可视，等待人工完成安全验证！\n")
+                        try:
+                            sess.restore_window()
+                            sess.activate_tab()
+                        except Exception:
+                            pass
+                        try:
+                            from . import feishu_bot
+                            feishu_bot.send_text_or_webhook(
+                                cfg,
+                                f"🚨【BOSS直聘风控安全验证预警】\n自动化精读触发了平台安全验证（滑块/人机校验），所有后续请求已自动熔断挂起！\n请前往桌面在已调至前台的 Chrome 浏览器中完成滑块验证后，在 Web 控制台点击恢复运行。"
+                            )
+                        except Exception:
+                            pass
+                        # 退出循环，绝不再遍历后续 70+ 个岗位！
+                        break
+                    except Exception as e:
+                        stats["errors"].append("detail_fetch_error: %s" % str(e)[:100])
                         item["detail"] = ""
                     browser.human_wait(cfg, "page")
             finally:

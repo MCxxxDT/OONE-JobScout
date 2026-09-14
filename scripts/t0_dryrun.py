@@ -2208,6 +2208,102 @@ check("校招专区名企计划纯净名称提取 (快手)", _pure_cmp == "快�
 
 _da39.clear_candidate_pool(dry_run=True)
 
+# ---------------------------------------------------------------------------
+# 40. 安全验证自动熔断暂停、避免持续刷新与风控一键解除断言
+# ---------------------------------------------------------------------------
+print("=== 40. 安全验证自动熔断暂停、避免持续刷新与风控一键解除断言 ===")
+from boss_apply import rawcdp as _rcdp40
+from boss_apply import daily_apply as _da40
+from boss_apply.browser import RiskControl as _RiskControl40
+
+# 40.1 哨兵检测函数 is_security_verification_triggered 断言
+class _MockSecuritySession:
+    def __init__(self, st):
+        self._st = st
+    def state(self):
+        return self._st
+
+_mock_verify = _MockSecuritySession({"security": True, "captcha": False, "href": "https://www.zhipin.com/web/passport/zp/verify.html?callbackUrl=test"})
+_trig, _reason = _rcdp40.is_security_verification_triggered(_mock_verify)
+check("is_security_verification_triggered 识别 verify.html 安全验证", _trig is True and "security verification" in _reason)
+
+_mock_captcha = _MockSecuritySession({"security": False, "captcha": True, "href": "https://www.zhipin.com/job_detail/xxx.html"})
+_trig_c, _reason_c = _rcdp40.is_security_verification_triggered(_mock_captcha)
+check("is_security_verification_triggered 识别滑块验证码", _trig_c is True and "captcha" in _reason_c)
+
+_mock_normal = _MockSecuritySession({"security": False, "captcha": False, "href": "https://www.zhipin.com/web/geek/jobs"})
+_trig_n, _ = _rcdp40.is_security_verification_triggered(_mock_normal)
+check("is_security_verification_triggered 放行正常页面", _trig_n is False)
+
+# 40.2 Phase 2 遭遇 RiskControl 立即熔断并中断循环，绝不连续刷新
+class _MockSessionRiskPhase2:
+    def __init__(self):
+        self.call_count = 0
+        self.window_restored = False
+        self.tab_activated = False
+    def open_tab(self, **kw):
+        pass
+    def close_tab(self):
+        pass
+    def close(self):
+        pass
+    def restore_window(self):
+        self.window_restored = True
+    def activate_tab(self):
+        self.tab_activated = True
+    def search_jobs(self, *a, **kw):
+        return [
+            {"title": f"测试岗位{i}", "company": f"测试企业{i}", "href": f"/job_detail/test{i}.html", "salary": "200-300/天", "tags": "实习"}
+            for i in range(1, 4)
+        ]
+    def fetch_detail(self, job):
+        self.call_count += 1
+        raise _RiskControl40("https://www.zhipin.com/web/passport/zp/verify.html 安全验证拦截")
+
+_old_rawcdp_init = _rcdp40.RawCDP
+_mock_p2_sess = _MockSessionRiskPhase2()
+_rcdp40.RawCDP = lambda *a, **kw: _mock_p2_sess
+
+_test_cfg = dict(cfg)
+_test_g = guard.Guard(_test_cfg)
+_test_g.resume()
+_test_cands = [
+    {"job": {"title": f"测试岗位{i}", "company": f"测试企业{i}", "href": f"/job_detail/{i}.html", "salary": "200/天"}, "base_score": 80.0, "is_eligible": True}
+    for i in range(1, 4)
+]
+
+try:
+    # 模拟 Phase 2 JD精读遭遇安全验证熔断过程
+    _out_cands, _out_stats = _da40.collect_candidates(_test_cfg, _test_g, max_pages=1, fetch_detail=True, initial_candidates=_test_cands)
+    check("遭遇安全验证时 fetch_detail 仅执行1次立即熔断 (未连环刷新)", _mock_p2_sess.call_count == 1)
+    _test_g.reload()
+    check("遭遇安全验证时 Guard 正确置位 security_verification 暂停", "security_verification" in str(_test_g.paused))
+    check("遭遇安全验证时窗口自动调用 restore_window 唤醒前台", _mock_p2_sess.window_restored is True)
+    check("遭遇安全验证时错误统计中记录 security_verification", any("security_verification" in str(e) for e in _out_stats.get("errors", [])))
+finally:
+    _rcdp40.RawCDP = _old_rawcdp_init
+    _test_g.resume()
+
+# 40.3 Web API POST /api/guard/resume 一键解除风控挂起
+_res_resume_unauth = _client.post("/api/guard/resume")
+check("POST /api/guard/resume 无 token 被 401 拦截", _res_resume_unauth.status_code == 401)
+
+_test_g.pause("security_verification: manual test")
+check("测试前置：Guard 处于暂停状态", _test_g.paused is not None)
+
+_res_resume_ok = _client.post(f"/api/guard/resume?token={_token}")
+check("POST /api/guard/resume 鉴权通过响应 200", _res_resume_ok.status_code == 200)
+check("POST /api/guard/resume 返回 ok 标识", _res_resume_ok.json().get("ok") is True)
+_test_g.reload()
+check("POST /api/guard/resume 成功解除 Guard 挂起 (paused is None)", _test_g.paused is None)
+
+# 40.4 前端页面包含 securityBanner 与 resumeGuardFromSecurity 按钮
+_resp_page_40 = _client.get(f"/?token={_token}")
+_html_40 = _resp_page_40.text
+check("Web 控制台包含 securityBanner 熔断强提醒横幅", 'id="securityBanner"' in _html_40)
+check("Web 控制台包含 resumeGuardFromSecurity 恢复函数", 'resumeGuardFromSecurity' in _html_40)
+check("Web 控制台包含安全验证恢复按钮", '我已完成验证，恢复自动化' in _html_40)
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()

@@ -762,10 +762,23 @@ def execute_jobs(cfg, g, jobs, max_count=10, dry_run=False):
                                     "greeting": greeting_text_sent})
                     print(f"  [{idx}/{len(jobs)}] 实弹送达成功! 专属开场白: {greeting_text_sent}")
             except browser.RiskControl as e:
-                g.pause("risk: %s" % e)
+                g.pause("security_verification: %s" % e)
                 ledger.append({"action": "greet", "status": "risk_paused", "reason": str(e), "title": job.get("title")})
                 results.append({"PAUSED": str(e)})
-                print(f"  [{idx}/{len(jobs)}] 风控暂停: {e}")
+                print(f"\n🚨 [风控熔断] 岗位打招呼遭遇 BOSS 安全验证/风控拦截: {e}！")
+                print("👉 已紧急挂起所有自动化请求，并将 Chrome 调至前台可视，等待人工完成安全验证！\n")
+                try:
+                    sess.restore_window()
+                    sess.activate_tab()
+                except Exception:
+                    pass
+                try:
+                    feishu_bot.send_text_or_webhook(
+                        cfg,
+                        f"🚨【BOSS直聘风控安全验证预警】\n自动打招呼时遭遇平台安全验证/风控拦截，所有后续投递已自动熔断挂起！\n请前往桌面在已调至前台的 Chrome 浏览器中手动完成滑块验证后，在 Web 控制台点击恢复运行。"
+                    )
+                except Exception:
+                    pass
                 break
             except Exception as e:
                 if not sent_successfully and hasattr(g, "release_greet_slot"):

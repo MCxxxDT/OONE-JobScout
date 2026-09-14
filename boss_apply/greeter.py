@@ -8,7 +8,7 @@ import re
 import time
 
 from . import ledger, rawcdp
-from .browser import check_risk
+from .browser import check_risk, RiskControl
 
 CHAT_SELECTORS = [".chat-input", ".dialog-chat textarea", "textarea.chat-input", ".chat-conversation textarea", ".chat-input textarea"]
 SEND_SELECTORS = [".btn-send", "button:has-text('发送')"]
@@ -909,6 +909,16 @@ def send_greeting_raw(sess, job, cfg):
         raise RuntimeError("start-chat button not found: %r" % (r1,))
     redir = (r1.get("redir") or "").strip()
 
+    # 点击立即沟通后立即检测是否触发了安全验证/滑块拦截
+    try:
+        challenged, chal_reason = rawcdp.is_security_verification_triggered(sess)
+        if challenged:
+            raise RiskControl(f"click start-chat triggered security verification: {chal_reason}")
+    except RiskControl:
+        raise
+    except Exception:
+        pass
+
     # 2) 页内面板兜底探测3秒（若BOSS A/B仍返回页内面板则直接用）
     confirmed = False
     info = None
@@ -934,6 +944,16 @@ def send_greeting_raw(sess, job, cfg):
                 sess.wait_ready(want_cards=False, timeout_s=10)
         info, conv_head = _open_conversation_input(sess, company, extra_kw=title)
         if not info:
+            # 优先检测是否由于遭遇风控/安全校验导致输入框未就绪
+            try:
+                challenged, chal_reason = rawcdp.is_security_verification_triggered(sess)
+                if challenged:
+                    raise RiskControl(f"chat probe triggered security verification: {chal_reason}")
+            except RiskControl:
+                raise
+            except Exception:
+                pass
+
             # 二次兜底：若当前会话输入框已就绪，直接复用
             info = _ev(sess, _probe_js())
             if isinstance(info, dict) and info.get("inputTag"):

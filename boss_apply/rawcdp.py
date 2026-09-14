@@ -43,14 +43,27 @@ RESTRICTED_KEYWORDS = ("环境存在异常", "访问频繁", "操作太频繁", 
 ACTIVE_RE = re.compile(r"(刚刚活跃|今日活跃|\d+日内活跃|本周活跃|本月活跃|月内活跃|在线)")
 
 STATE_JS = """
-(() => JSON.stringify({
-  href: location.href,
-  blank: location.href === 'about:blank',
-  bodyLen: document.body ? document.body.innerText.length : -1,
-  cards: document.querySelectorAll('li.job-card-box, li:has(.job-name)').length,
-  captcha: !!(document.querySelector('#nc_1_wrapper') || document.querySelector('.nc-container') || document.querySelector("iframe[src*='captcha']")),
-  security: /security-check|web\\/common\\/security|passport\\/zp\\/verify/.test(location.href)
-}))()
+(() => {
+  const href = location.href || '';
+  const title = document.title || '';
+  const bodyText = (document.body ? document.body.innerText : '').slice(0, 3000);
+  const isVerifyUrl = /security-check|web\\/common\\/security|passport\\/zp\\/verify|verify\\.html|safe\\/verify|code=3[167]/i.test(href);
+  const isVerifyTitle = /安全验证|安全校验|人机验证|环境异常/i.test(title);
+  const isVerifyText = /为了您的账户安全|请完成安全验证|请进行安全验证|异常访问行为|滑动验证|拖动滑块|完成拼图|环境存在异常/i.test(bodyText);
+  const hasCaptchaEl = !!(
+    document.querySelector('#nc_1_wrapper, .nc-container, iframe[src*="captcha"], iframe[src*="verify"], .verify-wrap, .geetest_holder, [class*="verify-box"], [class*="slider-verify"], [class*="sec-verify"]')
+  );
+  const isSecurity = isVerifyUrl || isVerifyTitle || isVerifyText || hasCaptchaEl;
+  return JSON.stringify({
+    href: href,
+    title: title,
+    blank: href === 'about:blank',
+    bodyLen: document.body ? document.body.innerText.length : -1,
+    cards: document.querySelectorAll('li.job-card-box, li:has(.job-name)').length,
+    captcha: hasCaptchaEl || isVerifyText,
+    security: isSecurity
+  });
+})()
 """
 
 LOGIN_JS = """
@@ -86,7 +99,15 @@ CARD_JS = """
 
 DETAIL_JS = """
 (() => {
+  const href = location.href || '';
+  const title = document.title || '';
   const body = document.body ? document.body.innerText : '';
+  // 严格安全门禁：若当前页面为安全验证/风控页面，绝不把提示文字当作 JD 返回
+  if (/security-check|web\\/common\\/security|passport\\/zp\\/verify|verify\\.html|safe\\/verify|code=3[167]/i.test(href) ||
+      /安全验证|安全校验|人机验证|环境异常/i.test(title) ||
+      /为了您的账户安全|请完成安全验证|请进行安全验证|异常访问行为/i.test(body)) {
+    return JSON.stringify({text: '', active: '', security_blocked: true});
+  }
   const cands = ['.job-detail', '.job-sec-text', '.detail-content', '[class*=detail-content]', '[class*=job-sec]'];
   let text = '';
   for (const s of cands) {
@@ -95,7 +116,7 @@ DETAIL_JS = """
   }
   if (!text) text = body.slice(0, 3000);
   const am = body.match(/(刚刚活跃|今日活跃|\\d+日内活跃|本周活跃|本月活跃|月内活跃|在线)/);
-  return JSON.stringify({text: text.slice(0, 4000), active: am ? am[1] : ''});
+  return JSON.stringify({text: text.slice(0, 4000), active: am ? am[1] : '', security_blocked: false});
 })()
 """
 
@@ -626,6 +647,9 @@ class RawCDP:
             self.nav(url)
             st = self.wait_ready(want_cards=False, timeout_s=12)
             if st:
+                # 再次快速校验风控哨兵
+                if st.get("security") or st.get("captcha"):
+                    raise RiskControl("captcha/security on %s" % (st.get("href") or url)[:80])
                 d = {}
                 for _ in range(8):
                     v = self.eval(DETAIL_JS)
@@ -633,6 +657,8 @@ class RawCDP:
                         d = json.loads(v) if v else {}
                     except Exception:
                         d = {}
+                    if d.get("security_blocked"):
+                        raise RiskControl("security challenge blocked detail page: %s" % (url[:80]))
                     if d.get("text") and len(d["text"]) > 100:
                         break
                     time.sleep(0.5)
@@ -642,6 +668,36 @@ class RawCDP:
             else:
                 return "", -1
         return "", -1
+
+    def is_security_challenged(self):
+        """检测当前标签页是否处于安全验证或滑块拦截状态。返回 (is_challenged, reason)。"""
+        st = self.state()
+        if not st:
+            return False, ""
+        if st.get("security"):
+            return True, f"security verification url/title/dom detected (url={st.get('href', '')[:80]})"
+        if st.get("captcha"):
+            return True, f"captcha component detected (url={st.get('href', '')[:80]})"
+        return False, ""
+
+
+def is_security_verification_triggered(sess) -> tuple[bool, str]:
+    """毫秒级哨兵检测函数：判断当前会话是否遭遇安全验证/滑块拦截。
+    返回 (is_triggered, reason)"""
+    if not sess:
+        return False, ""
+    try:
+        if hasattr(sess, "is_security_challenged"):
+            return sess.is_security_challenged()
+        st = sess.state() if hasattr(sess, "state") else None
+        if isinstance(st, dict):
+            if st.get("security"):
+                return True, f"security verification triggered (url={st.get('href', '')[:80]})"
+            if st.get("captcha"):
+                return True, f"captcha detected (url={st.get('href', '')[:80]})"
+    except Exception:
+        pass
+    return False, ""
 
 
 def set_browser_visibility(cdp_endpoint: str, visible: bool) -> dict:

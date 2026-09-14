@@ -345,6 +345,46 @@ async def api_settings_post(request: Request, token: str = ""):
     return {"ok": True, "changed": changed or ["无变更"], "quota_summary": g_set.summary()}
 
 
+@app.get("/api/browser/status")
+def api_browser_status(token: str = ""):
+    """获取 Chrome 自动化专属实例的连接与窗口状态。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cdp_ep = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+    from boss_apply.rawcdp import RawCDP
+    b_cfg = cfg.get("browser") or {}
+    status = {
+        "ok": True,
+        "connected": False,
+        "window_state": "unknown",
+        "current_url": None,
+        "current_title": None,
+        "silent_mode": bool(b_cfg.get("silent_mode", True)),
+        "minimize_on_start": bool(b_cfg.get("minimize_on_start", True)),
+    }
+    try:
+        sess = RawCDP(cdp_ep)
+        status["connected"] = True
+        win_id = sess._find_page_window_id()
+        if win_id:
+            bounds = sess._send("Browser.getWindowBounds", {"windowId": win_id})
+            status["window_state"] = (bounds.get("bounds") or {}).get("windowState", "normal")
+        try:
+            import urllib.request
+            tabs = json.loads(urllib.request.urlopen(cdp_ep.rstrip("/") + "/json", timeout=1.5).read().decode("utf-8"))
+            pages = [t for t in tabs if t.get("type") == "page"]
+            if pages:
+                status["current_url"] = pages[0].get("url")
+                status["current_title"] = pages[0].get("title")
+        except Exception:
+            pass
+        sess.close()
+    except Exception as e:
+        status["error"] = str(e)[:100]
+    return status
+
+
 @app.post("/api/browser/visibility")
 async def api_browser_visibility(request: Request, token: str = ""):
     """实时控制 Chrome 窗口显示/隐藏（可视/最小化），同时更新本地配置。"""
@@ -370,14 +410,40 @@ async def api_browser_visibility(request: Request, token: str = ""):
 
     _write_local("browser", {"silent_mode": silent})
     cdp_ep = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
-    from boss_apply import rawcdp
-    ok = rawcdp.set_browser_visibility(cdp_ep, visible=visible)
+    from boss_apply import rawcdp, qr_login
+    res_cdp = rawcdp.set_browser_visibility(cdp_ep, visible=visible)
+    is_ok = bool(res_cdp.get("ok", False)) if isinstance(res_cdp, dict) else bool(res_cdp)
+
+    # 若实例未启动且要求切换，尝试自动拉起后重试
+    if not is_ok:
+        try:
+            if qr_login.ensure_chrome_running(cfg):
+                import time
+                time.sleep(1)
+                res_cdp = rawcdp.set_browser_visibility(cdp_ep, visible=visible)
+                is_ok = bool(res_cdp.get("ok", False)) if isinstance(res_cdp, dict) else bool(res_cdp)
+        except Exception:
+            pass
+
+    err_msg = res_cdp.get("error") if isinstance(res_cdp, dict) else None
     return {
-        "ok": ok,
+        "ok": is_ok,
+        "error": err_msg,
         "silent_mode": silent,
         "visible": visible,
-        "message": "Chrome 已切换为前台可视模式" if visible else "Chrome 已切换为后台静默模式（窗口已最小化）"
+        "message": ("Chrome 自动化窗口已恢复前台可视" if visible else "Chrome 自动化窗口已最小化隐于后台") if is_ok else f"窗口状态切换失败: {err_msg or '未连接'}"
     }
+
+
+@app.post("/api/guard/resume")
+def api_guard_resume(token: str = ""):
+    """解除 Guard 护栏风控挂起状态（人工完成滑块或安全验证后一键恢复就绪）。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    g = guardmod.Guard(cfg)
+    g.resume()
+    return {"ok": True, "message": "风控挂起已成功解除，自动化已恢复就绪状态！", "paused": g.paused}
 
 
 @app.post("/api/settings/test")
@@ -3067,6 +3133,32 @@ PAGE = """<!DOCTYPE html>
         </div>
       </div>
 
+      <!-- Security Verification Alert Banner (安全验证熔断强提醒横幅) -->
+      <div id="securityBanner" class="p-3 mb-3" style="display:none;background:#fef2f2;border:1.5px solid #f87171;border-radius:14px;box-shadow:0 4px 12px rgba(239,68,68,0.1)">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div style="font-size:24px;line-height:1">🚨</div>
+            <div>
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <strong style="font-size:13.5px;color:#991b1b">检测到 BOSS 直聘安全验证拦截，自动化已自动熔断暂停！</strong>
+                <span class="soft-badge badge-rej" style="font-size:10px">风控保护已生效</span>
+              </div>
+              <div style="font-size:12px;color:#7f1d1d;margin-top:2px" id="securityBannerDesc">
+                请在已调至前台可视的 Chrome 自动化浏览器中手动完成滑块/人机验证，完成后点击右侧按钮恢复运行。
+              </div>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+            <button type="button" class="btn btn-sm btn-outline-danger py-1 px-3" style="font-size:12px;font-weight:700;border-radius:8px" onclick="toggleBrowserSilentRealtime(false)">
+              🖥️ 调出浏览器至前台
+            </button>
+            <button type="button" class="btn btn-sm btn-success py-1 px-3" style="font-size:12px;font-weight:700;border-radius:8px" onclick="resumeGuardFromSecurity()">
+              ✅ 我已完成验证，恢复自动化
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Tab 1: 待办审批 (聚焦待处理决策与运营大盘，独占 KPI 卡片) -->
       <main id="tab-pending" class="tab-content active">
         <!-- KPI Statistics Grid (Only shown in Tab 1) -->
@@ -3724,12 +3816,31 @@ PAGE = """<!DOCTYPE html>
         <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalBrowser')">✕</button>
       </div>
       <div class="setting-help-box info">
-        静默模式通过 Chrome CDP 后台执行；最小化保护可避免浏览器窗口遮挡用户工作屏幕。
+        静默模式通过 Chrome CDP 后台执行；最小化保护可避免自动化浏览器窗口遮挡工作屏幕。
       </div>
+
+      <!-- 专属自动化浏览器状态监控卡片 -->
+      <div class="p-3 mb-3" style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:14px">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span style="font-size:12px;font-weight:700;color:#334155">🖥️ BOSS 自动化浏览器实时状态</span>
+          <span id="browserLiveStatusTag" class="soft-badge badge-pub" style="font-size:11px">检测中…</span>
+        </div>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div style="font-size:12px;color:#475569" id="browserLiveDesc">正在探测端口 9335 状态…</div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(true)" title="立即最小化隐藏自动化浏览器窗口">⬇️ 立即最小化</button>
+            <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(false)" title="恢复自动化浏览器窗口至前台">🖥️ 调至前台可视</button>
+          </div>
+        </div>
+        <div class="mt-2" style="font-size:11px;color:#64748b;line-height:1.4">
+          💡 <strong>控制边界说明</strong>：此开关控制的是后端自动化巡检/打招呼所使用的<strong>独立 Chrome 实例</strong>（端口 9335）；当前你正在浏览的日常网页与工作台页面不受任何影响。
+        </div>
+      </div>
+
       <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
         <div>
           <strong style="font-size:13px;color:#111;display:block">静默后台巡检模式 (Silent Mode)</strong>
-          <span style="font-size:11px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行操作，绝不抢占前台输入焦点与激活置顶</span>
+          <span style="font-size:11px;color:var(--mut)">开启后自动化浏览器以最小化隐于后台，绝不抢占前台输入焦点与激活置顶</span>
         </div>
         <label class="form-switch-apple">
           <input type="checkbox" id="inBrowserSilent" onchange="toggleBrowserSilentRealtime(this.checked)">
@@ -3739,7 +3850,7 @@ PAGE = """<!DOCTYPE html>
       <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
         <div>
           <strong style="font-size:13px;color:#111;display:block">启动时窗口最小化 (Minimize On Start)</strong>
-          <span style="font-size:11px;color:var(--mut)">启动脚本拉起 Chrome 时自动以最小化启动，避免巨大浏览器窗口覆盖主屏</span>
+          <span style="font-size:11px;color:var(--mut)">守护启动拉起 Chrome 时自动以最小化启动，避免浏览器窗口覆盖主屏</span>
         </div>
         <label class="form-switch-apple">
           <input type="checkbox" id="inBrowserMinimize">
@@ -4541,7 +4652,16 @@ async function load(isManual) {
     const daemon = d.daemon || {};
     const guard = d.guard || {};
 
+    const secBanner = document.getElementById('securityBanner');
+    const secDesc = document.getElementById('securityBannerDesc');
+
     if (guard.paused) {
+      if (secBanner) {
+        secBanner.style.display = 'block';
+        if (secDesc) {
+          secDesc.textContent = `熔断拦截原因: ${guard.paused}。请在已调至前台可视的 Chrome 浏览器中完成滑块验证后，点击【我已完成验证，恢复自动化】。`;
+        }
+      }
       if (gp) {
         gp.className = 'soft-badge badge-rej';
         gp.innerHTML = '<span class="pulse-dot dot-red"></span> <span class="d-none d-sm-inline">⛔ 风控熔断: ' + esc(guard.paused) + '</span><span class="d-inline d-sm-none">风控熔断</span>';
@@ -4549,23 +4669,26 @@ async function load(isManual) {
       if (sideDot) sideDot.className = 'pulse-dot dot-red';
       if (sideText) sideText.textContent = '风控熔断停摆';
       if (sidePill) sidePill.style.borderColor = 'rgba(239,68,68,0.3)';
-    } else if (!daemon.running) {
-      if (gp) {
-        gp.className = 'soft-badge badge-rej';
-        gp.innerHTML = '<span class="pulse-dot dot-red"></span> <span class="d-none d-sm-inline">🔴 守护未运行 (后台进程离线)</span><span class="d-inline d-sm-none">守护未运行</span>';
-      }
-      if (sideDot) sideDot.className = 'pulse-dot dot-red';
-      if (sideText) sideText.textContent = '守护进程离线';
-      if (sidePill) sidePill.style.borderColor = 'rgba(239,68,68,0.3)';
     } else {
-      if (gp) {
-        gp.className = 'soft-badge badge-pub';
-        const stText = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
-        gp.innerHTML = `<span class="pulse-dot dot-green"></span> <span class="d-none d-sm-inline">🟢 ${stText} (PID ${daemon.pid || '已就绪'})</span><span class="d-inline d-sm-none">${stText}</span>`;
+      if (secBanner) secBanner.style.display = 'none';
+      if (!daemon.running) {
+        if (gp) {
+          gp.className = 'soft-badge badge-rej';
+          gp.innerHTML = '<span class="pulse-dot dot-red"></span> <span class="d-none d-sm-inline">🔴 守护未运行 (后台进程离线)</span><span class="d-inline d-sm-none">守护未运行</span>';
+        }
+        if (sideDot) sideDot.className = 'pulse-dot dot-red';
+        if (sideText) sideText.textContent = '守护进程离线';
+        if (sidePill) sidePill.style.borderColor = 'rgba(239,68,68,0.3)';
+      } else {
+        if (gp) {
+          gp.className = 'soft-badge badge-pub';
+          const stText = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
+          gp.innerHTML = `<span class="pulse-dot dot-green"></span> <span class="d-none d-sm-inline">🟢 ${stText} (PID ${daemon.pid || '已就绪'})</span><span class="d-inline d-sm-none">${stText}</span>`;
+        }
+        if (sideDot) sideDot.className = 'pulse-dot dot-green';
+        if (sideText) sideText.textContent = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
+        if (sidePill) sidePill.style.borderColor = '';
       }
-      if (sideDot) sideDot.className = 'pulse-dot dot-green';
-      if (sideText) sideText.textContent = daemon.status === 'sleeping' ? '休眠巡检中' : '守护运行中';
-      if (sidePill) sidePill.style.borderColor = '';
     }
 
     // KPI 统计
@@ -5618,6 +5741,9 @@ function openSettingModal(id) {
   if (m) {
     m.classList.add('active');
     document.body.style.overflow = 'hidden';
+    if (id === 'modalBrowser' && typeof initBrowserModal === 'function') {
+      initBrowserModal();
+    }
   }
 }
 
@@ -6560,8 +6686,37 @@ async function savePrivacyPolicy() {
   }
 }
 
-async function toggleBrowserSilentRealtime(isSilent) {
+async function initBrowserModal() {
+  const tag = document.getElementById('browserLiveStatusTag');
+  const desc = document.getElementById('browserLiveDesc');
+  const inSilent = document.getElementById('inBrowserSilent');
+  const inMin = document.getElementById('inBrowserMinimize');
   try {
+    const st = await api('/api/browser/status');
+    if (inSilent) inSilent.checked = st.silent_mode !== false;
+    if (inMin) inMin.checked = st.minimize_on_start !== false;
+    if (tag && desc) {
+      if (st.connected) {
+        const isMin = st.window_state === 'minimized';
+        tag.className = isMin ? 'soft-badge badge-ok' : 'soft-badge badge-warn';
+        tag.textContent = isMin ? '🟢 已最小化静默' : '👁️ 前台可视中';
+        desc.innerHTML = `端口 9335 已连通 · 窗口形态: <strong>${isMin ? '后台最小化 (Minimized)' : '前台可视 (Normal)'}</strong>${st.current_title ? ' · 当前页面: ' + esc(st.current_title).slice(0, 20) : ''}`;
+      } else {
+        tag.className = 'soft-badge badge-pub';
+        tag.textContent = '⚪ 未启动';
+        desc.textContent = '自动化浏览器实例尚未运行（执行自动投递或扫码时将自动以静默形态启动）';
+      }
+    }
+  } catch(e) {
+    if (tag) tag.textContent = '探测异常';
+  }
+}
+
+async function toggleBrowserSilentRealtime(isSilent) {
+  const inSilent = document.getElementById('inBrowserSilent');
+  if (inSilent) inSilent.checked = isSilent;
+  try {
+    showToast(isSilent ? '正在将自动化浏览器最小化隐藏…' : '正在将自动化浏览器调至前台…', 'info');
     const res = await api('/api/browser/visibility', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -6569,23 +6724,46 @@ async function toggleBrowserSilentRealtime(isSilent) {
     });
     if (res.ok) {
       showToast(res.message || (isSilent ? 'Chrome 窗口已最小化隐藏' : 'Chrome 窗口已前台显示'), 'success');
+      initBrowserModal();
       loadSettings();
     } else {
+      if (inSilent) inSilent.checked = !isSilent;
       showToast('窗口联动失败: ' + (res.error || '未能连接 Chrome CDP 9335'), 'error');
+      initBrowserModal();
     }
   } catch(e) {
+    if (inSilent) inSilent.checked = !isSilent;
     showToast('操作异常: ' + e.message, 'error');
+  }
+}
+
+
+async function resumeGuardFromSecurity() {
+  try {
+    showToast('正在解除风控挂起…', 'info');
+    const res = await api('/api/guard/resume', { method: 'POST' });
+    if (res.ok) {
+      showToast(res.message || '风控挂起已成功解除！自动化恢复就绪', 'success');
+      loadOverview();
+    } else {
+      showToast('解除失败: ' + (res.error || '未知错误'), 'error');
+    }
+  } catch(e) {
+    showToast('解除异常: ' + e.message, 'error');
   }
 }
 
 async function saveBrowserSettings() {
   const el = document.getElementById('resBrowser');
+  const isSilent = document.getElementById('inBrowserSilent').checked;
+  const isMin = document.getElementById('inBrowserMinimize').checked;
   const body = {
     browser: {
-      silent_mode: document.getElementById('inBrowserSilent').checked,
-      minimize_on_start: document.getElementById('inBrowserMinimize').checked,
+      silent_mode: isSilent,
+      minimize_on_start: isMin,
     }
   };
+  if (el) { el.style.color = '#2563eb'; el.textContent = '正在保存…'; }
   const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (el) {
     el.style.color = d.ok ? 'var(--ok)' : 'var(--dan)';
@@ -6593,8 +6771,16 @@ async function saveBrowserSettings() {
   }
   if (d.ok) {
     showToast('浏览器运行设置已保存！', 'success');
+    try {
+      await api('/api/browser/visibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ silent_mode: isSilent })
+      });
+    } catch(e) {}
     loadSettings();
-    setTimeout(() => closeSettingModal('modalBrowser'), 600);
+    initBrowserModal();
+    setTimeout(() => closeSettingModal('modalBrowser'), 800);
   }
 }
 
