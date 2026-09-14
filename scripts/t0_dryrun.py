@@ -2194,11 +2194,18 @@ from fastapi.testclient import TestClient
 from scripts.approval_web import app as _web_app
 _client = TestClient(_web_app)
 _token = "boss-apply"
-_res_vis_silent = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": True})
-check("/api/browser/visibility 设置静默模式响应 200", _res_vis_silent.status_code == 200 and _res_vis_silent.json().get("silent_mode") is True)
 
-_res_vis_shown = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": False})
-check("/api/browser/visibility 设置前台可视响应 200", _res_vis_shown.status_code == 200 and _res_vis_shown.json().get("visible") is True)
+# 沙箱化 LOCAL_CFG_PATH，严禁测试写穿真实用户配置
+_orig_local_path39 = cfgmod.LOCAL_CFG_PATH
+cfgmod.LOCAL_CFG_PATH = os.path.join(DRY, "config.local.json")
+try:
+    _res_vis_silent = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": True})
+    check("/api/browser/visibility 设置静默模式响应 200", _res_vis_silent.status_code == 200 and _res_vis_silent.json().get("silent_mode") is True)
+
+    _res_vis_shown = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": False})
+    check("/api/browser/visibility 设置前台可视响应 200", _res_vis_shown.status_code == 200 and _res_vis_shown.json().get("visible") is True)
+finally:
+    cfgmod.LOCAL_CFG_PATH = _orig_local_path39
 
 # 39.5 校招专区结构解析与名企纯净名称提取
 import re as _re39
