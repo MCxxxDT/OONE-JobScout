@@ -311,38 +311,46 @@ class RawCDP:
                 pass
         return None
 
-    def restore_window(self):
-        """尝试通过 CDP 将当前浏览器窗口恢复为正常可视形态，避免最小化或被遮挡。"""
+    def _find_page_window_id(self):
+        """查找属于普通网页标签的真实顶层浏览器窗口 ID。"""
         try:
-            target_id = self.tab_id
-            if not target_id:
-                targets = self._send("Target.getTargets").get("targetInfos", [])
-                target_id = targets[0]["targetId"] if targets else None
-            if target_id:
-                win = self._send("Browser.getWindowForTarget", {"targetId": target_id})
-                win_id = win.get("windowId")
-                if win_id:
-                    self._send("Browser.setWindowBounds", {"windowId": win_id, "bounds": {"windowState": "normal"}})
-                    return True
+            if self.tab_id:
+                win = self._send("Browser.getWindowForTarget", {"targetId": self.tab_id})
+                if win and win.get("windowId"):
+                    return win.get("windowId")
+            targets = self._send("Target.getTargets").get("targetInfos", [])
+            page_tids = [t["targetId"] for t in targets if t.get("type") == "page"]
+            for tid in page_tids:
+                try:
+                    win = self._send("Browser.getWindowForTarget", {"targetId": tid})
+                    if win and win.get("windowId"):
+                        return win.get("windowId")
+                except Exception:
+                    pass
         except Exception:
             pass
+        return None
+
+    def restore_window(self):
+        """通过 CDP 将当前浏览器窗口恢复为正常可视形态并置顶。"""
+        win_id = self._find_page_window_id()
+        if win_id:
+            try:
+                self._send("Browser.setWindowBounds", {"windowId": win_id, "bounds": {"windowState": "normal"}})
+                return True
+            except Exception:
+                pass
         return False
 
     def minimize_window(self):
-        """尝试通过 CDP 将当前浏览器窗口最小化，避免抢占焦点或弹窗打扰用户。"""
-        try:
-            target_id = self.tab_id
-            if not target_id:
-                targets = self._send("Target.getTargets").get("targetInfos", [])
-                target_id = targets[0]["targetId"] if targets else None
-            if target_id:
-                win = self._send("Browser.getWindowForTarget", {"targetId": target_id})
-                win_id = win.get("windowId")
-                if win_id:
-                    self._send("Browser.setWindowBounds", {"windowId": win_id, "bounds": {"windowState": "minimized"}})
-                    return True
-        except Exception:
-            pass
+        """通过 CDP 将当前浏览器窗口最小化，隐于后台避免打扰。"""
+        win_id = self._find_page_window_id()
+        if win_id:
+            try:
+                self._send("Browser.setWindowBounds", {"windowId": win_id, "bounds": {"windowState": "minimized"}})
+                return True
+            except Exception:
+                pass
         return False
 
     def nav(self, url):
@@ -632,5 +640,29 @@ class RawCDP:
             if attempt == 1:
                 time.sleep(2)
             else:
-                return "", -1  # 详情失败不熔断：降级为仅列表信息打分
+                return "", -1
         return "", -1
+
+
+def set_browser_visibility(cdp_endpoint: str, visible: bool) -> dict:
+    """即时切换当前运行中 Chrome 浏览器的可视/隐藏状态。
+    visible=True: 恢复前台可视 (windowState='normal') 并激活；
+    visible=False: 隐藏/最小化至后台 (windowState='minimized')，绝不杀掉进程。"""
+    try:
+        sess = RawCDP(cdp_endpoint)
+        try:
+            if visible:
+                ok = sess.restore_window()
+                try:
+                    sess.activate_tab()
+                except Exception:
+                    pass
+                return {"ok": ok, "visible": True, "action": "restore"}
+            else:
+                ok = sess.minimize_window()
+                return {"ok": ok, "visible": False, "action": "minimize"}
+        finally:
+            sess.close()
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:150], "visible": visible}
+

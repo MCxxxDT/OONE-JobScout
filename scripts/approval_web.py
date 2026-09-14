@@ -288,7 +288,15 @@ async def api_settings_post(request: Request, token: str = ""):
         b_cfg = body["browser"]
         clean_b = {}
         if "silent_mode" in b_cfg:
-            clean_b["silent_mode"] = bool(b_cfg["silent_mode"])
+            is_silent = bool(b_cfg["silent_mode"])
+            clean_b["silent_mode"] = is_silent
+            # 实时无缝联动前台 Chrome 窗口（静默则最小化，非静默则恢复前台可视）
+            cdp_ep = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+            try:
+                from boss_apply import rawcdp
+                rawcdp.set_browser_visibility(cdp_ep, visible=not is_silent)
+            except Exception:
+                pass
         if "minimize_on_start" in b_cfg:
             clean_b["minimize_on_start"] = bool(b_cfg["minimize_on_start"])
         if clean_b:
@@ -300,6 +308,11 @@ async def api_settings_post(request: Request, token: str = ""):
         jm = str(body["job_mode"]).strip().lower()
         if jm in ("intern", "campus", "mix", "all"):
             _write_local("job_mode", jm)
+            try:
+                from boss_apply import daily_apply
+                daily_apply.clear_candidate_pool()
+            except Exception:
+                pass
             changed.append("求职定向模态已更新为 %s" % jm)
 
     # 每日自动投递设置更新
@@ -330,6 +343,41 @@ async def api_settings_post(request: Request, token: str = ""):
         changed.append(f"已重置日扫描标记以激活额度补投 (缺口: {gap_count} 岗)")
 
     return {"ok": True, "changed": changed or ["无变更"], "quota_summary": g_set.summary()}
+
+
+@app.post("/api/browser/visibility")
+async def api_browser_visibility(request: Request, token: str = ""):
+    """实时控制 Chrome 窗口显示/隐藏（可视/最小化），同时更新本地配置。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    if "silent_mode" in body:
+        silent = bool(body["silent_mode"])
+        visible = not silent
+    elif "visible" in body:
+        visible = bool(body["visible"])
+        silent = not visible
+    else:
+        cur_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
+        silent = not cur_silent
+        visible = not silent
+
+    _write_local("browser", {"silent_mode": silent})
+    cdp_ep = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+    from boss_apply import rawcdp
+    ok = rawcdp.set_browser_visibility(cdp_ep, visible=visible)
+    return {
+        "ok": ok,
+        "silent_mode": silent,
+        "visible": visible,
+        "message": "Chrome 已切换为前台可视模式" if visible else "Chrome 已切换为后台静默模式（窗口已最小化）"
+    }
 
 
 @app.post("/api/settings/test")
@@ -365,6 +413,14 @@ async def api_prefs_post(request: Request, token: str = ""):
         jm = str(body["job_mode"]).strip().lower()
         if jm in ("intern", "campus", "mix", "all"):
             _write_local("job_mode", jm)
+
+    # 用户偏好更新，清除旧画像候选缓存
+    try:
+        from boss_apply import daily_apply
+        daily_apply.clear_candidate_pool()
+    except Exception:
+        pass
+
     cfg2 = cfgmod.load()
     eff = flows.effective_cities(cfg2)
     return {"ok": True, "prefs": prefs,
@@ -3676,7 +3732,7 @@ PAGE = """<!DOCTYPE html>
           <span style="font-size:11px;color:var(--mut)">开启后通过 CDP 隐藏标签页执行操作，绝不抢占前台输入焦点与激活置顶</span>
         </div>
         <label class="form-switch-apple">
-          <input type="checkbox" id="inBrowserSilent">
+          <input type="checkbox" id="inBrowserSilent" onchange="toggleBrowserSilentRealtime(this.checked)">
           <span class="switch-slider"></span>
         </label>
       </div>
@@ -6500,6 +6556,24 @@ async function savePrivacyPolicy() {
     showToast('隐私与自动化权限设置已保存！', 'success');
     loadSettings();
     setTimeout(() => closeSettingModal('modalPrivacy'), 600);
+  }
+}
+
+async function toggleBrowserSilentRealtime(isSilent) {
+  try {
+    const res = await api('/api/browser/visibility', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ silent_mode: isSilent })
+    });
+    if (res.ok) {
+      showToast(res.message || (isSilent ? 'Chrome 窗口已最小化隐藏' : 'Chrome 窗口已前台显示'), 'success');
+      loadSettings();
+    } else {
+      showToast('窗口联动失败: ' + (res.error || '未能连接 Chrome CDP 9335'), 'error');
+    }
+  } catch(e) {
+    showToast('操作异常: ' + e.message, 'error');
   }
 }
 

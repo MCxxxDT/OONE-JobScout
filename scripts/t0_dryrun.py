@@ -2134,6 +2134,80 @@ _current_target_mock = 50
 _quota_increased_mock = _current_target_mock > _last_target_mock
 check("守护进程能够捕获日内配额提升事件 (30->50)", _quota_increased_mock is True)
 
+# ===========================================================================
+# 39. 当日候选池软存储、校招名企专区与浏览器静默实时联动核验
+# ===========================================================================
+print("=== 39. 当日候选池软存储、校招名企专区与浏览器静默实时联动核验 ===")
+
+# 39.1 当日候选池软存储读写与模式校验
+from boss_apply import daily_apply as _da39
+_da39.clear_candidate_pool(dry_run=True)
+_cands_pool_test = [
+    {"href": "/job/c1", "title": "AI产品经理实习生", "company": "公司A", "salary": "200-300元/天", "score": 95, "verdict": "high", "score_source": "llm", "eligible": True, "job_mode": "intern"},
+    {"href": "/job/c2", "title": "产品经理实习生", "company": "公司B", "salary": "250-350元/天", "score": 90, "verdict": "high", "score_source": "llm", "eligible": True, "job_mode": "intern"},
+    {"href": "/job/c3", "title": "AI商业化产品", "company": "公司C", "salary": "300-400元/天", "score": 85, "verdict": "medium", "score_source": "llm", "eligible": True, "job_mode": "intern"},
+    {"href": "/job/c4", "title": "AI算法实习生", "company": "公司D", "salary": "350-450元/天", "score": 80, "verdict": "medium", "score_source": "llm", "eligible": True, "job_mode": "intern"},
+    {"href": "/job/c5", "title": "数据产品实习生", "company": "公司E", "salary": "200-300元/天", "score": 75, "verdict": "medium", "score_source": "llm", "eligible": True, "job_mode": "intern"},
+]
+_da39.save_candidate_pool(_cands_pool_test, cfg, dry_run=True)
+_loaded_pool = _da39.load_candidate_pool(cfg, dry_run=True)
+check("save_candidate_pool / load_candidate_pool 成功读取写入候选池", _loaded_pool is not None and len(_loaded_pool.get("candidates", [])) == 5)
+check("load_candidate_pool 记录今日日期与 job_mode", _loaded_pool.get("date") == _da39._today_str() and _loaded_pool.get("job_mode") == cfg.get("job_mode", "intern"))
+
+# 模式变更时自动使缓存失效
+_cfg_campus = {**cfg, "job_mode": "campus"}
+_loaded_mismatch = _da39.load_candidate_pool(_cfg_campus, dry_run=True)
+check("求职模态变更时自动使候选池软缓存失效", _loaded_mismatch is None)
+
+# 39.2 候选池命中零 Token 秒级复用出计划
+_scan_rep = _da39.scan_and_apply_daily(cfg, top_n=3, dry_run=True)
+check("候选池命中时标志 cache_hit=True", _scan_rep.get("cache_hit") is True)
+check("候选池命中时计划岗位数量准确截取 top_n", _scan_rep.get("plan_count") == 3)
+check("候选池命中时透出 score_source=cache_pool", (_scan_rep.get("rank") or {}).get("score_source") == "cache_pool")
+
+# 39.3 已投递岗位自动从候选池剔除
+# 模拟已投递 /job/c1 与 /job/c2
+_old_load_all = ledger.load_all
+try:
+    ledger.load_all = lambda: [
+        {"action": "greet", "status": "ok", "href": "/job/c1"},
+        {"action": "greet", "status": "ok", "href": "/job/c2"},
+    ]
+    _scan_rep2 = _da39.scan_and_apply_daily(cfg, top_n=2, dry_run=True)
+    check("已打过招呼岗位自动从候选池过滤跳过", _scan_rep2.get("cache_hit") is True and _scan_rep2.get("cached_available") == 3)
+    # 验证生成的计划中不含 /job/c1 和 /job/c2
+    _plan_file_ck = cfgmod.state_path("daily_plan_dryrun.json")
+    with open(_plan_file_ck, "r", encoding="utf-8") as _fck:
+        _plan_data_ck = json.load(_fck)
+    _plan_hrefs = [p.get("href") for p in _plan_data_ck]
+    check("计划中仅包含未投递的优质候选 (c3, c4)", "/job/c1" not in _plan_hrefs and "/job/c2" not in _plan_hrefs and "/job/c3" in _plan_hrefs)
+finally:
+    ledger.load_all = _old_load_all
+
+# 39.4 前台 Chrome 窗口静默/可视 CDP 控制与 /api/browser/visibility 接口
+from boss_apply import rawcdp as _rcdp39
+import inspect as _insp39
+check("rawcdp 具备 set_browser_visibility 控制函数", hasattr(_rcdp39, "set_browser_visibility"))
+check("rawcdp.set_browser_visibility 参数包含 cdp_endpoint 与 visible", "visible" in _insp39.signature(_rcdp39.set_browser_visibility).parameters)
+
+from fastapi.testclient import TestClient
+from scripts.approval_web import app as _web_app
+_client = TestClient(_web_app)
+_token = "boss-apply"
+_res_vis_silent = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": True})
+check("/api/browser/visibility 设置静默模式响应 200", _res_vis_silent.status_code == 200 and _res_vis_silent.json().get("silent_mode") is True)
+
+_res_vis_shown = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": False})
+check("/api/browser/visibility 设置前台可视响应 200", _res_vis_shown.status_code == 200 and _res_vis_shown.json().get("visible") is True)
+
+# 39.5 校招专区结构解析与名企纯净名称提取
+import re as _re39
+_sample_school_title = "快手2027届快Star顶尖技术人才计划"
+_pure_cmp = _re39.sub(r"(?:202\d|届|秋季|春季|校园|校招|招聘|顶尖|技术|人才|计划).*", "", _sample_school_title).strip()
+check("校招专区名企计划纯净名称提取 (快手)", _pure_cmp == "快手")
+
+_da39.clear_candidate_pool(dry_run=True)
+
 shutil.rmtree(DRY, ignore_errors=True)
 
 print()
