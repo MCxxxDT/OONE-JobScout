@@ -156,13 +156,18 @@ def ensure_chrome_running(cfg=None) -> bool:
 
     deadline = time.time() + 10
     while time.time() < deadline:
-        time.sleep(0.5)
         try:
             urlopen(cdp_http + "/json/version", timeout=1)
             if is_silent:
                 try:
                     from boss_apply import rawcdp
-                    rawcdp.set_win32_browser_visibility(port=9335, visible=False)
+                    rawcdp.set_win32_browser_visibility(port=9335, mode="hide")
+                except Exception:
+                    pass
+            elif is_min:
+                try:
+                    from boss_apply import rawcdp
+                    rawcdp.set_win32_browser_visibility(port=9335, mode="minimize")
                 except Exception:
                     pass
             return True

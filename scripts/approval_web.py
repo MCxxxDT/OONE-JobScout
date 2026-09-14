@@ -283,25 +283,40 @@ async def api_settings_post(request: Request, token: str = ""):
             _write_local("privacy_policy", clean_pol)
             changed.append("隐私与自动化权限已更新")
 
-    # 浏览器运行模式更新
+    # 浏览器运行模式更新 (渐进式分级联动)
     if "browser" in body and isinstance(body["browser"], dict):
         b_cfg = body["browser"]
         clean_b = {}
-        if "silent_mode" in b_cfg:
-            is_silent = bool(b_cfg["silent_mode"])
-            clean_b["silent_mode"] = is_silent
-            # 实时无缝联动前台 Chrome 窗口（静默则最小化，非静默则恢复前台可视）
-            cdp_ep = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+        cur_b = cfg.get("browser") or {}
+        is_min = bool(b_cfg.get("minimize_on_start", cur_b.get("minimize_on_start", True)))
+        is_silent = bool(b_cfg.get("silent_mode", cur_b.get("silent_mode", True)))
+        # 渐进式约束：若未开启最小化，静默模式强制关闭
+        if not is_min:
+            is_silent = False
+
+        clean_b["minimize_on_start"] = is_min
+        clean_b["silent_mode"] = is_silent
+
+        # 确定底层目标形态
+        if is_silent:
+            target_mode = "hide"
+        elif is_min:
+            target_mode = "minimize"
+        else:
+            target_mode = "normal"
+
+        cdp_ep = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
+        try:
+            from boss_apply import rawcdp
             try:
-                from boss_apply import rawcdp
-                rawcdp.set_browser_visibility(cdp_ep, visible=not is_silent)
-            except Exception:
-                pass
-        if "minimize_on_start" in b_cfg:
-            clean_b["minimize_on_start"] = bool(b_cfg["minimize_on_start"])
-        if clean_b:
-            _write_local("browser", clean_b)
-            changed.append("浏览器运行设置已更新")
+                rawcdp.set_browser_visibility(cdp_ep, mode=target_mode)
+            except TypeError:
+                rawcdp.set_browser_visibility(cdp_ep, visible=(target_mode == "normal"))
+        except Exception:
+            pass
+
+        _write_local("browser", clean_b)
+        changed.append("浏览器运行设置已更新")
 
     # 求职定向模态更新 (experience 门禁)
     if "job_mode" in body:
@@ -370,7 +385,7 @@ def api_browser_status(token: str = ""):
         if win_id:
             bounds = sess._send("Browser.getWindowBounds", {"windowId": win_id})
             status["window_state"] = (bounds.get("bounds") or {}).get("windowState", "normal")
-        # 检查 Win32 真实窗口物理隐藏状态（SW_HIDE）
+        # 检查 Win32 真实窗口物理形态（SW_HIDE / SW_MINIMIZE / SW_RESTORE）
         if os.name == "nt":
             try:
                 import ctypes, subprocess
@@ -394,9 +409,16 @@ def api_browser_status(token: str = ""):
                                 hwnds.append(h)
                         return True
                     user32.EnumDesktopWindows(hdesk, WNDENUMPROC(_cb), 0)
-                    if hwnds and all(user32.IsWindowVisible(h) == 0 for h in hwnds):
-                        status["window_state"] = "hidden"
-                        status["is_hidden"] = True
+                    if hwnds:
+                        h0 = hwnds[0]
+                        if not user32.IsWindowVisible(h0):
+                            status["window_state"] = "hidden"
+                            status["is_hidden"] = True
+                        elif user32.IsIconic(h0):
+                            status["window_state"] = "minimized"
+                            status["is_minimized"] = True
+                        else:
+                            status["window_state"] = "normal"
             except Exception:
                 pass
         try:
@@ -416,7 +438,7 @@ def api_browser_status(token: str = ""):
 
 @app.post("/api/browser/visibility")
 async def api_browser_visibility(request: Request, token: str = ""):
-    """实时控制 Chrome 窗口显示/隐藏（可视/最小化），同时更新本地配置。"""
+    """实时控制 Chrome 窗口显示/最小化/隐藏形态，同时更新本地配置。"""
     cfg = cfgmod.load()
     if not _check_token(cfg, token):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -426,21 +448,71 @@ async def api_browser_visibility(request: Request, token: str = ""):
     except Exception:
         pass
 
-    if "silent_mode" in body:
-        silent = bool(body["silent_mode"])
-        visible = not silent
-    elif "visible" in body:
-        visible = bool(body["visible"])
-        silent = not visible
-    else:
-        cur_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
-        silent = not cur_silent
-        visible = not silent
+    cur_b = cfg.get("browser") or {}
+    cur_silent = bool(cur_b.get("silent_mode", True))
+    cur_min = bool(cur_b.get("minimize_on_start", True))
 
-    _write_local("browser", {"silent_mode": silent})
+    if "mode" in body:
+        mode = str(body["mode"]).lower()
+        if mode == "hide":
+            silent = True
+            is_min = True
+        elif mode == "minimize":
+            silent = False
+            is_min = True
+        else:
+            mode = "normal"
+            silent = False
+            is_min = False if ("minimize_on_start" in body or "minimize" in body) else cur_min
+    elif "silent_mode" in body:
+        is_silent = bool(body["silent_mode"])
+        if is_silent:
+            mode = "hide"
+            silent = True
+            is_min = True
+        else:
+            if "minimize_on_start" in body:
+                is_min = bool(body["minimize_on_start"])
+                mode = "minimize" if is_min else "normal"
+            else:
+                is_min = False
+                mode = "normal"
+            silent = False
+    elif "minimize_on_start" in body or "minimize" in body:
+        is_min = bool(body.get("minimize_on_start", body.get("minimize")))
+        if is_min:
+            silent = bool(body.get("silent_mode", False))
+            mode = "hide" if silent else "minimize"
+        else:
+            silent = False
+            mode = "normal"
+    elif "visible" in body:
+        mode = "normal" if body["visible"] else "hide"
+        silent = (mode == "hide")
+        is_min = (mode != "normal")
+    else:
+        mode = "normal"
+        silent = False
+        is_min = False
+
+    if mode == "hide":
+        msg = "Chrome 自动化窗口已彻底隐藏于后台（零可见、绝不弹窗打扰）"
+    elif mode == "minimize":
+        msg = "Chrome 自动化窗口已收纳至任务栏最小化"
+    else:
+        msg = "Chrome 自动化窗口已恢复前台正常可视"
+
+    _write_local("browser", {"silent_mode": silent, "minimize_on_start": is_min})
     cdp_ep = cfg.get("cdp_endpoint", "http://127.0.0.1:9335")
     from boss_apply import rawcdp, qr_login
-    res_cdp = rawcdp.set_browser_visibility(cdp_ep, visible=visible)
+
+    def _do_set_vis(ep, m):
+        try:
+            return rawcdp.set_browser_visibility(ep, mode=m)
+        except TypeError:
+            return rawcdp.set_browser_visibility(ep, visible=(m == "normal"))
+
+    res_cdp = _do_set_vis(cdp_ep, mode)
     is_ok = bool(res_cdp.get("ok", False)) if isinstance(res_cdp, dict) else bool(res_cdp)
 
     # 若实例未启动且要求切换，尝试自动拉起后重试
@@ -449,7 +521,7 @@ async def api_browser_visibility(request: Request, token: str = ""):
             if qr_login.ensure_chrome_running(cfg):
                 import time
                 time.sleep(1)
-                res_cdp = rawcdp.set_browser_visibility(cdp_ep, visible=visible)
+                res_cdp = _do_set_vis(cdp_ep, mode)
                 is_ok = bool(res_cdp.get("ok", False)) if isinstance(res_cdp, dict) else bool(res_cdp)
         except Exception:
             pass
@@ -458,9 +530,11 @@ async def api_browser_visibility(request: Request, token: str = ""):
     return {
         "ok": is_ok,
         "error": err_msg,
+        "mode": mode,
         "silent_mode": silent,
-        "visible": visible,
-        "message": ("Chrome 自动化窗口已恢复前台可视" if visible else "Chrome 自动化窗口已彻底隐藏于后台（零可见、绝不弹窗打扰）") if is_ok else f"窗口状态切换失败: {err_msg or '未连接'}"
+        "minimize_on_start": is_min,
+        "visible": mode == "normal",
+        "message": msg if is_ok else f"窗口状态切换失败: {err_msg or '未连接'}"
     }
 
 
@@ -3857,25 +3931,50 @@ PAGE = """<!DOCTYPE html>
         <div style="font-size:12px;color:#475569;line-height:1.5" id="browserLiveDesc">正在探测端口 9335 状态…</div>
       </div>
 
-      <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
-        <div>
-          <strong style="font-size:13px;color:#111;display:block">静默后台巡检模式 (Silent Mode)</strong>
-          <span style="font-size:11px;color:var(--mut)">开启后通过操作系统级窗口隐藏隐于后台，前台桌面与任务栏完全隐形，彻底杜绝真实爬取与回复时的弹窗跳屏</span>
-        </div>
-        <label class="form-switch-apple">
-          <input type="checkbox" id="inBrowserSilent" onchange="toggleBrowserSilentRealtime(this.checked)">
-          <span class="switch-slider"></span>
-        </label>
+      <div style="font-size:11.5px;font-weight:600;color:var(--mut);margin-bottom:8px;padding-left:4px">
+        ⚙️ 渐进式运行形态阶梯（先最小化收纳，再解锁后台隐形）：
       </div>
-      <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
-        <div>
-          <strong style="font-size:13px;color:#111;display:block">启动时窗口最小化 (Minimize On Start)</strong>
-          <span style="font-size:11px;color:var(--mut)">若未开启静默隐藏模式，拉起 Chrome 时自动以任务栏最小化启动，避免覆盖主屏</span>
+
+      <!-- Level 1: 启动时窗口最小化 (前置基础) -->
+      <div class="p-3 mb-2" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;transition:all 0.2s ease">
+        <div class="d-flex align-items-center justify-content-between">
+          <div style="padding-right:12px">
+            <div class="d-flex align-items-center gap-1 mb-1">
+              <span class="soft-badge badge-pub" style="font-size:10px;padding:1px 6px">Level 1 基础</span>
+              <strong style="font-size:13.5px;color:#0f172a">启动时窗口最小化 (Minimize On Start)</strong>
+            </div>
+            <span style="font-size:11.5px;color:#64748b;line-height:1.4;display:block">拉起自动化 Chrome 时自动收纳至任务栏最小化，避免遮挡或覆盖当前工作屏幕</span>
+          </div>
+          <label class="form-switch-apple" style="flex-shrink:0">
+            <input type="checkbox" id="inBrowserMinimize" onchange="toggleBrowserMinimizeRealtime(this.checked)">
+            <span class="switch-slider"></span>
+          </label>
         </div>
-        <label class="form-switch-apple">
-          <input type="checkbox" id="inBrowserMinimize">
-          <span class="switch-slider"></span>
-        </label>
+      </div>
+
+      <!-- 渐进阶梯连接示意 -->
+      <div class="d-flex align-items-center justify-content-center my-1" style="color:#94a3b8;font-size:12px">
+        <span>↓ 解锁进阶隐形能力 ↓</span>
+      </div>
+
+      <!-- Level 2: 静默后台巡检模式 (进阶隐形) -->
+      <div id="containerBrowserSilent" class="p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;transition:all 0.2s ease">
+        <div class="d-flex align-items-center justify-content-between">
+          <div style="padding-right:12px">
+            <div class="d-flex align-items-center gap-1 mb-1">
+              <span class="soft-badge badge-ok" style="font-size:10px;padding:1px 6px">Level 2 进阶</span>
+              <strong style="font-size:13.5px;color:#0f172a">静默后台巡检模式 (Silent Mode)</strong>
+            </div>
+            <span style="font-size:11.5px;color:#64748b;line-height:1.4;display:block">在最小化基础上进行操作系统级隐形（桌面与任务栏零可见），彻底杜绝自动化时的弹窗与抢占焦点</span>
+            <div id="tipSilentLocked" style="display:none;font-size:11px;color:#e11d48;font-weight:600;margin-top:4px">
+              🔒 需先开启上方「启动时窗口最小化」后方可解锁静默模式
+            </div>
+          </div>
+          <label class="form-switch-apple" style="flex-shrink:0">
+            <input type="checkbox" id="inBrowserSilent" onchange="toggleBrowserSilentRealtime(this.checked)">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
       </div>
       <div class="setting-modal-footer">
         <span id="resBrowser" style="font-size:12px;margin-right:auto"></span>
@@ -6346,8 +6445,20 @@ async function loadSettings() {
   if (document.getElementById('inOnlineReply')) document.getElementById('inOnlineReply').checked = Boolean(s.online_reply_enabled);
 
   const br = s.browser || {};
-  if (document.getElementById('inBrowserSilent')) document.getElementById('inBrowserSilent').checked = br.silent_mode !== false;
-  if (document.getElementById('inBrowserMinimize')) document.getElementById('inBrowserMinimize').checked = br.minimize_on_start !== false;
+  const isMin = br.minimize_on_start !== false;
+  const isSilent = isMin && (br.silent_mode !== false);
+  const inSilent = document.getElementById('inBrowserSilent');
+  const inMinEl = document.getElementById('inBrowserMinimize');
+  const contSilent = document.getElementById('containerBrowserSilent');
+  const tipLocked = document.getElementById('tipSilentLocked');
+
+  if (inMinEl) inMinEl.checked = isMin;
+  if (inSilent) {
+    inSilent.checked = isSilent;
+    inSilent.disabled = !isMin;
+  }
+  if (contSilent) contSilent.style.opacity = isMin ? '1' : '0.55';
+  if (tipLocked) tipLocked.style.display = isMin ? 'none' : 'block';
 
   const aa = s.auto_apply || {};
   if (document.getElementById('inAutoApplyEnabled')) document.getElementById('inAutoApplyEnabled').checked = aa.enabled !== false;
@@ -6399,28 +6510,60 @@ async function loadSettings() {
     hAuto.textContent = aa.enabled !== false ? '🟢 已启用' : '⚪ 已暂停';
     hAuto.className = aa.enabled !== false ? 'soft-badge badge-ok' : 'soft-badge badge-rej';
   }
-  const isSilent = br.silent_mode !== false;
-  const isMin = br.minimize_on_start !== false;
+
   const hSilent = document.getElementById('hubBadgeBrowserSilent');
-  if (hSilent) {
-    hSilent.textContent = isSilent ? '🟢 静默后台模式' : '🖥️ 前台可视模式';
-    hSilent.className = isSilent ? 'soft-badge badge-ok' : 'soft-badge badge-pub';
-  }
   const hDesc = document.getElementById('hubDescBrowser');
-  if (hDesc) {
-    hDesc.textContent = isSilent
-      ? 'Chrome CDP 自动化后台巡检，防抢占桌面焦点与启动最小化防护'
-      : 'Chrome CDP 前台可视化运行，自动化操作实时可见，便于人工监工与调试';
-  }
   const hFocus = document.getElementById('hubTagBrowserFocus');
-  if (hFocus) {
-    hFocus.textContent = isSilent ? '零焦点抢占' : '前台实时可见';
-    hFocus.className = isSilent ? 'soft-badge badge-ok' : 'soft-badge';
-  }
   const hMin = document.getElementById('hubBadgeBrowserMin');
-  if (hMin) {
-    hMin.textContent = isMin ? '启动最小化' : '默认前台尺寸';
-    hMin.className = isMin ? 'soft-badge badge-ok' : 'soft-badge';
+
+  if (!isMin) {
+    if (hSilent) {
+      hSilent.textContent = '👁️ 前台正常可视';
+      hSilent.className = 'soft-badge badge-pub';
+    }
+    if (hDesc) {
+      hDesc.textContent = 'Chrome 自动化实例在前台正常窗口呈现，操作完全可见，便于人工调试';
+    }
+    if (hFocus) {
+      hFocus.textContent = '前台可视';
+      hFocus.className = 'soft-badge';
+    }
+    if (hMin) {
+      hMin.textContent = 'Level 0 默认尺寸';
+      hMin.className = 'soft-badge';
+    }
+  } else if (!isSilent) {
+    if (hSilent) {
+      hSilent.textContent = '⬇️ 任务栏已最小化';
+      hSilent.className = 'soft-badge badge-warn';
+    }
+    if (hDesc) {
+      hDesc.textContent = 'Chrome 自动化实例启动后收纳至系统任务栏，不覆盖主屏幕';
+    }
+    if (hFocus) {
+      hFocus.textContent = '任务栏最小化';
+      hFocus.className = 'soft-badge badge-warn';
+    }
+    if (hMin) {
+      hMin.textContent = 'Level 1 最小化';
+      hMin.className = 'soft-badge badge-ok';
+    }
+  } else {
+    if (hSilent) {
+      hSilent.textContent = '🟢 深度静默隐藏';
+      hSilent.className = 'soft-badge badge-ok';
+    }
+    if (hDesc) {
+      hDesc.textContent = 'Chrome 自动化实例彻底隐形于后台，系统级零可见，杜绝弹窗抢焦';
+    }
+    if (hFocus) {
+      hFocus.textContent = '零焦点抢占';
+      hFocus.className = 'soft-badge badge-ok';
+    }
+    if (hMin) {
+      hMin.textContent = 'Level 2 深度静默';
+      hMin.className = 'soft-badge badge-ok';
+    }
   }
   const hCandidate = document.getElementById('hubBadgeProfileCandidate');
   const hSchool = document.getElementById('hubBadgeProfileSchool');
@@ -6711,20 +6854,45 @@ async function initBrowserModal() {
   const desc = document.getElementById('browserLiveDesc');
   const inSilent = document.getElementById('inBrowserSilent');
   const inMin = document.getElementById('inBrowserMinimize');
+  const containerSilent = document.getElementById('containerBrowserSilent');
+  const tipLocked = document.getElementById('tipSilentLocked');
+
   try {
     const st = await api('/api/browser/status');
-    if (inSilent) inSilent.checked = st.silent_mode !== false;
-    if (inMin) inMin.checked = st.minimize_on_start !== false;
+    const isMinChecked = st.minimize_on_start !== false;
+    const isSilentChecked = isMinChecked && (st.silent_mode !== false);
+
+    if (inMin) inMin.checked = isMinChecked;
+    if (inSilent) {
+      inSilent.checked = isSilentChecked;
+      inSilent.disabled = !isMinChecked;
+    }
+    if (containerSilent) {
+      containerSilent.style.opacity = isMinChecked ? '1' : '0.55';
+    }
+    if (tipLocked) {
+      tipLocked.style.display = isMinChecked ? 'none' : 'block';
+    }
+
     if (tag && desc) {
       if (st.connected) {
-        const isHidden = st.window_state === 'hidden' || (st.silent_mode && st.window_state !== 'normal');
-        tag.className = isHidden ? 'soft-badge badge-ok' : 'soft-badge badge-warn';
-        tag.textContent = isHidden ? '🟢 已静默彻底隐藏' : '👁️ 前台可视中';
-        desc.innerHTML = `端口 9335 已连通 · 窗口形态: <strong>${isHidden ? '后台彻底隐藏 (Hidden / 零可见)' : '前台可视 (Normal)'}</strong>${st.current_title ? ' · 当前页面: ' + esc(st.current_title).slice(0, 20) : ''}`;
+        if (st.window_state === 'hidden' || (st.silent_mode && st.window_state !== 'normal')) {
+          tag.className = 'soft-badge badge-ok';
+          tag.textContent = '🟢 已静默彻底隐形 (Level 2)';
+          desc.innerHTML = `端口 9335 已连通 · 窗口形态: <strong>后台深度隐形 (Hidden / 零可见)</strong>${st.current_title ? ' · 页面: ' + esc(st.current_title).slice(0, 24) : ''}`;
+        } else if (st.window_state === 'minimized' || (!st.silent_mode && st.minimize_on_start)) {
+          tag.className = 'soft-badge badge-warn';
+          tag.textContent = '⬇️ 任务栏已最小化 (Level 1)';
+          desc.innerHTML = `端口 9335 已连通 · 窗口形态: <strong>任务栏最小化 (Minimized)</strong>${st.current_title ? ' · 页面: ' + esc(st.current_title).slice(0, 24) : ''}`;
+        } else {
+          tag.className = 'soft-badge badge-pub';
+          tag.textContent = '👁️ 前台正常可视 (Level 0)';
+          desc.innerHTML = `端口 9335 已连通 · 窗口形态: <strong>前台正常可视 (Normal)</strong>${st.current_title ? ' · 页面: ' + esc(st.current_title).slice(0, 24) : ''}`;
+        }
       } else {
         tag.className = 'soft-badge badge-pub';
         tag.textContent = '⚪ 未启动';
-        desc.textContent = '自动化浏览器实例尚未运行（执行自动投递或扫码时将自动以静默形态启动）';
+        desc.textContent = '自动化浏览器实例尚未运行（执行自动投递或扫码时将自动以所选形态启动）';
       }
     }
   } catch(e) {
@@ -6732,32 +6900,95 @@ async function initBrowserModal() {
   }
 }
 
-async function toggleBrowserSilentRealtime(isSilent) {
+async function toggleBrowserMinimizeRealtime(isMin) {
+  const inMin = document.getElementById('inBrowserMinimize');
   const inSilent = document.getElementById('inBrowserSilent');
-  if (inSilent) inSilent.checked = isSilent;
+  const lockTip = document.getElementById('tipSilentLocked');
+  const containerSilent = document.getElementById('containerBrowserSilent');
+
+  if (!isMin) {
+    // 关闭最小化 -> 自动关闭静默并置灰禁用
+    if (inSilent) {
+      inSilent.checked = false;
+      inSilent.disabled = true;
+    }
+    if (containerSilent) containerSilent.style.opacity = '0.55';
+    if (lockTip) lockTip.style.display = 'block';
+
+    showToast('正在将自动化浏览器恢复至前台正常可视…', 'info');
+    try {
+      const res = await api('/api/browser/visibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'normal', minimize_on_start: false, silent_mode: false })
+      });
+      if (res.ok) {
+        showToast(res.message || 'Chrome 窗口已恢复前台正常可视', 'success');
+      } else {
+        showToast('窗口联动提示: ' + (res.error || '未能连接 Chrome CDP 9335'), 'warn');
+      }
+    } catch(e) {
+      showToast('操作异常: ' + e.message, 'error');
+    }
+  } else {
+    // 开启最小化 -> 解锁静默选项（但默认保持静默关闭，除非用户进一步开启）
+    if (inSilent) {
+      inSilent.disabled = false;
+    }
+    if (containerSilent) containerSilent.style.opacity = '1';
+    if (lockTip) lockTip.style.display = 'none';
+
+    showToast('正在将自动化浏览器收纳至任务栏最小化…', 'info');
+    try {
+      const res = await api('/api/browser/visibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'minimize', minimize_on_start: true, silent_mode: false })
+      });
+      if (res.ok) {
+        showToast(res.message || 'Chrome 窗口已收纳至任务栏最小化', 'success');
+      } else {
+        showToast('窗口联动提示: ' + (res.error || '未能连接 Chrome CDP 9335'), 'warn');
+      }
+    } catch(e) {
+      showToast('操作异常: ' + e.message, 'error');
+    }
+  }
+  initBrowserModal();
+  loadSettings();
+}
+
+async function toggleBrowserSilentRealtime(isSilent) {
+  const inMin = document.getElementById('inBrowserMinimize');
+  const inSilent = document.getElementById('inBrowserSilent');
+
+  if (isSilent && inMin && !inMin.checked) {
+    inMin.checked = true;
+  }
+
+  // 开启静默 -> mode: 'hide'；关闭静默 -> mode: 'minimize'（退回任务栏最小化，符合渐进层级，不突兀弹窗）
+  const targetMode = isSilent ? 'hide' : 'minimize';
+  showToast(isSilent ? '正在将自动化浏览器深度隐形（零可见）…' : '正在将自动化浏览器退回任务栏最小化…', 'info');
   try {
-    showToast(isSilent ? '正在将自动化浏览器前台隐藏…' : '正在将自动化浏览器调至前台…', 'info');
     const res = await api('/api/browser/visibility', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ silent_mode: isSilent })
+      body: JSON.stringify({ mode: targetMode, silent_mode: isSilent, minimize_on_start: true })
     });
     if (res.ok) {
-      showToast(res.message || (isSilent ? 'Chrome 窗口已彻底隐藏于后台' : 'Chrome 窗口已恢复前台显示'), 'success');
+      showToast(res.message || (isSilent ? 'Chrome 窗口已彻底隐藏于后台' : 'Chrome 窗口已退回任务栏最小化'), 'success');
       if (inSilent) inSilent.checked = isSilent;
-      initBrowserModal();
-      loadSettings();
     } else {
       if (inSilent) inSilent.checked = !isSilent;
       showToast('窗口联动失败: ' + (res.error || '未能连接 Chrome CDP 9335'), 'error');
-      initBrowserModal();
     }
   } catch(e) {
     if (inSilent) inSilent.checked = !isSilent;
     showToast('操作异常: ' + e.message, 'error');
   }
+  initBrowserModal();
+  loadSettings();
 }
-
 
 async function resumeGuardFromSecurity() {
   try {
@@ -6776,12 +7007,15 @@ async function resumeGuardFromSecurity() {
 
 async function saveBrowserSettings() {
   const el = document.getElementById('resBrowser');
-  const isSilent = document.getElementById('inBrowserSilent').checked;
-  const isMin = document.getElementById('inBrowserMinimize').checked;
+  const isMin = document.getElementById('inBrowserMinimize')?.checked || false;
+  // 渐进式约束：若未开启最小化，静默模式强制为 false
+  const isSilent = isMin ? (document.getElementById('inBrowserSilent')?.checked || false) : false;
+
+  const targetMode = (!isMin) ? 'normal' : (isSilent ? 'hide' : 'minimize');
   const body = {
     browser: {
-      silent_mode: isSilent,
       minimize_on_start: isMin,
+      silent_mode: isSilent,
     }
   };
   if (el) { el.style.color = '#2563eb'; el.textContent = '正在保存…'; }
@@ -6796,7 +7030,7 @@ async function saveBrowserSettings() {
       await api('/api/browser/visibility', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ silent_mode: isSilent })
+        body: JSON.stringify({ mode: targetMode, silent_mode: isSilent, minimize_on_start: isMin })
       });
     } catch(e) {}
     loadSettings();

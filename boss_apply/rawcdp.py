@@ -705,12 +705,19 @@ def is_security_verification_triggered(sess) -> tuple[bool, str]:
     return False, ""
 
 
-def set_win32_browser_visibility(port: int = 9335, visible: bool = True) -> tuple[bool, list]:
-    """在 Windows 平台下通过 Win32 API 控制对应 CDP 端口的 Chrome 顶层窗口隐藏 (SW_HIDE) 或恢复 (SW_RESTORE)。
-    彻底解决仅依靠最小化时，真实页面跳转或 DOM 焦点导致窗口从任务栏弹回前台的问题。
+
+def set_win32_browser_visibility(port: int = 9335, visible: bool = None, mode: str = None) -> tuple[bool, list[int]]:
+    """通过 Windows 原生 Win32 API 控制指定端口 Chrome 实例的窗口形态。
+    mode='hide':     SW_HIDE (0) 操作系统级彻底隐藏窗口（桌面与任务栏完全隐形）
+    mode='minimize': SW_SHOWMINNOACTIVE (7) / SW_MINIMIZE (6) 任务栏最小化运行（任务栏可见，不覆盖屏幕）
+    mode='normal':   SW_RESTORE (9) 恢复正常前台窗口并带到前台置顶
+    兼容性：若传入 visible 布尔值，visible=False 等价于 mode='hide'，visible=True 等价于 mode='normal'。
     """
     if os.name != "nt":
         return False, []
+    if mode is None:
+        mode = "normal" if (visible is not False) else "hide"
+
     try:
         import ctypes
         import subprocess
@@ -753,23 +760,30 @@ def set_win32_browser_visibility(port: int = 9335, visible: bool = True) -> tupl
 
         user32.EnumDesktopWindows(hdesk, WNDENUMPROC(enum_cb), 0)
         for hwnd in target_hwnds:
-            if visible:
-                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            if mode == "hide":
+                user32.ShowWindow(hwnd, 0)  # SW_HIDE (0)
+            elif mode == "minimize":
+                user32.ShowWindow(hwnd, 7)  # SW_SHOWMINNOACTIVE (7)
+                user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE (6)
+            else:
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE (9)
                 try:
                     user32.SetForegroundWindow(hwnd)
                 except Exception:
                     pass
-            else:
-                user32.ShowWindow(hwnd, 0)  # SW_HIDE
         return bool(target_hwnds), target_hwnds
     except Exception:
         return False, []
 
 
-def set_browser_visibility(cdp_endpoint: str, visible: bool) -> dict:
-    """即时切换当前运行中 Chrome 浏览器的可视/隐藏状态。
-    visible=True: 恢复前台可视 (SW_RESTORE) 并激活置顶；
-    visible=False: 前台彻底隐藏 (SW_HIDE)，桌面与任务栏零可见，彻底杜绝自动化运行过程中的前台弹窗跳屏。"""
+def set_browser_visibility(cdp_endpoint: str, visible: bool = None, mode: str = None) -> dict:
+    """即时切换当前运行中 Chrome 浏览器的可视/最小化/隐藏形态。
+    mode='normal' (或 visible=True):   恢复前台可视 (SW_RESTORE) 并激活置顶；
+    mode='minimize':                   任务栏最小化 (SW_MINIMIZE)，不覆盖主屏；
+    mode='hide' (或 visible=False):    前台彻底隐藏 (SW_HIDE)，桌面与任务栏零可见。"""
+    if mode is None:
+        mode = "normal" if (visible is not False) else "hide"
+
     port = 9335
     try:
         import urllib.parse
@@ -779,19 +793,21 @@ def set_browser_visibility(cdp_endpoint: str, visible: bool) -> dict:
     except Exception:
         pass
 
-    win_ok, hwnds = set_win32_browser_visibility(port=port, visible=visible)
+    win_ok, hwnds = set_win32_browser_visibility(port=port, mode=mode)
     cdp_ok = False
     try:
         sess = RawCDP(cdp_endpoint)
         try:
-            if visible:
+            if mode == "normal":
                 cdp_ok = sess.restore_window()
                 try:
                     sess.activate_tab()
                 except Exception:
                     pass
+            elif mode == "minimize":
+                cdp_ok = sess.minimize_window()
             else:
-                # 关键：若 Win32 SW_HIDE 已经成功执行隐藏，严禁再调用 CDP minimize！
+                # hide 模式：若 Win32 SW_HIDE 已经成功执行隐藏，严禁再调用 CDP minimize！
                 # 因为 Chromium 处理 CDP minimized 时会调用 SW_SHOWMINIMIZED，
                 # 这会向窗口添加 WS_VISIBLE 样式，从而破坏 SW_HIDE 彻底隐藏状态！
                 if not win_ok:
@@ -801,6 +817,5 @@ def set_browser_visibility(cdp_endpoint: str, visible: bool) -> dict:
     except Exception:
         pass
 
-    action = "restore" if visible else "hide"
-    return {"ok": bool(win_ok or cdp_ok), "visible": visible, "action": action, "hwnds": hwnds}
+    return {"ok": bool(win_ok or cdp_ok), "mode": mode, "visible": mode == "normal", "action": mode, "hwnds": hwnds}
 
