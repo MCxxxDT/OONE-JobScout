@@ -2195,9 +2195,11 @@ from scripts.approval_web import app as _web_app
 _client = TestClient(_web_app)
 _token = "boss-apply"
 
-# 沙箱化 LOCAL_CFG_PATH，严禁测试写穿真实用户配置
+# 沙箱化 LOCAL_CFG_PATH，严禁测试写穿真实用户配置；Mock set_browser_visibility 严禁测试弹起实机窗口
 _orig_local_path39 = cfgmod.LOCAL_CFG_PATH
 cfgmod.LOCAL_CFG_PATH = os.path.join(DRY, "config.local.json")
+_orig_set_vis39 = _rcdp39.set_browser_visibility
+_rcdp39.set_browser_visibility = lambda ep, visible=True: {"ok": True, "visible": visible, "mock": True}
 try:
     _res_vis_silent = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": True})
     check("/api/browser/visibility 设置静默模式响应 200", _res_vis_silent.status_code == 200 and _res_vis_silent.json().get("silent_mode") is True)
@@ -2205,6 +2207,7 @@ try:
     _res_vis_shown = _client.post(f"/api/browser/visibility?token={_token}", json={"silent_mode": False})
     check("/api/browser/visibility 设置前台可视响应 200", _res_vis_shown.status_code == 200 and _res_vis_shown.json().get("visible") is True)
 finally:
+    _rcdp39.set_browser_visibility = _orig_set_vis39
     cfgmod.LOCAL_CFG_PATH = _orig_local_path39
 
 # 39.5 校招专区结构解析与名企纯净名称提取
@@ -2271,7 +2274,7 @@ _old_rawcdp_init = _rcdp40.RawCDP
 _mock_p2_sess = _MockSessionRiskPhase2()
 _rcdp40.RawCDP = lambda *a, **kw: _mock_p2_sess
 
-_test_cfg = dict(cfg)
+_test_cfg = {**cfg, "cities": [], "user_preference": {"want_cities": []}}
 _test_g = guard.Guard(_test_cfg)
 _test_g.resume()
 _test_cands = [
