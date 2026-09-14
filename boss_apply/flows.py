@@ -351,6 +351,37 @@ def parse_conv(raw, openers):
             "needs_human": not is_system and greeter.privacy_blocked(preview)}
 
 
+_JD_CACHE = {}
+
+
+def _get_cached_jd(eid: str):
+    if not eid:
+        return None
+    item = _JD_CACHE.get(eid)
+    if item and (time.time() - item.get("ts", 0) < 7 * 86400):
+        return item.get("jd_text", ""), item.get("boss_active", -1)
+    return None
+
+
+def _set_cached_jd(eid: str, jd_text: str, boss_active: int):
+    if not eid or not jd_text:
+        return
+    _JD_CACHE[eid] = {
+        "jd_text": jd_text,
+        "boss_active": boss_active,
+        "ts": time.time(),
+    }
+
+
+def _open_or_reuse_chat_tab(sess):
+    """优先查找并复用已存在的 /web/geek/chat 标签页，零刷新直接操作现有 DOM；
+    若全浏览器不存在该页面，才新建标签页并打开该 URL，且保留该标签页存活供后续巡检复用。"""
+    if hasattr(sess, "attach_existing_tab") and sess.attach_existing_tab("/web/geek/chat"):
+        return True
+    sess.open_tab(rawcdp.BASE + "/web/geek/chat")
+    return False
+
+
 def chat_inbox(cfg):
     """消息中心只读巡检（裸CDP，零发送）。返回 needs_reply（待回复）/needs_human
     （索要联系方式，禁止代发）/all。verify/安全页 → pause 护栏并返回 error
@@ -358,16 +389,22 @@ def chat_inbox(cfg):
     ops = greeter.self_openers(cfg) or (greeter.NATIVE_DEFAULT_OPENER,)
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
-        sess.open_tab(rawcdp.BASE + "/web/geek/chat")
-        st = None
-        for _ in range(15):
-            time.sleep(1)
+        reused = _open_or_reuse_chat_tab(sess)
+        if not reused:
+            st = None
+            for _ in range(15):
+                time.sleep(1)
+                st = sess.state()
+                if st and not st.get("blank") and st.get("bodyLen", 0) > 100:
+                    break
+            if st and (st.get("captcha") or st.get("security")):
+                guard.Guard(cfg).pause("risk: chat_inbox captcha/security")
+                return {"error": "verify/security page", "state": st}
+        else:
             st = sess.state()
-            if st and not st.get("blank") and st.get("bodyLen", 0) > 100:
-                break
-        if st and (st.get("captcha") or st.get("security")):
-            guard.Guard(cfg).pause("risk: chat_inbox captcha/security")
-            return {"error": "verify/security page", "state": st}
+            if st and (st.get("captcha") or st.get("security")):
+                guard.Guard(cfg).pause("risk: chat_inbox captcha/security")
+                return {"error": "verify/security page", "state": st}
         v = sess.eval(CHAT_LIST_JS)
         raws = json.loads(v) if v else []
         convs = [c for c in (parse_conv(r, ops) for r in raws) if c]
@@ -397,7 +434,7 @@ def chat_reply(cfg, company, text, force=False):
         return {"ok": False, "blocked": "privacy", "company": company}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
-        sess.open_tab()
+        _open_or_reuse_chat_tab(sess)
         r = greeter.send_message_via_chat(sess, company, text)
         r_status = (r or {}).get("status", "ok")
         if r_status == "unknown":
@@ -492,7 +529,7 @@ def chat_exchange_wechat(cfg, company, reply_text="", force=False, hi_flag=False
         return {"ok": False, "intercepted": True, "reason": "online_reply_enabled_false", "company": company}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
-        sess.open_tab()
+        _open_or_reuse_chat_tab(sess)
         r = greeter.exchange_wechat_via_chat(sess, company)
         text_res = None
         if reply_text and r.get("status") in ("ok", "already_sent"):
@@ -539,7 +576,7 @@ def chat_send_resume(cfg, company, reply_text="", force=False, hi_flag=False):
         return {"ok": False, "intercepted": True, "reason": "online_reply_enabled_false", "company": company}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
-        sess.open_tab()
+        _open_or_reuse_chat_tab(sess)
         r = greeter.send_resume_via_chat(sess, company)
         text_res = None
         if reply_text and r.get("status") in ("ok", "already_sent"):
@@ -586,7 +623,7 @@ def chat_agree_wechat(cfg, company, reply_text="", force=False, hi_flag=False):
         return {"ok": False, "intercepted": True, "reason": "online_reply_enabled_false", "company": company}
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
-        sess.open_tab()
+        _open_or_reuse_chat_tab(sess)
         r = greeter.agree_wechat_via_chat(sess, company)
         text_res = None
         if reply_text and r.get("status") in ("ok", "already_agreed"):
@@ -621,12 +658,13 @@ def chat_job_detail(cfg, company=None, fetch_jd=True, fetch_history=True):
     company_name = (company or "").strip()
     sess = rawcdp.RawCDP(cfg["cdp_endpoint"])
     try:
-        sess.open_tab(rawcdp.BASE + "/web/geek/chat")
-        for _ in range(12):
-            time.sleep(1)
-            st = sess.state()
-            if st and not st.get("blank") and st.get("bodyLen", 0) > 100:
-                break
+        reused = _open_or_reuse_chat_tab(sess)
+        if not reused:
+            for _ in range(12):
+                time.sleep(1)
+                st = sess.state()
+                if st and not st.get("blank") and st.get("bodyLen", 0) > 100:
+                    break
         if company_name:
             info, head = greeter._open_conversation_input(sess, company_name)
             if not info:
@@ -652,10 +690,18 @@ def chat_job_detail(cfg, company=None, fetch_jd=True, fetch_history=True):
 
         jd_text = ""
         boss_active = -1
-        if fetch_jd and job_info.get("href"):
-            sess.open_tab()
-            jd_text, boss_active = sess.fetch_detail(job_info)
-            sess.close_tab()
+        job_href = job_info.get("href") or ""
+        job_eid = job_info.get("encryptJobId") or job_href
+        if fetch_jd and job_href:
+            cached = _get_cached_jd(job_eid)
+            if cached:
+                jd_text, boss_active = cached
+            else:
+                sess.open_tab()
+                jd_text, boss_active = sess.fetch_detail(job_info)
+                sess.close_tab()
+                if jd_text:
+                    _set_cached_jd(job_eid, jd_text, boss_active)
 
         return {
             "ok": True,

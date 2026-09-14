@@ -310,12 +310,37 @@ class RawCDP:
         finally:
             self.ws.settimeout(30)
 
+    def get_page_targets(self):
+        """获取当前浏览器中所有普通的网页类型标签页（type=='page'）。"""
+        try:
+            targets = self._send("Target.getTargets").get("targetInfos", [])
+            return [t for t in targets if t.get("type") == "page"]
+        except Exception:
+            return []
+
+    def attach_existing_tab(self, url_pattern=""):
+        """查找并复用已存在的匹配 url_pattern 的标签页，避免反复全量新建与刷新页面。"""
+        pages = self.get_page_targets()
+        for p in pages:
+            u = p.get("url", "")
+            if url_pattern and url_pattern in u:
+                try:
+                    self.tab_id = p["targetId"]
+                    res = self._send("Target.attachToTarget", {"targetId": self.tab_id, "flatten": True})
+                    self.sid = res.get("sessionId")
+                    self.is_reused_tab = True
+                    return self.tab_id
+                except Exception:
+                    pass
+        return None
+
     def open_tab(self, url="about:blank", background=True):
         params = {"url": url}
         if background:
             params["background"] = True
         self.tab_id = self._send("Target.createTarget", params)["targetId"]
         self.sid = self._send("Target.attachToTarget", {"targetId": self.tab_id, "flatten": True})["sessionId"]
+        self.is_reused_tab = False
         if not background:
             try:
                 self.activate_tab()
@@ -391,12 +416,19 @@ class RawCDP:
         return res.get("value")
 
     def close_tab(self):
+        if getattr(self, "is_reused_tab", False):
+            # 复用已存在常驻标签页时，仅解绑本次会话引用，严禁销毁物理标签页，避免后续重复打开与刷新
+            self.tab_id = None
+            self.sid = None
+            self.is_reused_tab = False
+            return
         if self.tab_id:
             try:
                 self._send("Target.closeTarget", {"targetId": self.tab_id})
             except Exception:
                 pass
             self.tab_id = None
+            self.sid = None
 
     def close(self):
         try:

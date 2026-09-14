@@ -65,10 +65,10 @@
     "enable_windows_toast": true
   },
   "daemon": {
-    "interval_min": 3.0,
-    "interval_max": 5.0,
+    "interval_min": 15.0,
+    "interval_max": 25.0,
     "active_hours": "09:30-22:00",
-    "max_age_hours": 360,
+    "max_age_hours": 72,
     "soft_close_hard_limit": "23:30",
     "auto_apply": true,
     "apply_window": "09:30-14:00",
