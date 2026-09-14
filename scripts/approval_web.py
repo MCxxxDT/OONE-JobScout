@@ -3845,25 +3845,16 @@ PAGE = """<!DOCTYPE html>
         <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalBrowser')">✕</button>
       </div>
       <div class="setting-help-box info">
-        静默模式通过 Chrome CDP 后台执行；最小化保护可避免自动化浏览器窗口遮挡工作屏幕。
+        💡 控制说明：此设置仅作用于后端自动化巡检与打招呼所使用的独立 Chrome 实例（端口 9335），日常网页浏览与工作台页面不受任何影响。
       </div>
 
       <!-- 专属自动化浏览器状态监控卡片 -->
       <div class="p-3 mb-3" style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:14px">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <span style="font-size:12px;font-weight:700;color:#334155">🖥️ BOSS 自动化浏览器实时状态</span>
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <span style="font-size:12.5px;font-weight:700;color:#334155">🖥️ 自动化浏览器实时状态</span>
           <span id="browserLiveStatusTag" class="soft-badge badge-pub" style="font-size:11px">检测中…</span>
         </div>
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-          <div style="font-size:12px;color:#475569" id="browserLiveDesc">正在探测端口 9335 状态…</div>
-          <div class="d-flex gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(true)" title="立即将自动化浏览器彻底隐藏于后台">🙈 立即隐藏窗口</button>
-            <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(false)" title="恢复自动化浏览器窗口至前台">🖥️ 恢复前台可视</button>
-          </div>
-        </div>
-        <div class="mt-2" style="font-size:11px;color:#64748b;line-height:1.4">
-          💡 <strong>控制边界说明</strong>：此开关控制的是后端自动化巡检/打招呼所使用的<strong>独立 Chrome 实例</strong>（端口 9335）；当前你正在浏览的日常网页与工作台页面不受任何影响。
-        </div>
+        <div style="font-size:12px;color:#475569;line-height:1.5" id="browserLiveDesc">正在探测端口 9335 状态…</div>
       </div>
 
       <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
