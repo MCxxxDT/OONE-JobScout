@@ -318,8 +318,8 @@ def rank_and_plan(candidates, cfg, top_n=None, plan_file=None, dry_run=False):
     min_order = min_verdict_order.get(min_verdict, 2)
 
     # 构造 LLM 输入：只为尚未打分的条目调用 LLM，若已带有 score/verdict（如来自候选池复用）则零 Token 跳过
-    # 精选保护：优先评估已有完整 JD 或基础分靠前的优质头部岗位（上限 max(75, top_n + 25)），严禁无脑向大模型发送几百个未精读的低分候选空耗 Token
-    max_llm_eval = max(75, top_n + 25)
+    # 精选保护：优先评估已有完整 JD 或基础分靠前的优质头部岗位（上限 min(40, max(20, top_n + 10))），严禁无脑向大模型发送大量候选空耗 Token 与耗时
+    max_llm_eval = min(40, max(20, top_n + 10))
     need_llm_indices = sorted(
         [idx for idx, it in enumerate(candidates) if it.get("score") is None],
         key=lambda idx: (1 if candidates[idx].get("detail") else 0, candidates[idx].get("base_score", 0)),

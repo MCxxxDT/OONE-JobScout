@@ -3708,7 +3708,7 @@ PAGE = """<!DOCTYPE html>
         <span id="resAutoApply" style="font-size:12px;margin-right:auto"></span>
         <button type="button" class="btn-action-light" onclick="closeSettingModal('modalAutoApply')">取消</button>
         <button type="button" class="btn-action-light" onclick="saveAutoApply()">仅保存设置</button>
-        <button type="button" class="btn-black" onclick="saveAndApplyNow()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);border-color:#1d4ed8;color:#fff;font-weight:600" title="保存设置并立即启动全链路主动补投">⚡ 保存并立即补投/执行</button>
+        <button type="button" id="btnSaveAndApplyNow" class="btn-black" onclick="saveAndApplyNow()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);border-color:#1d4ed8;color:#fff;font-weight:600" title="保存设置并立即启动全链路主动补投">⚡ 保存并立即补投/执行</button>
       </div>
     </div>
   </div>
@@ -4508,6 +4508,7 @@ function triggerApplyNow() {
       try {
         const res = await api('/api/apply/now', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mode: 'auto_compensate', top_n: topN, async_run: true })
         });
         if (res.ok) {
@@ -6644,8 +6645,9 @@ async function saveAutoApply() {
   }
 }
 
-async function saveAndApplyNow() {
+async function saveAndApplyNow(force = false) {
   const el = document.getElementById('resAutoApply');
+  const btn = document.getElementById('btnSaveAndApplyNow');
   const topN = parseInt(document.getElementById('inApplyTopN').value) || 50;
   const body = {
     auto_apply: {
@@ -6656,31 +6658,48 @@ async function saveAndApplyNow() {
       apply_fetch_detail: document.getElementById('inApplyFetchDetail').value === 'true',
     }
   };
-  if (el) { el.style.color = '#2563eb'; el.textContent = '正在保存设置…'; }
-  const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!d.ok) {
-    if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ 保存设置失败'; }
-    showToast('保存失败: ' + (d.error || '网络异常'), 'danger');
-    return;
-  }
-  showToast('设置已保存！正在启动主动补投任务…', 'info');
+  if (btn) btn.disabled = true;
+  if (el) { el.style.color = '#2563eb'; el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>正在保存设置…'; }
   try {
+    const d = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!d.ok) {
+      if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ 保存设置失败: ' + (d.error || '网络异常'); }
+      showToast('保存失败: ' + (d.error || '网络异常'), 'danger');
+      return;
+    }
+    if (el) { el.style.color = '#2563eb'; el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>设置已保存，正在启动补投…'; }
+    showToast('设置已保存！正在启动主动补投任务…', 'info');
+
     const res = await api('/api/apply/now', {
       method: 'POST',
-      body: JSON.stringify({ mode: 'auto_compensate', top_n: topN, async_run: true })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'auto_compensate', top_n: topN, async_run: true, force: force })
     });
     if (res.ok) {
+      if (el) { el.style.color = 'var(--ok)'; el.textContent = '⚡ 补投任务已在后台启动！'; }
       showToast('⚡ 主动补投任务已在后台启动！正在遍历全城岗位补齐差额', 'success');
       loadSettings();
       load(true);
-      setTimeout(() => closeSettingModal('modalAutoApply'), 600);
+      setTimeout(() => closeSettingModal('modalAutoApply'), 1000);
     } else {
+      const isRunning = res.running || (res.error && res.error.includes('运行中'));
+      if (el) {
+        el.style.color = 'var(--dan)';
+        if (isRunning) {
+          el.innerHTML = `⚠️ ${esc(res.error || '任务正在运行中')} <a href="javascript:void(0)" onclick="saveAndApplyNow(true)" style="color:#2563eb;font-weight:700;margin-left:6px;text-decoration:underline">⚡ 强制重新启动</a>`;
+        } else {
+          el.textContent = '❌ ' + (res.error || '触发失败');
+        }
+      }
       showToast('补投触发提示: ' + (res.error || '任务已在运行中'), 'warning');
       loadSettings();
       load(true);
     }
   } catch (ex) {
+    if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ 异常: ' + ex.message; }
     showToast('补投触发异常: ' + ex.message, 'danger');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -7618,6 +7637,7 @@ _DAILY_APPLY_STATUS = {
     "last_run_time": None,
     "last_report": None,
     "last_error": None,
+    "start_timestamp": 0.0,
 }
 
 
@@ -7628,6 +7648,14 @@ def api_apply_status(token: str = ""):
     if not _check_token(cfg, token):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     g = guardmod.Guard(cfg)
+
+    # 自动超时自愈看门狗：后台任务若异常阻塞超 10 分钟，自动熔断复位
+    if _DAILY_APPLY_STATUS["running"]:
+        elapsed = time.time() - float(_DAILY_APPLY_STATUS.get("start_timestamp") or 0)
+        if elapsed > 600:
+            _DAILY_APPLY_STATUS["running"] = False
+            _DAILY_APPLY_STATUS["last_error"] = f"前次后台任务运行超时 ({int(elapsed)}秒)，已自动熔断复位"
+
     return {
         "ok": True,
         "running": _DAILY_APPLY_STATUS["running"],
@@ -7637,6 +7665,17 @@ def api_apply_status(token: str = ""):
         "scan_done_today": g.is_scan_done(),
         "guard_summary": g.summary(),
     }
+
+
+@app.post("/api/apply/reset")
+def api_apply_reset(token: str = ""):
+    """强制重置投递任务锁与运行状态。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    _DAILY_APPLY_STATUS["running"] = False
+    _DAILY_APPLY_STATUS["last_error"] = "用户手动强制重置任务锁"
+    return {"ok": True, "message": "任务锁已成功复位"}
 
 
 @app.post("/api/apply/now")
@@ -7654,6 +7693,7 @@ async def api_apply_now(request: Request, token: str = ""):
     mode = body.get("mode", "auto_compensate")
     dry_run = bool(body.get("dry_run", False))
     async_run = bool(body.get("async_run", False))
+    force = bool(body.get("force", False))
     daemon_cfg = cfg.get("daemon") or {}
     default_top_n = int(daemon_cfg.get("apply_top_n", 50))
     top_n = int(body.get("top_n") or default_top_n)
@@ -7663,6 +7703,7 @@ async def api_apply_now(request: Request, token: str = ""):
 
     def _worker():
         _DAILY_APPLY_STATUS["running"] = True
+        _DAILY_APPLY_STATUS["start_timestamp"] = time.time()
         _DAILY_APPLY_STATUS["last_run_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _DAILY_APPLY_STATUS["last_error"] = None
         try:
@@ -7721,7 +7762,17 @@ async def api_apply_now(request: Request, token: str = ""):
 
     if async_run:
         if _DAILY_APPLY_STATUS["running"]:
-            return {"ok": False, "error": "任务正在运行中，请勿重复触发"}
+            elapsed = int(time.time() - float(_DAILY_APPLY_STATUS.get("start_timestamp") or 0))
+            if force or elapsed > 600:
+                print(f"  [任务熔断] 强制接管投递任务 (前次运行耗时 {elapsed} 秒)")
+                _DAILY_APPLY_STATUS["running"] = False
+            else:
+                return {
+                    "ok": False,
+                    "error": f"任务正在运行中（已运行 {elapsed} 秒），请稍候或点击强制重试",
+                    "running": True,
+                    "elapsed": elapsed
+                }
         import threading
         t = threading.Thread(target=_worker, daemon=True)
         t.start()

@@ -126,7 +126,7 @@ def _call_once(batch, cfg, start_idx=0):
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
                                      headers={"Content-Type": "application/json",
                                               "Authorization": "Bearer " + llm["api_key"]})
-        with urllib.request.urlopen(req, timeout=90) as resp:
+        with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         content = (data["choices"][0]["message"].get("content") or "").strip()
         content = re.sub(r"^```(?:json)?\s*", "", content)
@@ -147,5 +147,6 @@ def _call_once(batch, cfg, start_idx=0):
             except Exception:
                 continue
         return out if out else None
-    except Exception:
+    except Exception as e:
+        print(f"  [LLM智能匹配] 调用失败或超时 ({e})，安全回退关键词评分")
         return None
