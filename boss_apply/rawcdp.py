@@ -22,6 +22,7 @@ BOSS 安全JS检测到该特征后清空页面DOM（URL保留或跳about:blank�
 """
 import base64
 import json
+import os
 import re
 import time
 from urllib.parse import quote
@@ -353,7 +354,11 @@ class RawCDP:
         return None
 
     def restore_window(self):
-        """通过 CDP 将当前浏览器窗口恢复为正常可视形态并置顶。"""
+        """通过 CDP 与 Win32 API 将当前浏览器窗口恢复为正常可视形态并置顶。"""
+        try:
+            set_win32_browser_visibility(port=9335, visible=True)
+        except Exception:
+            pass
         win_id = self._find_page_window_id()
         if win_id:
             try:
@@ -700,25 +705,96 @@ def is_security_verification_triggered(sess) -> tuple[bool, str]:
     return False, ""
 
 
+def set_win32_browser_visibility(port: int = 9335, visible: bool = True) -> tuple[bool, list]:
+    """在 Windows 平台下通过 Win32 API 控制对应 CDP 端口的 Chrome 顶层窗口隐藏 (SW_HIDE) 或恢复 (SW_RESTORE)。
+    彻底解决仅依靠最小化时，真实页面跳转或 DOM 焦点导致窗口从任务栏弹回前台的问题。
+    """
+    if os.name != "nt":
+        return False, []
+    try:
+        import ctypes
+        import subprocess
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        pids = set()
+        try:
+            out = subprocess.check_output(["netstat", "-ano", "-p", "tcp"], text=True, timeout=2)
+            for l in out.splitlines():
+                if f":{port}" in l and "LISTENING" in l:
+                    parts = l.strip().split()
+                    if parts:
+                        pids.add(int(parts[-1]))
+        except Exception:
+            pass
+
+        if not pids:
+            return False, []
+
+        hdesk = user32.OpenDesktopW("Default", 0, False, 0x01FF)
+        if hdesk:
+            user32.SetThreadDesktop(hdesk)
+
+        target_hwnds = []
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def enum_cb(hwnd, lparam):
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value in pids:
+                length = user32.GetWindowTextLengthW(hwnd)
+                buff = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buff, length + 1)
+                if "Chrome" in buff.value or "BOSS" in buff.value:
+                    target_hwnds.append(hwnd)
+            return True
+
+        user32.EnumDesktopWindows(hdesk, WNDENUMPROC(enum_cb), 0)
+        for hwnd in target_hwnds:
+            if visible:
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                try:
+                    user32.SetForegroundWindow(hwnd)
+                except Exception:
+                    pass
+            else:
+                user32.ShowWindow(hwnd, 0)  # SW_HIDE
+        return True, target_hwnds
+    except Exception:
+        return False, []
+
+
 def set_browser_visibility(cdp_endpoint: str, visible: bool) -> dict:
     """即时切换当前运行中 Chrome 浏览器的可视/隐藏状态。
-    visible=True: 恢复前台可视 (windowState='normal') 并激活；
-    visible=False: 隐藏/最小化至后台 (windowState='minimized')，绝不杀掉进程。"""
+    visible=True: 恢复前台可视 (SW_RESTORE) 并激活置顶；
+    visible=False: 前台彻底隐藏 (SW_HIDE)，桌面与任务栏零可见，彻底杜绝自动化运行过程中的前台弹窗跳屏。"""
+    port = 9335
+    try:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(cdp_endpoint)
+        if parsed.port:
+            port = parsed.port
+    except Exception:
+        pass
+
+    win_ok, hwnds = set_win32_browser_visibility(port=port, visible=visible)
+    cdp_ok = False
     try:
         sess = RawCDP(cdp_endpoint)
         try:
             if visible:
-                ok = sess.restore_window()
+                cdp_ok = sess.restore_window()
                 try:
                     sess.activate_tab()
                 except Exception:
                     pass
-                return {"ok": ok, "visible": True, "action": "restore"}
             else:
-                ok = sess.minimize_window()
-                return {"ok": ok, "visible": False, "action": "minimize"}
+                cdp_ok = sess.minimize_window()
         finally:
             sess.close()
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:150], "visible": visible}
+    except Exception:
+        pass
+
+    action = "restore" if visible else "hide"
+    return {"ok": bool(win_ok or cdp_ok), "visible": visible, "action": action, "hwnds": hwnds}
 

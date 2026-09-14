@@ -95,13 +95,27 @@ if (-not $chromeAlive) {
             $gData = Get-Content $cfgJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($gData.browser) { $bMode = $gData.browser }
         }
-        if ($bMode -and ($bMode.minimize_on_start -or $bMode.silent_mode)) {
-            $isSilent = $true
+        if ($bMode) {
+            if ($bMode.silent_mode) {
+                $isSilent = $true
+            }
         }
     } catch {}
 
-    $windowArg = if ($isSilent) { "--start-minimized" } else { "--start-maximized" }
-    $procWindowStyle = if ($isSilent) { "Minimized" } else { "Normal" }
+    $procWindowStyle = "Normal"
+    $windowArg = "--start-maximized"
+    if ($bMode) {
+        if ($bMode.silent_mode) {
+            $procWindowStyle = "Hidden"
+            $windowArg = "--start-minimized"
+        } elseif ($bMode.minimize_on_start) {
+            $procWindowStyle = "Minimized"
+            $windowArg = "--start-minimized"
+        }
+    } elseif ($isSilent) {
+        $procWindowStyle = "Hidden"
+        $windowArg = "--start-minimized"
+    }
 
     $chromeArgs = @(
         "--remote-debugging-port=9335",
@@ -115,8 +129,10 @@ if (-not $chromeAlive) {
     )
 
     Start-Process -FilePath $chromePath -ArgumentList $chromeArgs -WindowStyle $procWindowStyle
-    if ($isSilent) {
-        Write-Host "[静默模式] 浏览器已在后台最小化启动，避免抢占焦点与弹窗遮挡。" -ForegroundColor Magenta
+    if ($procWindowStyle -eq "Hidden") {
+        Write-Host "[静默隐藏模式] 浏览器已在后台彻底隐藏启动（Window Hidden），前台零可见、零弹窗打扰。" -ForegroundColor Magenta
+    } elseif ($procWindowStyle -eq "Minimized") {
+        Write-Host "[启动最小化] 浏览器已在任务栏最小化启动，避免遮挡主屏。" -ForegroundColor Cyan
     }
     Write-Host "[拉起中] 等待 Chrome 9335 CDP 接口响应..." -ForegroundColor Cyan
 

@@ -431,7 +431,7 @@ async def api_browser_visibility(request: Request, token: str = ""):
         "error": err_msg,
         "silent_mode": silent,
         "visible": visible,
-        "message": ("Chrome 自动化窗口已恢复前台可视" if visible else "Chrome 自动化窗口已最小化隐于后台") if is_ok else f"窗口状态切换失败: {err_msg or '未连接'}"
+        "message": ("Chrome 自动化窗口已恢复前台可视" if visible else "Chrome 自动化窗口已彻底隐藏于后台（零可见、绝不弹窗打扰）") if is_ok else f"窗口状态切换失败: {err_msg or '未连接'}"
     }
 
 
@@ -3840,7 +3840,7 @@ PAGE = """<!DOCTYPE html>
       <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
         <div>
           <strong style="font-size:13px;color:#111;display:block">静默后台巡检模式 (Silent Mode)</strong>
-          <span style="font-size:11px;color:var(--mut)">开启后自动化浏览器以最小化隐于后台，绝不抢占前台输入焦点与激活置顶</span>
+          <span style="font-size:11px;color:var(--mut)">开启后通过操作系统级窗口隐藏隐于后台，前台桌面与任务栏完全隐形，彻底杜绝真实爬取与回复时的弹窗跳屏</span>
         </div>
         <label class="form-switch-apple">
           <input type="checkbox" id="inBrowserSilent" onchange="toggleBrowserSilentRealtime(this.checked)">
@@ -3850,7 +3850,7 @@ PAGE = """<!DOCTYPE html>
       <div class="d-flex align-items-center justify-content-between p-3 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
         <div>
           <strong style="font-size:13px;color:#111;display:block">启动时窗口最小化 (Minimize On Start)</strong>
-          <span style="font-size:11px;color:var(--mut)">守护启动拉起 Chrome 时自动以最小化启动，避免浏览器窗口覆盖主屏</span>
+          <span style="font-size:11px;color:var(--mut)">若未开启静默隐藏模式，拉起 Chrome 时自动以任务栏最小化启动，避免覆盖主屏</span>
         </div>
         <label class="form-switch-apple">
           <input type="checkbox" id="inBrowserMinimize">
@@ -6716,14 +6716,14 @@ async function toggleBrowserSilentRealtime(isSilent) {
   const inSilent = document.getElementById('inBrowserSilent');
   if (inSilent) inSilent.checked = isSilent;
   try {
-    showToast(isSilent ? '正在将自动化浏览器最小化隐藏…' : '正在将自动化浏览器调至前台…', 'info');
+    showToast(isSilent ? '正在将自动化浏览器前台隐藏…' : '正在将自动化浏览器调至前台…', 'info');
     const res = await api('/api/browser/visibility', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ silent_mode: isSilent })
     });
     if (res.ok) {
-      showToast(res.message || (isSilent ? 'Chrome 窗口已最小化隐藏' : 'Chrome 窗口已前台显示'), 'success');
+      showToast(res.message || (isSilent ? 'Chrome 窗口已彻底隐藏于后台' : 'Chrome 窗口已恢复前台显示'), 'success');
       initBrowserModal();
       loadSettings();
     } else {

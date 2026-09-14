@@ -80,7 +80,8 @@ def ensure_chrome_running(cfg=None) -> bool:
             pass
 
     is_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
-    window_arg = "--start-minimized" if is_silent else "--start-maximized"
+    is_min = bool((cfg.get("browser") or {}).get("minimize_on_start", True))
+    window_arg = "--start-minimized" if (is_silent or is_min) else "--start-maximized"
     cmd = [
         chrome_exe,
         "--remote-debugging-port=9335",
@@ -127,7 +128,15 @@ def ensure_chrome_running(cfg=None) -> bool:
             si.cb = ctypes.sizeof(STARTUPINFOW)
             si.lpDesktop = 'WinSta0\\Default'
             si.dwFlags = 1  # STARTF_USESHOWWINDOW
-            si.wShowWindow = 6 if is_silent else 3  # SW_MINIMIZE or SW_SHOWMAXIMIZED
+            # 0 = SW_HIDE (静默模式：真正的前台隐藏运行，零弹窗跳屏)
+            # 6 = SW_MINIMIZE (前台模式下的启动时最小化)
+            # 3 = SW_SHOWMAXIMIZED (常规最大化启动)
+            if is_silent:
+                si.wShowWindow = 0
+            elif is_min:
+                si.wShowWindow = 6
+            else:
+                si.wShowWindow = 3
 
             pi = PROCESS_INFORMATION()
             cmd_str = subprocess.list2cmdline(cmd)
