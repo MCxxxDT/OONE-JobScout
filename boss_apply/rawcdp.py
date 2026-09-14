@@ -742,10 +742,12 @@ def set_win32_browser_visibility(port: int = 9335, visible: bool = True) -> tupl
             pid = wintypes.DWORD()
             user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
             if pid.value in pids:
+                cls_buff = ctypes.create_unicode_buffer(256)
+                user32.GetClassNameW(hwnd, cls_buff, 256)
                 length = user32.GetWindowTextLengthW(hwnd)
                 buff = ctypes.create_unicode_buffer(length + 1)
                 user32.GetWindowTextW(hwnd, buff, length + 1)
-                if "Chrome" in buff.value or "BOSS" in buff.value:
+                if cls_buff.value == "Chrome_WidgetWin_1" or "Chrome" in buff.value or "BOSS" in buff.value:
                     target_hwnds.append(hwnd)
             return True
 
@@ -759,7 +761,7 @@ def set_win32_browser_visibility(port: int = 9335, visible: bool = True) -> tupl
                     pass
             else:
                 user32.ShowWindow(hwnd, 0)  # SW_HIDE
-        return True, target_hwnds
+        return bool(target_hwnds), target_hwnds
     except Exception:
         return False, []
 
@@ -789,7 +791,11 @@ def set_browser_visibility(cdp_endpoint: str, visible: bool) -> dict:
                 except Exception:
                     pass
             else:
-                cdp_ok = sess.minimize_window()
+                # 关键：若 Win32 SW_HIDE 已经成功执行隐藏，严禁再调用 CDP minimize！
+                # 因为 Chromium 处理 CDP minimized 时会调用 SW_SHOWMINIMIZED，
+                # 这会向窗口添加 WS_VISIBLE 样式，从而破坏 SW_HIDE 彻底隐藏状态！
+                if not win_ok:
+                    cdp_ok = sess.minimize_window()
         finally:
             sess.close()
     except Exception:

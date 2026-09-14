@@ -370,6 +370,35 @@ def api_browser_status(token: str = ""):
         if win_id:
             bounds = sess._send("Browser.getWindowBounds", {"windowId": win_id})
             status["window_state"] = (bounds.get("bounds") or {}).get("windowState", "normal")
+        # 检查 Win32 真实窗口物理隐藏状态（SW_HIDE）
+        if os.name == "nt":
+            try:
+                import ctypes, subprocess
+                from ctypes import wintypes
+                user32 = ctypes.windll.user32
+                out = subprocess.check_output(["netstat", "-ano", "-p", "tcp"], text=True, timeout=1)
+                pids = [int(l.strip().split()[-1]) for l in out.splitlines() if ":9335" in l and "LISTENING" in l]
+                if pids:
+                    hdesk = user32.OpenDesktopW("Default", 0, False, 0x01FF)
+                    if hdesk:
+                        user32.SetThreadDesktop(hdesk)
+                    hwnds = []
+                    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+                    def _cb(h, lp):
+                        pid = wintypes.DWORD()
+                        user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+                        if pid.value in pids:
+                            cls_buff = ctypes.create_unicode_buffer(256)
+                            user32.GetClassNameW(h, cls_buff, 256)
+                            if cls_buff.value == "Chrome_WidgetWin_1":
+                                hwnds.append(h)
+                        return True
+                    user32.EnumDesktopWindows(hdesk, WNDENUMPROC(_cb), 0)
+                    if hwnds and all(user32.IsWindowVisible(h) == 0 for h in hwnds):
+                        status["window_state"] = "hidden"
+                        status["is_hidden"] = True
+            except Exception:
+                pass
         try:
             import urllib.request
             tabs = json.loads(urllib.request.urlopen(cdp_ep.rstrip("/") + "/json", timeout=1.5).read().decode("utf-8"))
@@ -3828,8 +3857,8 @@ PAGE = """<!DOCTYPE html>
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
           <div style="font-size:12px;color:#475569" id="browserLiveDesc">正在探测端口 9335 状态…</div>
           <div class="d-flex gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(true)" title="立即最小化隐藏自动化浏览器窗口">⬇️ 立即最小化</button>
-            <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(false)" title="恢复自动化浏览器窗口至前台">🖥️ 调至前台可视</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(true)" title="立即将自动化浏览器彻底隐藏于后台">🙈 立即隐藏窗口</button>
+            <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size:11.5px;border-radius:8px" onclick="toggleBrowserSilentRealtime(false)" title="恢复自动化浏览器窗口至前台">🖥️ 恢复前台可视</button>
           </div>
         </div>
         <div class="mt-2" style="font-size:11px;color:#64748b;line-height:1.4">
@@ -6697,10 +6726,10 @@ async function initBrowserModal() {
     if (inMin) inMin.checked = st.minimize_on_start !== false;
     if (tag && desc) {
       if (st.connected) {
-        const isMin = st.window_state === 'minimized';
-        tag.className = isMin ? 'soft-badge badge-ok' : 'soft-badge badge-warn';
-        tag.textContent = isMin ? '🟢 已最小化静默' : '👁️ 前台可视中';
-        desc.innerHTML = `端口 9335 已连通 · 窗口形态: <strong>${isMin ? '后台最小化 (Minimized)' : '前台可视 (Normal)'}</strong>${st.current_title ? ' · 当前页面: ' + esc(st.current_title).slice(0, 20) : ''}`;
+        const isHidden = st.window_state === 'hidden' || (st.silent_mode && st.window_state !== 'normal');
+        tag.className = isHidden ? 'soft-badge badge-ok' : 'soft-badge badge-warn';
+        tag.textContent = isHidden ? '🟢 已静默彻底隐藏' : '👁️ 前台可视中';
+        desc.innerHTML = `端口 9335 已连通 · 窗口形态: <strong>${isHidden ? '后台彻底隐藏 (Hidden / 零可见)' : '前台可视 (Normal)'}</strong>${st.current_title ? ' · 当前页面: ' + esc(st.current_title).slice(0, 20) : ''}`;
       } else {
         tag.className = 'soft-badge badge-pub';
         tag.textContent = '⚪ 未启动';
@@ -6724,6 +6753,7 @@ async function toggleBrowserSilentRealtime(isSilent) {
     });
     if (res.ok) {
       showToast(res.message || (isSilent ? 'Chrome 窗口已彻底隐藏于后台' : 'Chrome 窗口已恢复前台显示'), 'success');
+      if (inSilent) inSilent.checked = isSilent;
       initBrowserModal();
       loadSettings();
     } else {
