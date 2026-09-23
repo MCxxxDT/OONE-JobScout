@@ -133,24 +133,33 @@ wt.bat remove feat/ai-prompt-v2 -f -d
 
 ## 🔌 接入 IDE / MCP 智能体客户端（可选）
 
-本项目原生支持 **FastMCP** 标准协议，可接入 **Trae**、**Cursor**、**WorkBuddy** 或 **Claude Code**：
+本项目原生支持 **FastMCP** 标准协议，可作为 AI Agent 专属插件无缝接入 **Trae**、**Cursor**、**WorkBuddy** 或 **Claude Code**：
 
-以通用 MCP 配置文件（如 `~/.cursor/mcp.json` 或 `~/.workbuddy/mcp.json`）为例：
+#### 方式 A：免克隆、免配置环境直接调用（推荐，基于 uvx 极速运行）
+无需下载仓库，只需在 IDE MCP 配置（如 `~/.cursor/mcp.json` 或 `Claude Desktop` 配置）中添加：
 
 ```json
 {
   "mcpServers": {
     "boss-apply": {
-      "command": "python",
-      "args": ["-m", "boss_apply.server"],
-      "env": {
-        "PYTHONUNBUFFERED": "1"
-      }
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/MCxxxDT/OONE-JobScout", "boss-mcp"]
     }
   }
 }
 ```
-*(注：如果使用虚拟环境，将 `"command"` 填入你的虚拟环境 Python 绝对路径，如 Windows 下 `D:/.../.venv/Scripts/python.exe` 或 Mac 下 `/Users/.../.venv/bin/python`)*
+
+#### 方式 B：本地源码或已安装环境调用
+```json
+{
+  "mcpServers": {
+    "boss-apply": {
+      "command": "boss-mcp"
+    }
+  }
+}
+```
+*(注：如果使用虚拟环境，将 `"command"` 填入虚拟环境生成的可执行文件，如 Windows 下 `D:/.../.venv/Scripts/boss-mcp.exe`)*
 
 配置完成后，即可在 Agent 中进行自然语言调度：
 - *“帮我扫描杭州的 AI产品经理 岗位，筛选出 8 分以上的优质机会。”*

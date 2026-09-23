@@ -65,13 +65,17 @@ fi
 echo "[浏览器] 正在自检与准备专属调试浏览器 (端口 9335)..."
 "$PY_BIN" -c "from boss_apply import qr_login; ok = qr_login.ensure_chrome_running(); print('[浏览器] ' + ('调试专用 Chrome 已就绪并在 9335 端口监听' if ok else '未能自动拉起 Chrome，请确认是否已安装 Chrome/Edge/Arc 浏览器'))" || true
 
-# 6. 在默认浏览器中弹出 Web 审批工作台
+# 6. 在独立软件窗口中唤醒 Web 审批工作台 (App 模式)
 WEB_URL="http://127.0.0.1:8788/?token=boss-apply"
-echo "[服务] 正在唤醒现代 Web 审批工作台..."
+echo "[软件] 正在唤醒桌面端人机协同工作台 (独立软件窗口)..."
 echo "[访问] $WEB_URL"
 echo ""
 
-if command -v open >/dev/null 2>&1; then
+if [ -d "/Applications/Google Chrome.app" ]; then
+    open -na "Google Chrome" --args --app="$WEB_URL" || true
+elif [ -d "/Applications/Microsoft Edge.app" ]; then
+    open -na "Microsoft Edge" --args --app="$WEB_URL" || true
+elif command -v open >/dev/null 2>&1; then
     open "$WEB_URL" || true
 elif command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$WEB_URL" || true
