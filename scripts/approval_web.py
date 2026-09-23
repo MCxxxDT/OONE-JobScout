@@ -106,7 +106,8 @@ def _key_source(cfg):
     if secrets_mod.has_secret("llm_api_key"):
         return "DPAPI（web端保存）"
     llm = cfg.get("llm") or {}
-    if llm.get("api_key"):
+    raw_key = (llm.get("api_key") or "").strip()
+    if raw_key and raw_key != "YOUR_LLM_API_KEY_HERE" and not raw_key.startswith("YOUR_"):
         return "config.local.json"
     if os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY"):
         return "环境变量"
@@ -204,7 +205,7 @@ def api_settings_get(token: str = ""):
             "apply_fetch_detail": daemon_cfg.get("apply_fetch_detail", True),
         },
         "llm": {
-            "api_key_masked": secrets_mod.masked(llm.get("api_key") or ""),
+            "api_key_masked": secrets_mod.masked(llm.get("api_key") or "") if (llm.get("api_key") or "").strip() not in ("", "YOUR_LLM_API_KEY_HERE") and not (llm.get("api_key") or "").strip().startswith("YOUR_") else "",
             "key_source": _key_source(cfg),
             "base_url": llm.get("base_url") or "",
             "model": llm.get("model") or "",
