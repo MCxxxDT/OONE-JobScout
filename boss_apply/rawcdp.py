@@ -254,11 +254,37 @@ def map_api_jobs(data, keyword=""):
     return out
 
 
+class CDPConnectionError(RuntimeError):
+    """CDP 远程调试端口无法连接异常。"""
+    pass
+
+
 class RawCDP:
     """浏览器级裸CDP会话 + 一个复用标签页。"""
 
-    def __init__(self, cdp_http="http://127.0.0.1:9335"):
-        ver = json.loads(urlopen(cdp_http + "/json/version", timeout=5).read().decode())
+    def __init__(self, cdp_http="http://127.0.0.1:9335", auto_recover=True):
+        ver = None
+        for attempt in range(2):
+            try:
+                ver = json.loads(urlopen(cdp_http + "/json/version", timeout=3).read().decode())
+                break
+            except Exception as e:
+                if attempt == 0 and auto_recover and "127.0.0.1:9335" in str(cdp_http):
+                    # 尝试自愈：自动拉起独立调试 Chrome 实例
+                    try:
+                        from . import qr_login
+                        if qr_login.ensure_chrome_running():
+                            time.sleep(1.5)
+                            continue
+                    except Exception:
+                        pass
+                if attempt == 1 or not auto_recover:
+                    raise CDPConnectionError(
+                        f"无法连接调试 Chrome (地址: {cdp_http})。\n"
+                        f"可能原因：1. 调试浏览器未拉起；2. 端口被占用。\n"
+                        f"解决方案：双击项目根目录下的 start.bat 或 launch_debug_chrome.bat 一键拉起调试浏览器。"
+                    ) from e
+
         self.ws = websocket.create_connection(ver["webSocketDebuggerUrl"], timeout=30, suppress_origin=True)
         self._mid = 0
         self.tab_id = None

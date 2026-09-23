@@ -21,10 +21,12 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
 def find_cloudflared() -> str:
     """寻找本地可用 cloudflared 可执行文件"""
     candidates = [
-        r"D:\LENOVO\Tailscale\cloudflared.exe",
-        r"D:\Tailscale\cloudflared.exe",
-        r"D:\LENOVO\tools\cloudflared.exe",
         os.path.join(os.path.dirname(__file__), "..", "bin", "cloudflared.exe"),
+        os.path.join(os.path.dirname(__file__), "..", "tools", "cloudflared.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\cloudflared\cloudflared.exe"),
+        os.path.expanduser("~/tools/cloudflared.exe"),
+        r"C:\Tailscale\cloudflared.exe",
+        r"D:\Tailscale\cloudflared.exe",
     ]
     for p in candidates:
         if os.path.isfile(p):
@@ -79,7 +81,8 @@ def main():
     cf_path = find_cloudflared()
     if not cf_path:
         print("\n❌ 错误：未找到 cloudflared.exe 可执行文件！")
-        print("   预期路径：D:\\LENOVO\\Tailscale\\cloudflared.exe")
+        print("   请下载 cloudflared.exe 并放置在项目 bin/ 目录或系统 PATH 中：")
+        print("   https://github.com/cloudflare/cloudflared/releases")
         return 1
 
     # 1. 检查本地 Web 服务
