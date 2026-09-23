@@ -30,3 +30,7 @@ __pycache__/
 .venv/
 state_dryrun/
 
+# Git Worktree 并行联调工作区
+.worktrees/
+worktrees/
+

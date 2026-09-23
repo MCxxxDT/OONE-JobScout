@@ -95,6 +95,33 @@ cp config.local.example.json config.local.json
 
 ---
 
+## 🔀 Git Worktree 团队多人并行开发与分支调优（零成本切分支）
+
+在多人协同、多特性并行实验或 A/B 模型比对阶段，频繁切换分支容易污染依赖、中断本地调试。
+本项目内置专属 **Git Worktree 协同管理器**，支持秒级创建独立分支工作区，**自动复用主环境 `.venv`（无需重新装包），自动同步私有配置与 Key**：
+
+```bash
+# 1. 一键创建并初始化新分支工作区（Windows 直接双击 wt.bat 或在终端运行）
+wt.bat add feat/ai-prompt-v2
+# macOS / Linux:
+python3 scripts/worktree.py add feat/ai-prompt-v2
+
+# 2. 列出当前所有并行工作区
+wt.bat list
+
+# 3. 独立工作区即开即用（工作区内拥有完全隔离的源码树）
+cd .worktrees/feat-ai-prompt-v2
+start.bat     # Windows 双击或运行，自动共享主环境极速启动
+
+# 4. 调试/合并完成后，一键安全注销并清理分支与环境
+wt.bat remove feat/ai-prompt-v2 -f -d
+```
+
+> 💡 **端口隔离提示**：若需要同时运行多个分支的 Web 控制台，可使用独立端口：
+> `python -m boss_apply.web_server --port 8789`
+
+---
+
 ## 🔌 接入 IDE / MCP 智能体客户端（可选）
 
 本项目原生支持 **FastMCP** 标准协议，可接入 **Trae**、**Cursor**、**WorkBuddy** 或 **Claude Code**：

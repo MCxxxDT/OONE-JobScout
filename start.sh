@@ -20,6 +20,16 @@ if [ -f "$ROOT_DIR/.venv/bin/python" ]; then
     echo "[环境] 检测到项目专属虚拟环境: .venv"
 fi
 
+# 1.1 若处于 .worktrees/ 或 worktrees/ 分支目录，自动软链接主仓库 venv (零等待、零额外占用)
+if [ -z "$PY_BIN" ] && [ -f "$ROOT_DIR/../../.venv/bin/python" ]; then
+    echo "[环境] 检测到 Worktree 分支工作区，正在自动链接主仓库环境..."
+    ln -sf "$ROOT_DIR/../../.venv" "$ROOT_DIR/.venv" 2>/dev/null || true
+    if [ -f "$ROOT_DIR/.venv/bin/python" ]; then
+        PY_BIN="$ROOT_DIR/.venv/bin/python"
+        echo "[环境] 成功映射主仓库 .venv (零等待、免重新装包)"
+    fi
+fi
+
 # 2. 若虚拟环境不存在，自动探测 Python / uv 并搭建
 if [ -z "$PY_BIN" ]; then
     echo "[初始化] 正在初始化项目运行环境..."

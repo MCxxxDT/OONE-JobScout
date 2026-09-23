@@ -18,6 +18,18 @@ if exist "%~dp0.venv\Scripts\python.exe" (
     echo [环境] 检测到项目专属虚拟环境: .venv
 )
 
+:: 1.1 若处于 .worktrees/ 或 worktrees/ 分支目录，自动映射主仓库 venv (零等待、零额外占用)
+if not defined PY_BIN (
+    if exist "%~dp0..\..\.venv\Scripts\python.exe" (
+        echo [环境] 检测到 Worktree 分支工作区，正在自动链接主仓库环境...
+        mklink /J "%~dp0.venv" "%~dp0..\..\.venv" >nul 2>&1
+        if exist "%~dp0.venv\Scripts\python.exe" (
+            set "PY_BIN=%~dp0.venv\Scripts\python.exe"
+            echo [环境] 成功映射主仓库 .venv (零等待、免重新装包)
+        )
+    )
+)
+
 :: 2. 若虚拟环境不存在，自动探测 Python / uv 并静默搭建
 if not defined PY_BIN (
     echo [初始化] 正在初始化项目运行环境...
