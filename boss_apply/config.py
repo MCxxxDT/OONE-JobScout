@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from typing import Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +14,18 @@ DEFAULT_PROXY_POOL = {
     "provider": "custom",
     "endpoints": [],
     "geo_affinity": True,
+}
+
+DEFAULT_WEB = {
+    "base_url": "http://127.0.0.1:8788",
+    "token": "boss-apply",
+}
+
+DEFAULT_LLM = {
+    "provider": "deepseek",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "api_key": "",
 }
 
 
@@ -39,6 +52,19 @@ def load():
     else:
         for k, v in DEFAULT_PROXY_POOL.items():
             cfg["proxy_pool"].setdefault(k, v)
+
+    # Web 审批台与大模型配置段兜底
+    if "web" not in cfg:
+        cfg["web"] = dict(DEFAULT_WEB)
+    else:
+        for k, v in DEFAULT_WEB.items():
+            cfg["web"].setdefault(k, v)
+
+    if "llm" not in cfg:
+        cfg["llm"] = dict(DEFAULT_LLM)
+    else:
+        for k, v in DEFAULT_LLM.items():
+            cfg["llm"].setdefault(k, v)
 
     # 敏感值优先级：DPAPI secrets.json（Web 端保存，加密落盘）
     # > config.local.json > 环境变量。仅覆盖已存在的键路径，不改变其余结构。
@@ -73,4 +99,11 @@ def atomic_save_json(path: str, data: Any, indent: int = 2) -> None:
         json.dump(data, f, ensure_ascii=False, indent=indent)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp_path, path)
+    for attempt in range(5):
+        try:
+            os.replace(tmp_path, path)
+            break
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.05)

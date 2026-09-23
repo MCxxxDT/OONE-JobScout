@@ -251,17 +251,17 @@ check("LLM从config读取base_url", bool(ai_engine_llm.openai_base))
 check("LLM从config读取model", bool(ai_engine_llm.llm_model))
 
 # 离线干跑测试：在无外部活体Key或测试占位Key时通过Mock保证离线断言确定性通过
-_orig_openai_call = getattr(ai_engine_llm, "_call_openai_chat", None)
+_orig_llm_call = getattr(ai_engine_llm, "_llm_call_once", None)
 try:
     if "YOUR_LLM_API_KEY" in (ai_engine_llm.openai_key or "") or not ai_engine_llm.openai_key:
-        ai_engine_llm._call_openai_chat = lambda prompt, sys="": '{"action": "reply", "reply_text": "您好，已收到您的消息，对岗位非常感兴趣！", "reason": "mock_pass"}'
+        ai_engine_llm._llm_call_once = lambda prompt: {"action": "reply", "reply_text": "您好，已收到您的消息，对岗位非常感兴趣！", "reason": "mock_pass"}
     llm_gen = ai_engine_llm._try_llm_generate({"who": "高先生沉心传媒招聘者", "last_msg": "方便沟通一下吗？"})
     check("LLM直连生成结构化回复", bool(llm_gen and llm_gen.get("action") == "reply"))
     check("LLM直连回复非空", bool(llm_gen and llm_gen.get("reply_text")))
     check("LLM直连回复通过隐私红线", not _gr.privacy_blocked((llm_gen or {}).get("reply_text", "")))
 finally:
-    if _orig_openai_call is not None:
-        ai_engine_llm._call_openai_chat = _orig_openai_call
+    if _orig_llm_call is not None:
+        ai_engine_llm._llm_call_once = _orig_llm_call
 
 print("  --- Agent 决策 Prompt 构建校验 ---")
 prompt_test = ai_engine_raw.build_agent_prompt({
@@ -1418,7 +1418,7 @@ try:
     print("== 30. 校园与实习双模态检索参数体系（2026-09-09 现场调研落地）==")
     # 30.1 search_jobs experience 参数构造断言
     from boss_apply.rawcdp import RawCDP
-    cdp_inst = RawCDP("http://127.0.0.1:9335")
+    cdp_inst = RawCDP.__new__(RawCDP)
     captured_nav_urls = []
     cdp_inst.nav = lambda u: captured_nav_urls.append(u)
     cdp_inst.wait_ready = lambda **kw: {"cards": 0}
@@ -1448,9 +1448,12 @@ try:
         scan_urls.append({"p": p, "exp": experience})
         return []
     orig_search_jobs = flows.rawcdp.RawCDP.search_jobs
+    orig_init30 = flows.rawcdp.RawCDP.__init__
+    flows.rawcdp.RawCDP.__init__ = lambda self, *a, **kw: None
     flows.rawcdp.RawCDP.search_jobs = mock_search
     flows.rawcdp.RawCDP.open_tab = lambda self, **kw: None
     flows.rawcdp.RawCDP.close_tab = lambda self: None
+    flows.rawcdp.RawCDP.close = lambda self: None
     try:
         flows.scan_city(cfg_intern, guard.Guard(cfg_intern), "杭州", keywords=["AI产品"], max_pages=1, fetch_detail=False)
         check("scan_city intern模式传108", len(scan_urls) >= 1 and scan_urls[-1]["exp"] == "108")
@@ -1466,6 +1469,7 @@ try:
         check("scan_city mix模式交替调度", len(scan_urls) >= 2 and scan_urls[0]["exp"] == "108" and scan_urls[1]["exp"] == "102")
     finally:
         flows.rawcdp.RawCDP.search_jobs = orig_search_jobs
+        flows.rawcdp.RawCDP.__init__ = orig_init30
 
     # 30.4 Web 端 Settings / Prefs 读写 job_mode 回环
     resp_job_mode = client.post("/api/settings?token=boss-apply", json={"job_mode": "campus"})
@@ -1501,8 +1505,11 @@ try:
     orig_search_jobs31 = flows.rawcdp.RawCDP.search_jobs
     orig_open_tab31 = flows.rawcdp.RawCDP.open_tab
     orig_close_tab31 = flows.rawcdp.RawCDP.close_tab
+    orig_init31 = flows.rawcdp.RawCDP.__init__
+    flows.rawcdp.RawCDP.__init__ = lambda self, *a, **kw: None
     flows.rawcdp.RawCDP.open_tab = lambda self, **kw: None
     flows.rawcdp.RawCDP.close_tab = lambda self: None
+    flows.rawcdp.RawCDP.close = lambda self: None
     flows.rawcdp.RawCDP.search_jobs = lambda self, kw, c, p, experience=None: list(mock_jobs_pool)
     try:
         cfg31 = dict(cfg, job_mode="intern", cities=[{"name": "杭州", "code": "101210100", "quota": 10}], keywords=["AI产品"])
@@ -1557,6 +1564,7 @@ try:
         flows.rawcdp.RawCDP.search_jobs = orig_search_jobs31
         flows.rawcdp.RawCDP.open_tab = orig_open_tab31
         flows.rawcdp.RawCDP.close_tab = orig_close_tab31
+        flows.rawcdp.RawCDP.__init__ = orig_init31
 
     # 31.6 Web 端 Settings API 读写 auto_apply 回环
     resp_settings_aa = client.get("/api/settings?token=boss-apply")
