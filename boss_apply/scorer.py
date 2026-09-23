@@ -103,8 +103,22 @@ def check_eligibility(job, detail, cfg):
             return False, "salary out of range: %s" % job.get("salary")
 
     # 6. 届别不符（如只收28届而用户27届）：标题或JD明确标注且范围不含目标届 → 一票否决
-    if jie_excludes((title or "") + "\n" + (detail or ""), cfg.get("target_jie", 27)):
-        return False, "kill: 届别标注不含%d届" % cfg.get("target_jie", 27)
+    target_jie = cfg.get("target_jie")
+    if not target_jie:
+        try:
+            from . import profile_store
+            p_data = profile_store.load_profile() or {}
+            refined_p = p_data.get("refined") or {}
+            gy = refined_p.get("grad_year") or p_data.get("grad_year")
+            if gy:
+                target_jie = int(gy) % 100 if int(gy) >= 1000 else int(gy)
+        except Exception:
+            pass
+    if not target_jie:
+        target_jie = 27
+
+    if jie_excludes((title or "") + "\n" + (detail or ""), target_jie):
+        return False, "kill: 届别标注不含%d届" % target_jie
 
     # 7. 用户偏好排斥词硬否决（若配置）
     prefs_avoid = (cfg.get("prefs") or {}).get("avoid_jobs") or []

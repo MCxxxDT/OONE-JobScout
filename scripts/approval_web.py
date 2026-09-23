@@ -965,10 +965,16 @@ async def api_playground_simulate(request: Request, token: str = ""):
                 "suggested_reply": ""
             }
         else:
+            # 动态根据本地求职者画像或中性话术兜底，消除任何硬编码城市与身份
+            cached_prof = qr_login.get_cached_user_profile() or {}
+            stored_prof = profile_store.load_profile() or {}
+            cur_city = cached_prof.get("current_city") or stored_prof.get("current_city") or ""
+            city_prefix = f"目前人在{cur_city}，" if cur_city else ""
+            default_reply = f"您好！{city_prefix}对贵团队该方向很感兴趣，随时可以沟通交流，期待深入了解！"
             parsed_decision = {
                 "action": "reply",
                 "reason": "常规业务沟通，基于画像与JD生成拟人化回答",
-                "suggested_reply": "您好！目前人在福州，随时可以奔赴现场实习，期待与贵团队进一步交流！"
+                "suggested_reply": default_reply
             }
 
     raw_suggested = parsed_decision.get("reply_text") or parsed_decision.get("suggested_reply") or ""
@@ -3600,8 +3606,8 @@ PAGE = """<!DOCTYPE html>
             <div class="hub-title">求职偏好与定向模态</div>
             <div class="hub-desc">在校实习与校招应届双模切换，期望/排斥岗位与城市智能过滤黑白名单</div>
             <div class="hub-meta-tags">
-              <span class="soft-badge" id="hubBadgeRoles">AI产品经理</span>
-              <span class="soft-badge" id="hubBadgeCities">福州 / 上海 / 杭州</span>
+              <span class="soft-badge" id="hubBadgeRoles">全方向岗位</span>
+              <span class="soft-badge" id="hubBadgeCities">全城扫描</span>
             </div>
           </div>
           <button type="button" class="hub-card-btn">⚙️ 编辑求职偏好</button>

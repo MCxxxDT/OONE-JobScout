@@ -750,7 +750,8 @@ def execute_jobs(cfg, g, jobs, max_count=10, dry_run=False):
         for idx, job in enumerate(jobs, 1):
             if done >= max_count:
                 break
-            city = job.get("city") or "杭州"
+            first_city = (cfg.get("cities") or [{}])[0].get("name") if cfg.get("cities") else "全国"
+            city = job.get("city") or first_city or "全国"
             company = job.get("company") or ""
             title = job.get("title") or ""
             print(f"\n  [{idx}/{len(jobs)}] 正在处理: {company} - {title} ({city}, {job.get('score')}分)...")
