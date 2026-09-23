@@ -549,6 +549,57 @@ def api_guard_resume(token: str = ""):
     return {"ok": True, "message": "风控挂起已成功解除，自动化已恢复就绪状态！", "paused": g.paused}
 
 
+@app.get("/api/system/health")
+def api_system_health(token: str = ""):
+    """系统就绪状态与开箱体检接口"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    auth_st = qr_login.QRLoginManager().get_auth_status(cfg)
+    llm_cfg = cfg.get("llm") or {}
+    api_key = (llm_cfg.get("api_key") or "").strip()
+    user_prof = qr_login.get_cached_user_profile()
+
+    return {
+        "ok": True,
+        "environment": {
+            "python_version": sys.version.split()[0],
+            "is_venv": sys.prefix != sys.base_prefix,
+            "platform": sys.platform,
+        },
+        "browser": {
+            "cdp_connected": auth_st.get("cdp_connected", False),
+            "port": 9335,
+        },
+        "account": {
+            "logged_in": auth_st.get("logged_in", False),
+            "user_name": user_prof.get("name") or "",
+            "avatar": user_prof.get("avatar") or "",
+        },
+        "llm": {
+            "configured": bool(api_key and "YOUR_LLM_API_KEY" not in api_key),
+            "provider": llm_cfg.get("provider", "DeepSeek"),
+            "model": llm_cfg.get("model", "deepseek-chat"),
+        },
+        "daemon": get_daemon_status(),
+    }
+
+
+@app.post("/api/browser/launch")
+def api_browser_launch(token: str = ""):
+    """一键拉起调试专用 Chrome 浏览器"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    ok = qr_login.ensure_chrome_running(cfg)
+    return {
+        "ok": ok,
+        "message": "调试 Chrome 浏览器已成功拉起并在 9335 端口就绪！" if ok else "无法拉起 Chrome，请确认系统中是否安装了 Chrome / Edge 浏览器。"
+    }
+
+
 @app.post("/api/settings/test")
 async def api_settings_test(request: Request, token: str = ""):
     cfg = cfgmod.load()
@@ -7979,6 +8030,7 @@ def api_overview(token: str = ""):
         "daemon": get_daemon_status(),
         "auth": qr_login.QRLoginManager().get_auth_status(cfg),
         "user_profile": qr_login.get_cached_user_profile(),
+        "llm_configured": bool((cfg.get("llm") or {}).get("api_key") and "YOUR_LLM_API_KEY" not in (cfg.get("llm") or {}).get("api_key", "")),
         "pending": pending[:100],
         "resolved": resolved[:100],
         "ledger": enriched_ledger,

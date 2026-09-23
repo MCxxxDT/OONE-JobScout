@@ -7,21 +7,24 @@
 
 ---
 
-## 🛠️ 快速开始（跨平台开箱 5 步）
+---
 
-### 1. 克隆代码仓库
-```bash
-git clone https://github.com/MCxxxDT/OONE-JobScout.git
-cd OONE-JobScout
-```
+## 🚀 极速开箱（推荐：一键双击即开即用）
 
-### 2. 初始化环境并安装依赖（支持 UV 或 PIP）
-建议使用 **Python 3.10 ~ 3.13**。你可以根据个人开发习惯选择以下任意一种方式：
+本项目已全面内置**智能自愈与一键就绪启动器**，无论在新机器还是现有设备中，均无需繁琐手动配置命令行：
 
-#### ⚡ 方式 A：使用 UV（极速推荐，依赖秒级解析与安装）
-> 如果尚未安装 `uv`，可一键安装：
-> - **Windows (PowerShell)**: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-> - **macOS / Linux**: `curl -LsSf https://astral.sh/uv/install.sh | sh` 或 `brew install uv`
+- **Windows 10/11**: 直接双击运行项目根目录下的 **`start.bat`**
+- **macOS / Linux**: 终端运行 **`chmod +x start.sh && ./start.sh`**
+
+启动器将全自动完成：
+1. 自动检测系统 Python/uv 并秒级搭建专属 `.venv` 虚拟环境与依赖；
+2. 自动生成本地私有安全配置文件 `config.local.json`（绝不上云）；
+3. 自动自检并拉起独立调试 Chrome 浏览器（端口 9335，独立 Profile 隔离）；
+4. 自动在默认浏览器中弹出现代 Web 审批工作台 (`http://127.0.0.1:8788/?token=boss-apply`)，并在顶栏呈现系统就绪体检看板。
+
+---
+
+## 🛠️ 开发者手动安装（可选 / 进阶）
 
 - **Windows (PowerShell)**:
   ```powershell
