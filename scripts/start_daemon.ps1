@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   BOSS直聘消息巡检后台守护与 Chrome 自愈保活启动脚本。
 .DESCRIPTION
@@ -186,18 +186,24 @@ $logDir = Join-Path $RepoRoot "state"
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
 $logPath = Join-Path $logDir "daemon.log"
 
-Write-Host "`n[守护启动] 正在执行: python $($daemonArgs -join ' ')" -ForegroundColor Cyan
+$pyBin = "python"
+$venvPy = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+if (Test-Path $venvPy) {
+    $pyBin = $venvPy
+}
+
+Write-Host "`n[守护启动] 正在执行: $pyBin $($daemonArgs -join ' ')" -ForegroundColor Cyan
 Write-Host "[守护日志] $logPath（控制台与文件双写）" -ForegroundColor Gray
 
 if ($Once) {
     # 单次模式：直接执行，输出双写日志
-    & python @daemonArgs 2>&1 | Tee-Object -FilePath $logPath -Append
+    & $pyBin @daemonArgs 2>&1 | Tee-Object -FilePath $logPath -Append
 } else {
     # 常驻模式：崩溃自动重启（正常退出码 0 不重启；异常退出退避 60 秒后重启并记日志）
     $restartCount = 0
     while ($true) {
         $startTime = Get-Date
-        & python @daemonArgs 2>&1 | Tee-Object -FilePath $logPath -Append
+        & $pyBin @daemonArgs 2>&1 | Tee-Object -FilePath $logPath -Append
         $exitCode = $LASTEXITCODE
         if ($exitCode -eq 0) {
             Write-Host "[守护退出] daemon 正常退出（exit 0），不重启。" -ForegroundColor Yellow
