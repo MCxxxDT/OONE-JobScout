@@ -3,7 +3,7 @@
 **审计日期**：2026-09-13  
 **执行角色**：CDP Web E2E Testing & Audit Agent  
 **受测环境**：
-- 工作区：`d:\LENOVO\Desktop\简历\boss-apply`
+- 工作区：`<工作区根目录>`
 - Web 控制台：`http://127.0.0.1:8788/?token=boss-apply`
 - Chrome CDP 实例：`http://127.0.0.1:9335` (Chrome 140 Headless)
 - Git Commit 基准：`591b57a` (含审计期间发现并修复的 `showConfirm` 弹窗缺陷)

@@ -15,6 +15,15 @@
 
 - **Windows 10/11**: 直接双击运行项目根目录下的 **`start.bat`**
 - **macOS / Linux**: 终端运行 **`chmod +x start.sh && ./start.sh`**
+- **使用 uv 全局免克隆即开即用（现代极速方式）**:
+  ```bash
+  # 一行命令拉起 Web 控制台：
+  uvx --from git+https://github.com/MCxxxDT/OONE-JobScout boss-apply
+
+  # 或一键安装为系统全局命令：
+  uv tool install git+https://github.com/MCxxxDT/OONE-JobScout
+  boss-apply
+  ```
 
 启动器将全自动完成：
 1. 自动检测系统 Python/uv 并秒级搭建专属 `.venv` 虚拟环境与依赖；

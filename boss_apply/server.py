@@ -111,8 +111,12 @@ def resume_guard() -> dict:
     return {"resumed": True, "guard": g.summary()}
 
 
-if __name__ == "__main__":
+def main():
     if "--http" in sys.argv:
         mcp.run(transport="http", host="127.0.0.1", port=8765)
     else:
         mcp.run()
+
+
+if __name__ == "__main__":
+    main()

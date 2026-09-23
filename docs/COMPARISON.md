@@ -13,7 +13,7 @@
 ### 1.2 已实现
 | 层 | 内容 | 状态 |
 |---|---|---|
-| 抓取 | [rawcdp.py](file:///d:/LENOVO/Desktop/简历/boss-apply/boss_apply/rawcdp.py) 裸CDP直连真实Chrome（不 enable 任何域规避检测）；页内 `/wapi/zpgeek/search/joblist.json` 拿明文薪资（绕字体反爬）；`passport/zp/verify` 安全页识别 | ✅ 实测零风控 |
+| 抓取 | [rawcdp.py](boss_apply/rawcdp.py) 裸CDP直连真实Chrome（不 enable 任何域规避检测）；页内 `/wapi/zpgeek/search/joblist.json` 拿明文薪资（绕字体反爬）；`passport/zp/verify` 安全页识别 | ✅ 实测零风控 |
 | 登录/风控 | `flows.login_state` 复用登录态 + 截图留痕；护栏遇 verify 自动熔断 | ✅ |
 | 扫描/打分 | 7城×9关键词只读扫描；规则打分（关键词加权 + title_kill 岗位门槛 + 届别27届 + BOSS活跃度 + 薪资区间 + 黑名单 + 公司池） | ✅ 990条/706去重/待投345 |
 | 沟通 | 打招呼（建连+默认招呼+自定义跟发，适配 BOSS 聊天移至 /web/geek/chat）；`send_message_via_chat` 消息中心回复HR；受信任点击；输入框清零验证 | ✅ 实弹通过 |
@@ -113,7 +113,7 @@ N 个独立真实 BOSS 账号，各自独立登录态/配额/节奏，错峰投�
 ## 8. 开源采纳记录（2026-08-31 晚，方案 B+C 执行结果）
 
 ### 8.1 boss-agent-cli 试水（方案 C）✅
-- 安装：`uv tool install boss-agent-cli` → v1.19.1，命令 `boss` / `boss-mcp`（路径 `简历\.tools\uv\bin`，因沙箱限制未用默认 `D:\LENOVO\tools\uv`）。
+- 安装：`uv tool install boss-agent-cli` → v1.19.1，命令 `boss` / `boss-mcp`。
 - 冒烟通过：`boss platforms` 返回 JSON 信封 `{ok,data,error,hints}`，zhipin 求职者+招聘者侧均 `available`。登录/沟通等真实链路待后续（登录需 patchright chromium 内核，按需再装）。
 - 结论：其 schema/JSON 信封/能力发现为我们的插件面提供了可照搬的设计蓝本（下一轮插件化实现参考）。
 

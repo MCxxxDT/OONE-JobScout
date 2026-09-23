@@ -26,16 +26,16 @@
 | T0 离线干跑 | ✅ 15/15（逮到并修了 sys.path、import 两个真 bug） |
 | T1 连通验收 | ✅ CDP 连 9333 → 登录检测 → 风控信号无 |
 | T2 只读扫描 | ✅ 杭州×"AI产品经理" 1页=15岗、详情 15/15、活跃度全拿到；高分：淘宝闪购25.0、阿里国际23.0、整数智能20.0、不息20.0(claude code命中)、Babycare17.0；同花顺-3.0 被正确拒绝 |
-| T3 打招呼 | ✅ 整数智能 + 不息 两家完整走通（连接→自动默认招呼→自定义跟发），`executed:1 ok:true` |
+| T3 打招呼 | ✅ 目标企业两家完整走通（连接→自动默认招呼→自定义跟发），`executed:1 ok:true` |
 | 频率探针 | ✅ 24 请求阶梯 3s→0.5s **全程零风控**（只读维度余量 > 2请求/秒；生产仍保持 4-10s 随机） |
 | 护栏 | 日切 2026-08-31，greet 1/100，杭州 1/25，无熔断（state/guard_state.json） |
 | 台账 | state/ledger.jsonl 全量审计记录（含 note 补记条目，status=note 不计配额） |
-| MCP | server.py 已写进 `C:\Users\LENOVO\.workbuddy\mcp.json`（stdio，venv python），**待用户在 WorkBuddy 连接器管理页对 boss-apply 点"信任"激活** |
+| MCP | server.py 支持写入通用 MCP 配置（stdio，venv python），支持在 Trae / Cursor / WorkBuddy 连接器管理页激活 |
 
 ## 4. 文件地图
 
-```
-D:\LENOVO\Desktop\简历\boss-apply\
+```text
+<工作区根目录>/
 ├── launch_debug_chrome.bat      # 调试Chrome启动器（9335端口+专用profile）
 ├── .git / .gitignore            # git仓库已建（见第10节三板斧）；state/guard_state.json与*.png不入库
 ├── config.json                  # 全部配置：城市码/关键词/打分词表/公司池/文案/护栏参数
@@ -55,17 +55,15 @@ D:\LENOVO\Desktop\简历\boss-apply\
 
 ## 5. 运行环境（踩过坑，照做）
 
-- **启动调试 Chrome**：跑 `launch_debug_chrome.bat`（= 9335 端口 + `--user-data-dir=C:\Users\LENOVO\chrome-cdp-profile`）。用户登录态在此 profile 的浏览器里。
+- **启动调试 Chrome**：跑 `launch_debug_chrome.bat`（= 9335 端口 + 独立专用 profile 目录）。用户登录态在此 profile 的浏览器里。
 - **端口迁移记录（2026-08-31）**：9333 → **9335**。原因：用户的另一个爬虫项目占用 9333，共存必冲突。同步更新 config.json cdp_endpoint / launch_debug_chrome.bat / rawcdp.py 默认参数 / diag 脚本。历史验收记录中的 9333 均为迁移前事实，不影响现状。
-- **Python 解释器**（venv，playwright/fastmcp/websocket-client 已装）：
-  - Git Bash 路径：`/d/work buddy/C-migrated/Users/LENOVO/.workbuddy/binaries/python/envs/default/Scripts/python.exe`
-  - 注意 `C:\Users\LENOVO\.workbuddy` 是 junction，真实路径在 `D:\work buddy\C-migrated\...`，引用要走真实路径。
+- **Python 解释器**：统一使用项目专属虚拟环境 `.venv\Scripts\python.exe`（或通过 `start.bat` 自动识别搭建）。
 - **端口探测规范**：`netstat + curl -w "%{http_code}"`。勿信 `curl -s` 空输出（可能被代理劫持或静默吞 404）。
 - **红线**：
   - **D 盘根目录不可写**（任何 `--user-data-dir=D:\xxx` 会静默失败回退默认 profile）。
   - **9222 端口弃用**（Chrome 136+ 默认 profile 会"占端口废接口"）。
   - **勿杀用户日常 Chrome 进程**（与调试实例并存）。
-  - **`.workbuddy` 目录勿删**（工作区记忆）。
+  - **工作区记忆目录勿删**。
 
 ## 6. 反爬核心经验（勿走回头路）
 
@@ -82,18 +80,17 @@ D:\LENOVO\Desktop\简历\boss-apply\
 2. **用户确认后** → 9 关键词 × 7 城市全量扫描；高分岗（≥min_score=8）列表给用户过目。
 3. **用户点头后** → `execute_jobs` 自动打招呼（test 文案）；每日 greet 上限 100，间隔 4-10s 随机，护栏自动熔断。
 4. **切 `profile: "real"`**（仅用户明确指令后）：启用三段个人文案；投放节奏 20→50→100 爬坡。
-5. 提醒用户：连接器管理页对 boss-apply 点"信任"激活 MCP；到 BOSS 消息列表人工确认整数智能/不息的送达状态。
+5. 提醒用户：连接器管理页对 boss-apply 点"信任"激活 MCP；到 BOSS 消息列表人工确认实测沟通的送达状态。
 6. 可选优化：server.py 的 check_login 仍走 playwright（对已存活标签页有效，够用）；probe 步进可进一步压（1s 以下）校准但收益低。
 
 ## 8. 关键命令速查
 
 ```bash
 # 启动调试Chrome（用户操作或代跑）
-D:\LENOVO\Desktop\简历\boss-apply\launch_debug_chrome.bat
+.\launch_debug_chrome.bat
 
-# 探针/扫描/执行（venv python，经真实路径）
-cd "D:/LENOVO/Desktop/简历/boss-apply"
-PY="/d/work buddy/C-migrated/Users/LENOVO/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
+# 探针/扫描/执行（venv python）
+PY=".\.venv\Scripts\python.exe"
 $PY scripts/t1_check_login.py        # T1 连通
 $PY scripts/probe_readonly_rate.py   # 频率探针
 $PY scripts/t3_single_greet.py       # 单次沟通验证（有 y/N 闸）
@@ -102,7 +99,7 @@ $PY scripts/t3_single_greet.py       # 单次沟通验证（有 y/N 闸）
 ## 9. 硬性行为规范
 
 - 回复用简体中文；对用户直给结论，别客套。
-- 每完成一段实质工作，追加记录到 `.workbuddy/memory/当日.md`（append-only）。
+- 每完成一段实质工作，追加记录到工作区日志（append-only）。
 - 交付文件用 present_files 展示。
 - 涉及真实沟通（打招呼）的动作，先扫描给用户看，再执行；不要自作主张群发。
 
@@ -113,8 +110,7 @@ $PY scripts/t3_single_greet.py       # 单次沟通验证（有 y/N 闸）
 1. **修改**：动手改代码前不需要请示，但一次改动聚焦一件事。
 2. **测试**（改完立即跑，全绿才算过）：
    ```bash
-   cd "D:/LENOVO/Desktop/简历/boss-apply"
-   PY="/d/work buddy/C-migrated/Users/LENOVO/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
+   PY=".\.venv\Scripts\python.exe"
    $PY -m compileall -q boss_apply        # ① 语法/导入检查
    $PY scripts/t0_dryrun.py               # ② 离线全链路干跑（15项断言，不连浏览器）
    # ③ 与改动相关的专项验证（如改greeter就跑t3_single_greet.py，改flows扫描就跑T2式单页扫描）
