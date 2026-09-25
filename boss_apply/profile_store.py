@@ -160,15 +160,42 @@ def fetch_boss_online_resume(cfg=None):
 
 
 def load_profile():
-    """返回提炼画像 dict（无则 None）。字段键与 CANDIDATE_PROFILE 对齐可直接覆盖。"""
-    refined = _load().get("refined")
-    if isinstance(refined, dict) and refined.get("name"):
-        out = {}
-        for k, v in refined.items():
-            if v not in ("", None, [], 0):
-                out[k] = v
-        return out or None
-    return None
+    """返回提炼画像 dict（无则 None）。字段键与 CANDIDATE_PROFILE 对齐可直接覆盖。
+    多级优先合并：
+    1. profile.local.json 中的 refined（大模型深度提炼完整画像）；
+    2. profile.local.json 顶层基础字段；
+    3. state/user_profile.json（从 BOSS 直聘扫码登录/在线抓取的真实资料：姓名、学校、届别、到岗状态等）。
+    """
+    data = _load()
+    refined = data.get("refined") or {}
+    if not isinstance(refined, dict):
+        refined = {}
+
+    cached_sync = {}
+    try:
+        sync_path = os.path.join(cfgmod.STATE_DIR, "user_profile.json")
+        if os.path.exists(sync_path):
+            with open(sync_path, "r", encoding="utf-8") as sf:
+                cached_sync = json.load(sf) or {}
+    except Exception:
+        cached_sync = {}
+
+    out = {}
+    for k in (
+        "name", "school", "major", "grad_year", "grade_desc", "current_city",
+        "target_region", "availability", "salary_requirement", "target_roles",
+        "tech_highlights", "business_highlights", "summary", "highlights"
+    ):
+        val = refined.get(k) or data.get(k) or cached_sync.get(k)
+        if val not in ("", None, [], 0):
+            out[k] = val
+
+    if not out.get("availability") and cached_sync.get("status_desc"):
+        out["availability"] = cached_sync["status_desc"]
+    if not out.get("grade_desc") and cached_sync.get("grade_desc"):
+        out["grade_desc"] = cached_sync["grade_desc"]
+
+    return out or None
 
 
 def profile_meta():

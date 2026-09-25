@@ -298,14 +298,14 @@ class AIReplyEngine:
         llm_cfg = self.cfg.get("llm") or {}
         if llm_cfg.get("api_key"):
             self.openai_key = llm_cfg["api_key"]
-            self.openai_base = llm_cfg.get("base_url") or "https://api.openai.com/v1"
-            self.llm_model = llm_cfg.get("model") or "gpt-4o-mini"
+            self.openai_base = llm_cfg.get("base_url") or "https://api.deepseek.com/v1"
+            self.llm_model = llm_cfg.get("model") or "deepseek-chat"
             self.openrouter_key = llm_cfg.get("openrouter_key") or ""
         else:
-            self.openrouter_key = os.getenv("OPENROUTER_API_KEY") or ""
-            self.openai_key = os.getenv("OPENAI_API_KEY") or ""
-            self.openai_base = os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-            self.llm_model = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
+            self.openrouter_key = (llm_cfg.get("openrouter_key") or "").strip() or os.getenv("OPENROUTER_API_KEY") or ""
+            self.openai_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+            self.openai_base = llm_cfg.get("base_url") or os.getenv("OPENAI_BASE_URL") or "https://api.deepseek.com/v1"
+            self.llm_model = llm_cfg.get("model") or os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "deepseek-chat"
 
     def build_agent_prompt(self, conv: dict) -> str:
         """根据当前会话构建供 Agent/大模型思考的标准化决策 Prompt 与心法。
@@ -574,6 +574,8 @@ class AIReplyEngine:
 
     def _llm_call_once(self, prompt: str) -> Optional[dict]:
         """单次 LLM 调用：返回解析后的 {action,...} dict；任何异常/格式异常返回 None。"""
+        if not (self.openai_key or self.openrouter_key) or "YOUR_LLM_API_KEY" in (self.openai_key or ""):
+            return None
         try:
             import urllib.request
 
@@ -617,8 +619,8 @@ class AIReplyEngine:
                         if act in ("reply", "send_resume", "exchange_wechat", "agree_wechat", "needs_human", "skip"):
                             parsed["reply_text"] = sanitize_and_clean_reply(parsed.get("reply_text") or "", max_chars=150)
                             return parsed
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [⚠️LLM会话决策异常] {e}")
         return None
 
 
@@ -656,7 +658,8 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
     prof = engine.profile
 
     # 1. 尝试大模型动态提炼
-    if engine.openai_key or engine.openrouter_key:
+    has_real_key = (engine.openai_key and "YOUR_LLM_API_KEY" not in engine.openai_key) or engine.openrouter_key
+    if has_real_key:
         try:
             import urllib.request
             headers = {"Content-Type": "application/json", "User-Agent": "boss-apply/1.0"}
@@ -723,8 +726,8 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
                     is_leak, _ = detect_privacy_leak(cleaned, cfg, prof)
                     if cleaned and not is_leak and len(cleaned) >= 20:
                         return cleaned
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [⚠️LLM开场白生成异常] {e}，将基于岗位JD与真实画像动态合成")
 
     # 2. 离线多模态智能语义合成（无大模型时的保底，结合岗位关键词看岗位下菜碟）
     full_target = f"{title} {jd_text}".lower()

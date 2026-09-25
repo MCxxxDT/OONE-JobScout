@@ -273,7 +273,7 @@ class DifferentiatedGreeter:
         if prof is None:
             try:
                 from . import profile_store
-                prof = profile_store.load()
+                prof = profile_store.load_profile() or {}
             except Exception:
                 prof = {}
         prof = prof or {}
