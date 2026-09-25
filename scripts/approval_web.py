@@ -3866,7 +3866,7 @@ PAGE = """<!DOCTYPE html>
       <div class="row g-3 mb-3">
         <div class="col-6">
           <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">个人手机号（防泄密物理锁死）</label>
-          <input type="text" id="inContactPhone" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" placeholder="13800000000">
+          <input type="text" id="inContactPhone" class="form-control" style="border-radius:12px;padding:9px 12px;font-size:13px" placeholder="请输入联系手机号">
         </div>
         <div class="col-6">
           <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">个人微信号（防泄密物理锁死）</label>

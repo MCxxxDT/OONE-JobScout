@@ -1,7 +1,7 @@
 # boss-apply 任务交接文档（HANDOVER）
 
-> 交接时间：2026-08-31 01:30 · 移交方：WorkBuddy（GLM）· 接收方：新 Agent
-> 本文档自包含。接手后先通读本文档，再读 `.workbuddy/memory/2026-08-30.md`（完整排障过程）与 `.workbuddy/memory/MEMORY.md`（长期备忘）。
+> 项目交接与工程规范文档（HANDOVER）
+> 本文档自包含，记录架构设计、反爬经验、四级验收基线与运维规范。
 
 ---
 
@@ -13,10 +13,10 @@
 
 ## 2. 用户背景与画像约定
 
-- 求职者画像：高校在读（预计 2027 拿双证）。沟通口径勿写"已毕业"。
-- 方向：AI / Agent 产品经理 / 商业化产品经理 实习。差异化卖点："能写代码的商业化 PM"。
+- 求职者画像：支持高校在读/社招等全身份设定，毕业年份由系统动态计算（当前年份+1~3年）。
+- 方向：求职方向与核心能力在 `config.json` 或本地 profile 中配置。
 - 核心能力：Chrome CDP 自动化、FastMCP 封装、业务落地。
-- 地域策略：优先江浙沪核心城市，配额在 `config.json` 或 `config.local.json` 维护。
+- 地域策略：优先配置中的目标城市，配额在 `config.json` 或 `config.local.json` 维护。
 - 模式约定：默认支持测试模式（中性文案）与实操模式，真实打招呼在本地 `config.local.json` 注入。
 
 ## 3. 当前状态（截至交接）
@@ -70,7 +70,7 @@
 1. **playwright `connect_over_cdp` 会被 BOSS 安全 JS 检测 → 清空 DOM**（URL 保留或跳 about:blank）。这是本项目的根因级发现：手动打开的页面、裸 CDP 开的页面完全存活，playwright 新建页必死。**所以全链路用 rawcdp.py，不要再回到 playwright。**
 2. 裸 CDP 要点：浏览器级 WS（`suppress_origin=True`）+ 单标签页复用 + 一次性 `Runtime.evaluate`（`returnByValue:True` + `awaitPromise:True`）；async 必须 IIFE `(async()=>{})()`。
 3. BOSS 新版 DOM：卡片 `li.job-card-box`，路由 `/web/geek/jobs`；**薪资数字不进 DOM**，需页内 fetch `/wapi/zpgeek/search/joblist.json` 按 encryptJobId 回填；详情全文 `.job-detail`；沟通按钮 `.btn-startchat`；聊天输入 `div.chat-input[contenteditable]`，发送 `.btn-send` 或 Enter。
-4. **BOSS 沟通机制**：点"立即沟通"= 建立连接 + **自动发出账号自己设置的默认打招呼语**；工具的自定义文案是聊天窗跟发。**已提醒用户检查小号默认语**（"您好，我是27年毕业生…"已实际送达 3 次）。
+4. **BOSS 沟通机制**：点"立即沟通"= 建立连接 + **自动发出账号自己设置的默认打招呼语**；工具的自定义文案是聊天窗跟发。**请用户检查账号默认语**（系统已适配各类招呼语格式并防止误判）。
 5. 只读维度频率余量 > 2请求/秒（实测）；但**沟通维度永远不做频率探针**——触发风控是不可逆账号伤害。
 6. 值守/监控脚本必须纯只读（wait_login v1 曾因自动导航打断用户扫码被骂"闪退"）。
 
@@ -119,4 +119,4 @@ $PY scripts/t3_single_greet.py       # 单次沟通验证（有 y/N 闸）
    - 测试**通过** → 存档：`git add -A && git commit -m "<改动一句话>（测试：compileall+t0+<专项> 通过）"`
    - 测试**不通过** → 回滚：`git restore .`（必要时 `git restore --staged .` 先），回滚后重新排查，**禁止把失败状态留在工作区或带病 commit**。
 
-仓库现状：已 `git init`（main 分支），基线 commit = `3236374`（T0-T3 验收+探针通过的稳定态）。commit 身份统一使用 GitHub 账号配置（`git -c user.name="MCxxxDT" -c user.email="MCxxxDT@users.noreply.github.com"`）。运行时状态（guard_state.json/截图/本地隐私配置）均在 .gitignore 里，不入库。
+仓库现状：已 `git init`（main 分支），基线 commit = `3236374`（T0-T3 验收+探针通过的稳定态）。commit 身份统一使用项目标准配置（可通过环境变量或命令行指定）。运行时状态（guard_state.json/截图/本地隐私配置）均在 .gitignore 里，不入库。

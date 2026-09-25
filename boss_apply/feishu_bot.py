@@ -336,10 +336,10 @@ def send_daily_report(cfg: dict, report: dict, dry_run: bool = False) -> dict:
 def handle_card_action(cfg: dict, action_payload: dict) -> dict:
     """处理卡片点击回调或远程交互动作。
     action_payload 形如：
-    {"action": "reply", "company": "淘宝闪购", "text": "收到，谢谢您！"}
-    {"action": "exchange_wechat", "company": "淘宝闪购"}
-    {"action": "send_resume", "company": "淘宝闪购"}
-    {"action": "ignore", "company": "淘宝闪购"}
+    {"action": "reply", "company": "某科技公司", "text": "收到，谢谢您！"}
+    {"action": "exchange_wechat", "company": "某科技公司"}
+    {"action": "send_resume", "company": "某科技公司"}
+    {"action": "ignore", "company": "某科技公司"}
     """
     act = action_payload.get("action")
     company = action_payload.get("company") or ""

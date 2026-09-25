@@ -65,8 +65,8 @@ check("resolved 记录中 suggested (Agent回复) 杜绝空白", blank_suggested
 hr1, ai1 = aw._extract_dialog_texts({"last_msg": "你好，看你履历很不错", "suggested_reply": "谢谢您关注"})
 check("extract_dialog_texts 正常字段精准提取", hr1 == "你好，看你履历很不错" and ai1 == "谢谢您关注")
 
-hr2, ai2 = aw._extract_dialog_texts({"conv": "系统: 开始\nHR: 沟通\n我们公司在福州台江区"}, {"action": "exchange_wechat"})
-check("extract_dialog_texts conv多行提取与系统动作文案兜底", "福州台江区" in hr2 and "已在沟通界面向对方发起官方交换微信申请" in ai2)
+hr2, ai2 = aw._extract_dialog_texts({"conv": "系统: 开始\nHR: 沟通\n我们公司在高新区科技园"}, {"action": "exchange_wechat"})
+check("extract_dialog_texts conv多行提取与系统动作文案兜底", "高新区科技园" in hr2 and "已在沟通界面向对方发起官方交换微信申请" in ai2)
 
 hr3, ai3 = aw._extract_dialog_texts({"error": "定位失败(head='HR: 招聘主管\n您好\n还在看机会吗？')"}, {"action": "send_resume"})
 check("extract_dialog_texts error/head 解析与发简历动作兜底", "还在看机会吗？" in hr3 and "已在沟通界面向对方发送正式在线简历" in ai3)

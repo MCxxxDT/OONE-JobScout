@@ -165,36 +165,36 @@ check("台账reply文本头进openers", "您好！感谢您的关注与招呼，
 check("BOSS原生默认招呼保底", "您好，我是27年毕业生" in _gr.self_openers(cfg))
 
 print("== 8. 会话解析（flows.parse_conv）==")
-c1 = flows.parse_conv("02:42|赵先生新美虹星总经理|[送达]|" + g0, ops)
+c1 = flows.parse_conv("02:42|赵先生某科技企业总经理|[送达]|" + g0, ops)
 check("自家招呼结尾→不需回复", bool(c1) and not c1["needs_reply_guess"] and not c1["needs_human"])
-c2 = flows.parse_conv("14:03|秦女士淘宝闪购校招HR|你好，方便聊聊吗", ops)
+c2 = flows.parse_conv("14:03|秦女士某知名大厂校招HR|你好，方便聊聊吗", ops)
 check("HR最后发言→待回复", bool(c2) and c2["needs_reply_guess"] and not c2["needs_human"])
 c3 = flows.parse_conv("14:03|王先生某公司HR|方便留个微信吗", ops)
 check("HR索微信→转人工", bool(c3) and c3["needs_human"])
-c4 = flows.parse_conv("16:53|华先生Talking猎头顾问|[送达]|您好，我是27年毕业生，对岗位很感兴趣", ops)
+c4 = flows.parse_conv("16:53|华先生某科技猎头顾问|[送达]|您好，我是27年毕业生，对岗位很感兴趣", ops)
 check("原生默认招呼结尾→不需回复", bool(c4) and not c4["needs_reply_guess"])
-c5 = flows.parse_conv("08月31日|秦女士淘宝闪购校招HR|[送达]|" + g0, ops)
+c5 = flows.parse_conv("08月31日|秦女士某知名大厂校招HR|[送达]|" + g0, ops)
 check("历史日期会话解析正确且自家发言不需回复", bool(c5) and c5["time"] == "08月31日" and not c5["needs_reply_guess"])
 
 # 审计补丁#4/#5：系统回显与短结束语不判待回复（2026-09-07 实测误判修复）
-c_sys1 = flows.parse_conv("08月31日|王女士靖安科技CHO|您的附件简历 简历 已发送给Boss点击查看附件", ops)
+c_sys1 = flows.parse_conv("08月31日|王女士某科技企业CHO|您的附件简历 简历 已发送给Boss点击查看附件", ops)
 check("系统回显(简历已发送给Boss)不判待回复", bool(c_sys1) and not c_sys1["needs_reply_guess"])
-c_sys2 = flows.parse_conv("08月31日|顾女士成都福客人工智能科技高级招聘专员|对方已同意，您的附件简历已发送给对方", ops)
+c_sys2 = flows.parse_conv("08月31日|顾女士某人工智能高级招聘专员|对方已同意，您的附件简历已发送给对方", ops)
 check("系统回显(对方已同意)不判待回复", bool(c_sys2) and not c_sys2["needs_reply_guess"])
-# 2026-09-08 沉心传媒复发案例：交换请求回执（同意/拒绝）不判待回复
-c_sys3 = flows.parse_conv("22:41|张宏辉沉心传媒运营总监|您已经成功拒绝了对方交换微信请求", ops)
+# 交换请求回执（同意/拒绝）不判待回复
+c_sys3 = flows.parse_conv("22:41|张先生某数字传媒总监|您已经成功拒绝了对方交换微信请求", ops)
 check("系统回执(拒绝交换微信)不判待回复", bool(c_sys3) and not c_sys3["needs_reply_guess"])
 c_sys4 = flows.parse_conv("10:00|某HR|已同意和对方交换微信", ops)
 check("系统回执(同意交换微信)不判待回复", bool(c_sys4) and not c_sys4["needs_reply_guess"])
 c_sys5 = flows.parse_conv("10:00|某HR|您已成功同意对方交换电话请求", ops)
 check("系统回执(同意交换电话)不判待回复", bool(c_sys5) and not c_sys5["needs_reply_guess"])
 check("HR真实微信请求仍判待回复(转人工)", bool(flows.parse_conv("10:00|某HR|我想要和您交换微信，您是否同意", ops)))
-# 侧栏预览含拒绝回执的完整行（复现23:04现场）
-c_sys6 = flows.parse_conv("22:41|张宏辉沉心传媒运营总监|[送达]|您已经成功拒绝了对方交换微信请求", ops)
-check("复现23:04现场:[送达]+拒绝回执不判待回复", bool(c_sys6) and not c_sys6["needs_reply_guess"])
-c_close = flows.parse_conv("08月31日|罗女士肯德基招聘主管|[已读]|谢谢", ops)
+# 侧栏预览含拒绝回执的完整行
+c_sys6 = flows.parse_conv("22:41|张先生某数字传媒总监|[送达]|您已经成功拒绝了对方交换微信请求", ops)
+check("复现现场:[送达]+拒绝回执不判待回复", bool(c_sys6) and not c_sys6["needs_reply_guess"])
+c_close = flows.parse_conv("08月31日|罗女士某餐饮集团HR|[已读]|谢谢", ops)
 check("短促结束语(谢谢)视为对话闭环", bool(c_close) and not c_close["needs_reply_guess"])
-c_keep = flows.parse_conv("09月01日|韩女士杭州壹网壹创招聘HR|现在在杭州吗，可以接受线下面试吗", ops)
+c_keep = flows.parse_conv("09月01日|韩女士某电商公司HR|现在在本地吗，可以接受线下面试吗", ops)
 check("真实HR提问仍判待回复", bool(c_keep) and c_keep["needs_reply_guess"])
 c_long = flows.parse_conv("09月05日|某公司HR|谢谢，期待您的回复", ops)
 check("长句含谢谢不误判闭环", bool(c_long) and c_long["needs_reply_guess"])
@@ -255,7 +255,7 @@ _orig_llm_call = getattr(ai_engine_llm, "_llm_call_once", None)
 try:
     if "YOUR_LLM_API_KEY" in (ai_engine_llm.openai_key or "") or not ai_engine_llm.openai_key:
         ai_engine_llm._llm_call_once = lambda prompt: {"action": "reply", "reply_text": "您好，已收到您的消息，对岗位非常感兴趣！", "reason": "mock_pass"}
-    llm_gen = ai_engine_llm._try_llm_generate({"who": "高先生沉心传媒招聘者", "last_msg": "方便沟通一下吗？"})
+    llm_gen = ai_engine_llm._try_llm_generate({"who": "高先生某传媒科技招聘者", "last_msg": "方便沟通一下吗？"})
     check("LLM直连生成结构化回复", bool(llm_gen and llm_gen.get("action") == "reply"))
     check("LLM直连回复非空", bool(llm_gen and llm_gen.get("reply_text")))
     check("LLM直连回复通过隐私红线", not _gr.privacy_blocked((llm_gen or {}).get("reply_text", "")))
@@ -293,14 +293,14 @@ def mock_agent(conv, prompt):
     if "杭州" in msg or "线下" in msg:
         return {
             "action": "reply",
-            "reply_text": "您好！我目前常驻福州，因为非常看好江浙沪及贵司该方向，随时可奔赴到岗！初试方便先线上进行吗？谢谢！",
-            "reason": "Agent真诚告知在福州并提议线上初试",
-            "notice": "HR询问地点，Agent已告知在福州并提议线上"
+            "reply_text": "您好！我目前常驻目标城市，因为非常看好贵司该方向，随时可奔赴到岗！初试方便先线上进行吗？谢谢！",
+            "reason": "Agent真诚告知常驻地并提议线上初试",
+            "notice": "HR询问地点，Agent已告知常驻地并提议线上"
         }
     if "期望薪资" in msg:
         return {
             "action": "reply",
-            "reply_text": "您好！考虑跨城赴江浙沪全职实习，主要希望能覆盖当地基础租房与生活开销；核心最看重业务匹配度，方便发一份JD吗？",
+            "reply_text": "您好！考虑全职实习发展，主要希望能覆盖当地基础租房与生活开销；核心最看重业务匹配度，方便发一份JD吗？",
             "reason": "Agent说明生活底线并索JD"
         }
     return {
@@ -320,7 +320,7 @@ check("Agent回复文案反索JD", "JD" in r_agent_wx["reply_text"])
 # 场景 B: 询问地点与能否线下
 r_agent_loc = ai_engine_agent.decide_and_generate({"who": "杭州HR", "last_msg": "请问你现在在杭州吗，可以接受线下面试吗？"})
 check("Agent驱动地点询问判为reply", r_agent_loc["action"] == "reply")
-check("Agent回复说明常驻福州", "福州" in r_agent_loc["reply_text"])
+check("Agent回复说明常驻目标城市", "常驻" in r_agent_loc["reply_text"])
 check("Agent回复提议线上初试", "线上" in r_agent_loc["reply_text"])
 check("Agent回复通过隐私强校验", not _gr.privacy_blocked(r_agent_loc["reply_text"]))
 
@@ -353,7 +353,7 @@ class MockSess:
     def eval(self, js):
         return self.val
 
-s_ok = MockSess(json.dumps({"encryptJobId": "test_eid", "positionName": "AI产品经理", "companyName": "淘宝闪购"}))
+s_ok = MockSess(json.dumps({"encryptJobId": "test_eid", "positionName": "AI产品经理", "companyName": "某知名大厂"}))
 parsed_job = _gr.get_active_conversation_job(s_ok)
 check("get_active_conversation_job 正确提取有效岗位", parsed_job and parsed_job.get("encryptJobId") == "test_eid")
 
@@ -562,7 +562,7 @@ class MockHistSess:
     def eval(self, js):
         return self.val
 
-# 模拟壹网壹创真实会话提取结果（侦察实测 12 条的代表性子集）
+# 模拟某电商公司真实会话提取结果（侦察实测 12 条的代表性子集）
 hist_payload = json.dumps({
     "messages": [
         {"role": "me", "text": "您好，这是我的电话"},
@@ -570,7 +570,7 @@ hist_payload = json.dumps({
         {"role": "hr", "text": "我想要一份您的附件简历，您是否同意"},
         {"role": "system", "text": "您的附件简历 简历 已发送给Boss点击查看附件"},
         {"role": "hr", "text": "现在在杭州吗，可以接受线下面试吗，预计到岗时间什么时候"},
-        {"role": "me", "text": "您好！目前人在福州，对江浙沪方向的机会也一直持开放态度。初试方便先通过线上进行吗？"},
+        {"role": "me", "text": "您好！目前正在积极看机会，对该方向一直持开放态度。初试方便先通过线上进行吗？"},
         {"role": "hr", "text": "目前实习生薪资3000（包括基础薪资2700…），可以接受吗"},
     ],
     "count": 7, "source": "dom",
@@ -591,17 +591,17 @@ engine_hist = _air.AIReplyEngine(cfg)
 p_no_hist = engine_hist.build_agent_prompt({"who": "测试HR", "last_msg": "您好"})
 check("无history时prompt不含历史段", "【对话历史（最近" not in p_no_hist)
 conv_hist = {
-    "who": "韩女士壹网壹创HR", "last_msg": "目前实习生薪资3000，可以接受吗",
-    "job": {"title": "电商运营实习生", "company": "壹网壹创", "salary": "130-180元/天"},
+    "who": "韩女士某电商公司HR", "last_msg": "目前实习生薪资3000，可以接受吗",
+    "job": {"title": "电商运营实习生", "company": "某电商公司", "salary": "130-180元/天"},
     "history": [
         {"role": "hr", "text": "现在在杭州吗，可以接受线下面试吗"},
-        {"role": "me", "text": "您好！目前人在福州，初试方便先线上进行吗？"},
+        {"role": "me", "text": "您好！目前正在积极看机会，初试方便先线上进行吗？"},
         {"role": "hr", "text": "目前实习生薪资3000，可以接受吗"},
     ],
 }
 p_hist = engine_hist.build_agent_prompt(conv_hist)
 check("带history时prompt含对话历史段", "【对话历史" in p_hist)
-check("历史段标注我方发言", "我方: 您好！目前人在福州" in p_hist)
+check("历史段标注我方发言", "我方: 您好！目前正在积极看机会" in p_hist)
 check("历史段标注HR发言", "HR: 现在在杭州吗" in p_hist)
 check("历史段条数标注正确", "最近3条" in p_hist)
 check("历史与JD段共存", "会话关联岗位" in p_hist and "对话历史" in p_hist)
@@ -732,20 +732,20 @@ check("高意向卡片同样含说明行", any("审批台" in json.dumps(e, ensu
                                    for e in card_hi16["card"]["elements"]))
 
 print("== 17. 发言方回执判定（2026-09-08 修复：[送达]/[已读]=我方最后发言，平台权威信号）==")
-# 沉心传媒 bug 场景：用户手打"直接boss说吧"（不在任何 opener 集合）+ 平台[送达]回执
+# 真实回执判定场景：用户手打"直接boss说吧"（不在任何 opener 集合）+ 平台[送达]回执
 # 修复前：前缀法失败 → 误判 HR 发言 → daemon 答非所问；修复后：回执法接住
-c_bug = flows.parse_conv("22:17|张宏辉沉心传媒运营总监|[送达]|直接boss说吧", ops)
+c_bug = flows.parse_conv("22:17|张先生某数字传媒总监|[送达]|直接boss说吧", ops)
 check("bug复现场景:[送达]+手打消息判我方发言", bool(c_bug) and not c_bug["needs_reply_guess"])
 # 修复后核心断言：带 [送达] 回执 = 我方发言，即使文本不在 openers
-c_fix1 = flows.parse_conv("08月31日|张宏辉沉心传媒运营总监|[送达]|直接boss说吧", ops)
+c_fix1 = flows.parse_conv("08月31日|张先生某数字传媒总监|[送达]|直接boss说吧", ops)
 check("回执法:[送达]手打消息判我方发言", bool(c_fix1) and not c_fix1["needs_reply_guess"])
-c_fix2 = flows.parse_conv("昨天|高先生沉心传媒招聘者|[已读]|您好！感谢您耐心介绍~", ops)
+c_fix2 = flows.parse_conv("昨天|高先生某数字传媒招聘者|[已读]|您好！感谢您耐心介绍~", ops)
 check("回执法:[已读]判我方发言", bool(c_fix2) and not c_fix2["needs_reply_guess"])
 # 无回执的 HR 发言仍正常判待回复
-c_hr = flows.parse_conv("10:34|韩女士壹网壹创HR|目前实习生薪资3000可以接受吗", ops)
+c_hr = flows.parse_conv("10:34|韩女士某电商公司HR|目前实习生薪资3000可以接受吗", ops)
 check("无回执HR发言仍判待回复", bool(c_hr) and c_hr["needs_reply_guess"] and c_hr["status"] == "")
 # 双通道兼容：前缀法依然生效（无回执+我方模板前缀）
-c_pf = flows.parse_conv("02:42|赵先生新美虹星总经理|" + g0, ops)
+c_pf = flows.parse_conv("02:42|赵先生某科技企业总经理|" + g0, ops)
 check("前缀法通道依然生效", bool(c_pf) and not c_pf["needs_reply_guess"])
 # 实弹回归验证：今晚 daemon 已回的会话现在应显示我方发言（模拟侧栏行）
 for row in ledger.load_all():
@@ -1358,10 +1358,10 @@ check("回复文案含11位手机号被物理门禁拦截", leak_phone is True a
 cfg_user_contact = {
     "privacy_policy": {
         "contact_phone": "18888889999",
-        "contact_wechat": "zyt_creative_2026",
+        "contact_wechat": "wx_demo_hunter2026",
     }
 }
-leak_cfg_wx, _ = _air.detect_privacy_leak("我的微信是zyt_creative_2026，随时联系", cfg=cfg_user_contact)
+leak_cfg_wx, _ = _air.detect_privacy_leak("我的微信是wx_demo_hunter2026，随时联系", cfg=cfg_user_contact)
 check("回复文案包含配置的微信号被物理门禁拦截", leak_cfg_wx is True)
 
 # 常见微信号吐出模式拦截
