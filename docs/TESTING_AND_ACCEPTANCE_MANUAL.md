@@ -56,7 +56,7 @@ flowchart TD
 - **包管理器**：`uv` (0.4+) 或标准 `pip`
 - **浏览器**：Google Chrome (120+) 或 Microsoft Edge (120+)
 - **CDP 远程调试端口**：`127.0.0.1:9335`
-- **Web 服务端口**：`127.0.0.1:5000` (局域网工作台)
+- **Web 服务端口**：`127.0.0.1:8788` (局域网工作台)
 
 ---
 
@@ -71,7 +71,7 @@ flowchart TD
 | :--- | :--- | :--- | :--- | :--- |
 | **TC-INF-01** | `start.bat` | Python 环境变量丢失自愈 | 1. 在没有系统全局 Python PATH 的纯净终端中运行 `start.bat`<br>2. 观察控制台输出 | 脚本自动检索 `%LOCALAPPDATA%\Programs\Python`，成功补齐 PATH 并输出 `[JobScout] 自动定位并加载 Python 运行时`，正常进入下一阶段 |
 | **TC-INF-02** | `start.bat` | 国内镜像高速依赖装配 | 1. 临时移除 `.venv` 目录<br>2. 执行 `start.bat` | 脚本优先检测 `uv`，若存在则使用 `uv venv` 并在依赖安装阶段带上 `-i https://mirrors.aliyun.com/pypi/simple/` 镜像源，80+ 依赖在 15 秒内装配完毕 |
-| **TC-INF-03** | `start.bat` | Chrome/Edge 浏览器探测 | 1. 确保机器安装了 Chrome 或 Edge<br>2. 运行 `start.bat` 选项 `[1]` 或直接启动 | 自动探测浏览器可执行文件路径，拉起带参数 `--remote-debugging-port=9335` 的独立用户目录实例 |
+| **TC-INF-03** | `start.bat` | 双端浏览器统一与端口零拒绝 | 1. 运行 `start.bat`<br>2. 观察控制台与浏览器拉起过程 | 1. 自动清理可能残留的 8788 端口孤儿进程<br>2. CDP 自动化浏览器与 Web 工作台统一使用 Chrome 优先（Edge 兜底）<br>3. Web 工作台在 8788 端口 200 OK 就绪后再拉起独立 App 窗口，彻底消除 `ERR_CONNECTION_REFUSED` |
 | **TC-INF-04** | `wt.bat` | 新建工作区 (add) | 执行 `wt.bat add feat/test-branch` | 1. 在 `.worktrees/feat-test-branch` 创建独立分支目录<br>2. 自动建立指向根目录 `.venv` 和 `state/` 的 Junction 目录联接<br>3. 自动同步 `config.local.json` |
 | **TC-INF-05** | `wt.bat` | 工作区列表 (list) | 执行 `wt.bat list` | 准确列出所有活动的 worktree 路径、当前检出分支和 HEAD 提交哈希 |
 | **TC-INF-06** | `wt.bat` | 安全移除工作区 (remove) | 执行 `wt.bat remove feat/test-branch` | 1. 安全解除目录联接，**严禁物理误删公共状态目录**<br>2. 成功注销 worktree 注册记录 |
@@ -200,12 +200,13 @@ flowchart TD
 
 | 用例编号 | 测试模块 | 测试场景 | 操作步骤 | 预期结果 |
 | :--- | :--- | :--- | :--- | :--- |
-| **TC-WEB-01** | `approval_web.py` | 首次运行向导自动弹出 | 清理 `config.local.json` 后访问 `http://127.0.0.1:5000` | `/api/wizard/status` 返回 `is_configured: false`，浏览器自动居中弹出 3 步极速开箱向导 |
+| **TC-WEB-01** | `approval_web.py` | 首次运行向导自动弹出 | 清理 `config.local.json` 后访问 `http://127.0.0.1:8788` | `/api/wizard/status` 返回 `is_configured: false`，浏览器自动居中弹出 3 步极速开箱向导 |
 | **TC-WEB-02** | `approval_web.py` | Step 1：预设与城市选择 | 在向导第 1 步选择 `技术研发 (全栈/后端/算法)`，勾选 `杭州`、`上海` | 选项被正确暂存，城市树状下拉联动正常 |
 | **TC-WEB-03** | `approval_web.py` | Step 2：服务商预设与 Ping | 1. 切换 SiliconFlow、DeepSeek、GLM-4-Flash 预设<br>2. 填入测试 Key，点击 `连通性测试` | 1. Base URL 与推荐模型名称自动填充<br>2. 调用 `/api/llm/ping` 实时反馈成功延迟或精准报错信息 |
 | **TC-WEB-04** | `approval_web.py` | Step 3：原子提交与生效 | 在第 3 步确认并点击 `开启我的智能求职之旅` | 1. 调用 `/api/wizard/apply`<br>2. Key 被安全加密写入 `secrets.json`<br>3. 基础配置落盘 `config.local.json`<br>4. 弹窗优雅关闭，顶部展示当前预设徽章 |
 | **TC-WEB-05** | `approval_web.py` | UI 布局与图标尺寸约束 | 审查 Web 控制台 SVG 图标与输入控件尺寸 | 1. 页面标题所有图标受 `.title-icon` 严格约束为 `18px`，无巨型视觉失真<br>2. 设置项输入框高度为标准 `36px` 桌面规范 |
 | **TC-WEB-06** | `approval_web.py` | 演练场安全对话模拟 | 进入“对话演练场”，输入模拟 HR 发言并点击生成 | 不触碰任何外部沟通，实时展示 AI 根据当前设定推演出的回复内容与动作归因 |
+| **TC-WEB-07** | `approval_web.py` | ⚡ 一键智能导入 API Key | 1. 复制 CC-Switch / Cherry 导出 JSON、环境变量或网页文本<br>2. 点击 `📋 剪贴板一键导入` 或打开 `📥 粘贴/文件` 弹窗导入 | 1. 系统全自动识别 Base URL、模型与 Key<br>2. 自动修正剥离 `/chat/completions` 等冗余后缀<br>3. DPAPI 加密保存并即时完成连通性测试 |
 
 ### 3. 验收准则
 - [ ] 零配置小白用户可在 60 秒内通过向导完成全部初始化工作，全流程无代码侵入。
@@ -248,11 +249,11 @@ flowchart TD
 在发布或合并分支前，必须顺序执行以下三大自动化回归套件，确保系统达到 **100% PASS** 基线：
 
 ### 1. P0 级核心功能集成回归
-覆盖预设解耦、门禁放行、沟通姿态与 Web 向导 API：
+覆盖预设解耦、门禁放行、沟通姿态、向导 API 与 CC-Switch / 剪贴板全格式一键智能导入：
 ```powershell
 .venv\Scripts\python.exe scripts/test_p0_features.py
 ```
-> **预期指标**：`Ran 8 tests ... OK`，8 项断言 100% 通过。
+> **预期指标**：`Ran 15 tests ... OK`，15 项断言 100% 通过。
 
 ### 2. 端到端系统就绪与数据完整性验收
 覆盖前端 CSS 尺寸约束、台账空数据防御、会话模糊匹配算法：
