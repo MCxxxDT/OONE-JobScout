@@ -1430,7 +1430,7 @@ PAGE = """<!DOCTYPE html>
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
     color: var(--txt);
     -webkit-font-smoothing: antialiased;
-    padding-bottom: 60px;
+    padding-bottom: 0;
     min-height: 100vh;
   }
 
@@ -1448,7 +1448,8 @@ PAGE = """<!DOCTYPE html>
     justify-content: center;
     user-select: none;
     transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), filter 0.5s ease;
-    overflow: hidden;
+    overflow-y: auto;
+    padding: 20px 14px;
   }
   #appSplashScreen.splash-closing {
     opacity: 0;
@@ -1477,6 +1478,10 @@ PAGE = """<!DOCTYPE html>
     z-index: 2;
     width: 90%;
     max-width: 440px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    margin: auto;
+    scrollbar-width: thin;
     background: rgba(15, 23, 42, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px rgba(56, 189, 248, 0.15);
@@ -1952,7 +1957,7 @@ PAGE = """<!DOCTYPE html>
     letter-spacing: 0.2px;
   }
   .app-body {
-    padding: 24px 28px;
+    padding: 18px 24px 20px;
     max-width: 1400px;
     width: 100%;
     margin: 0 auto;
@@ -2345,12 +2350,15 @@ PAGE = """<!DOCTYPE html>
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     z-index: 100000; justify-content: center; align-items: center;
     opacity: 0; transition: opacity 0.25s ease;
+    overflow-y: auto; padding: 20px 14px;
   }
   .modal-overlay.active { display: flex; opacity: 1; }
   .modal-card {
-    background: #fff; padding: 36px 32px; border-radius: 28px; width: 90%; max-width: 420px;
+    background: #fff; padding: 32px 28px; border-radius: 28px; width: 90%; max-width: 420px;
+    max-height: calc(100vh - 40px); overflow-y: auto; margin: auto;
     text-align: center; transform: scale(0.92); transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1.2);
     box-shadow: 0 30px 60px rgba(0,0,0,0.18); border: 1px solid rgba(0,0,0,0.04);
+    scrollbar-width: thin;
   }
   .modal-overlay.active .modal-card { transform: scale(1); }
 
@@ -2443,11 +2451,11 @@ PAGE = """<!DOCTYPE html>
   /* Setting Modal Card Styles */
   .setting-modal-card {
     background: #ffffff;
-    padding: 28px 30px;
+    padding: 24px 28px;
     border-radius: 26px;
     width: 92%;
     max-width: 620px;
-    max-height: 88vh;
+    max-height: calc(100vh - 48px);
     overflow-y: auto;
     text-align: left;
     transform: scale(0.94);
@@ -2456,6 +2464,7 @@ PAGE = """<!DOCTYPE html>
     border: 1px solid rgba(0, 0, 0, 0.05);
     position: relative;
     scrollbar-width: thin;
+    margin: auto;
   }
   .modal-overlay.active .setting-modal-card { transform: scale(1); }
   .setting-modal-header {
@@ -2628,10 +2637,11 @@ PAGE = """<!DOCTYPE html>
   .chat-arena-card {
     background: #fff; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.035);
     border: 1px solid rgba(0,0,0,0.05); display: flex; flex-direction: column;
-    height: 820px; overflow: hidden; position: relative;
+    height: calc(100vh - 108px); min-height: 440px; max-height: calc(100vh - 108px);
+    overflow: hidden; position: relative;
   }
   .chat-arena-header {
-    padding: 16px 22px; border-bottom: 1px solid #f1f5f9; display: flex;
+    padding: 14px 20px; border-bottom: 1px solid #f1f5f9; display: flex;
     justify-content: space-between; align-items: center; background: #fafafa; flex-shrink: 0;
   }
   .chat-avatar {
@@ -2642,17 +2652,17 @@ PAGE = """<!DOCTYPE html>
   .chat-avatar.agent { background: #0f172a; color: #fff; }
   
   .chat-flow-container {
-    flex: 1; padding: 22px; overflow-y: auto; display: flex; flex-direction: column;
-    gap: 20px; background: #fdfdfd; scroll-behavior: smooth;
+    flex: 1 1 0%; min-height: 0; padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column;
+    gap: 16px; background: #fdfdfd; scroll-behavior: smooth;
   }
   .chat-welcome-box {
-    text-align: center; padding: 60px 20px; margin: auto; max-width: 460px;
+    text-align: center; padding: clamp(14px, 3.5vh, 36px) 16px; margin: auto; max-width: 460px;
   }
   .chat-welcome-title {
-    font-size: 20px; font-weight: 900; color: var(--txt); margin-bottom: 8px; letter-spacing: -0.3px;
+    font-size: 19px; font-weight: 900; color: var(--txt); margin-bottom: 6px; letter-spacing: -0.3px;
   }
   .chat-welcome-desc {
-    font-size: 13px; color: var(--mut); line-height: 1.6; margin-bottom: 20px;
+    font-size: 13px; color: var(--mut); line-height: 1.5; margin-bottom: 16px;
   }
   
   .chat-msg-row {
@@ -2666,7 +2676,7 @@ PAGE = """<!DOCTYPE html>
   .chat-msg-row.agent { align-self: flex-end; flex-direction: row-reverse; }
   
   .chat-bubble {
-    padding: 14px 18px; border-radius: 20px; font-size: 14px; line-height: 1.6;
+    padding: 12px 16px; border-radius: 20px; font-size: 13.5px; line-height: 1.55;
     word-break: break-word; box-shadow: 0 2px 8px rgba(0,0,0,0.02); position: relative;
   }
   .chat-msg-row.hr .chat-bubble {
@@ -2687,38 +2697,38 @@ PAGE = """<!DOCTYPE html>
   
   /* Gemini-style Input Box */
   .chat-input-wrapper {
-    padding: 14px 18px 18px; background: #fff; border-top: 1px solid #f1f5f9; flex-shrink: 0;
+    padding: 10px 16px 14px; background: #fff; border-top: 1px solid #f1f5f9; flex-shrink: 0;
   }
   .preset-chips-scroll {
-    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 6px;
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 4px;
     scrollbar-width: thin;
   }
   .preset-chip {
     background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 20px;
-    padding: 6px 13px; font-size: 12px; font-weight: 700; color: #475569;
+    padding: 5px 12px; font-size: 11.5px; font-weight: 700; color: #475569;
     cursor: pointer; transition: all 0.2s; user-select: none; display: inline-flex;
     align-items: center; gap: 4px; white-space: nowrap; flex-shrink: 0;
   }
   .preset-chip:hover { background: #0f172a; color: #fff; border-color: #0f172a; transform: translateY(-1px); }
   
   .chat-input-box {
-    background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 20px;
-    padding: 12px 16px; transition: all 0.2s; display: flex; flex-direction: column; gap: 8px;
+    background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 18px;
+    padding: 10px 14px; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px;
   }
   .chat-input-box:focus-within {
     border-color: #0f172a; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.06);
   }
   .chat-input-textarea {
     width: 100%; border: none; outline: none; background: transparent;
-    font-size: 14px; font-family: inherit; color: #0f172a; resize: none;
-    max-height: 110px; line-height: 1.5; min-height: 24px;
+    font-size: 13.5px; font-family: inherit; color: #0f172a; resize: none;
+    max-height: 84px; line-height: 1.45; min-height: 24px;
   }
   .chat-input-actions {
     display: flex; justify-content: space-between; align-items: center;
   }
   .chat-send-btn {
     background: #0f172a; color: #fff; border: none; border-radius: 12px;
-    padding: 7px 16px; font-size: 13px; font-weight: 700; display: inline-flex;
+    padding: 6px 15px; font-size: 12.5px; font-weight: 700; display: inline-flex;
     align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s;
   }
   .chat-send-btn:hover { background: #334155; transform: translateY(-1px); }
@@ -3007,7 +3017,9 @@ PAGE = """<!DOCTYPE html>
 
     /* Tab 5 Gemini Chat Arena on Mobile */
     .chat-arena-card {
-      height: 540px;
+      height: calc(100dvh - 210px) !important;
+      min-height: 340px !important;
+      max-height: calc(100dvh - 210px) !important;
       border-radius: 18px;
     }
     .chat-arena-header {
@@ -3202,6 +3214,8 @@ PAGE = """<!DOCTYPE html>
     .profile-popover-card {
       width: min(310px, calc(100vw - 24px)) !important;
       right: -8px !important;
+      max-height: calc(100dvh - 72px) !important;
+      overflow-y: auto !important;
     }
     .btn-apply-topbar {
       padding: 6px 10px !important;
@@ -3297,13 +3311,18 @@ PAGE = """<!DOCTYPE html>
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 24px 16px;
+    overflow-y: auto;
     transition: opacity 0.35s ease, visibility 0.35s ease;
   }
   .login-gate-card {
     background: #ffffff;
     width: 100%;
     max-width: 460px;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    margin: auto;
+    scrollbar-width: thin;
     border-radius: 28px;
     padding: 36px 32px 28px;
     box-shadow: 0 24px 64px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(0,0,0,0.04);
@@ -3440,6 +3459,9 @@ PAGE = """<!DOCTYPE html>
     box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
     padding: 18px;
     z-index: 1200;
+    max-height: calc(100vh - 84px);
+    overflow-y: auto;
+    scrollbar-width: thin;
     animation: popoverFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
   @keyframes popoverFade {
@@ -4181,7 +4203,7 @@ PAGE = """<!DOCTYPE html>
                   </button>
                 </div>
               </div>
-              <div class="terminal-body" id="termLogsContainer" style="margin-top:14px;height:320px;overflow-y:auto;font-family:'JetBrains Mono', Consolas, Monaco, monospace;font-size:12px;line-height:1.6;color:#94a3b8;background:#090d16;border-radius:12px;padding:16px;border:1px solid #1e293b;white-space:pre-wrap;word-break:break-all">
+              <div class="terminal-body" id="termLogsContainer" style="margin-top:14px;height:clamp(220px, 32vh, 360px);overflow-y:auto;font-family:'JetBrains Mono', Consolas, Monaco, monospace;font-size:12px;line-height:1.6;color:#94a3b8;background:#090d16;border-radius:12px;padding:16px;border:1px solid #1e293b;white-space:pre-wrap;word-break:break-all">
                 <div style="color:#64748b">// 正在连接并拉取守护进程执行日志…</div>
               </div>
               <div class="d-flex justify-content-between align-items-center mt-2 px-1" style="font-size:11px;color:#64748b;font-family:monospace">
@@ -5288,7 +5310,7 @@ PAGE = """<!DOCTYPE html>
 
   <!-- Modal: 演练场目标岗位与背景设定 -->
   <div class="modal-overlay" id="modalPgSettings" onclick="if(event.target === this) closeSettingModal('modalPgSettings')">
-    <div class="setting-modal-card" style="max-width:720px;max-height:90vh;overflow-y:auto">
+    <div class="setting-modal-card" style="max-width:720px">
       <div class="setting-modal-header">
         <div>
           <div class="setting-modal-title">🎯 目标岗位与背景设定</div>
