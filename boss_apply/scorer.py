@@ -60,7 +60,11 @@ def check_eligibility(job, detail, cfg):
     """硬性资格门禁（阶段 A）：公司黑名单、kill 词、岗位门槛、活跃度、薪资区间、届别。
     返回 (is_eligible: bool, reason: str)。一票否决项在此裁定。
     """
-    w = cfg.get("score_words", {})
+    try:
+        from . import presets
+        w = presets.resolve_score_words(cfg)
+    except Exception:
+        w = cfg.get("score_words", {})
     title = job.get("title") or ""
     company = job.get("company") or ""
 
@@ -134,7 +138,11 @@ def calculate_matching_score(job, detail, cfg):
     包含 strong/medium/weak 关键词权重、公司层级加成、实习/PM偏好与时令规格动态调优。
     返回 (score: float, reasons: str)。即使得分为 0 也代表符合资格的零关键词候选。
     """
-    w = cfg.get("score_words", {})
+    try:
+        from . import presets
+        w = presets.resolve_score_words(cfg)
+    except Exception:
+        w = cfg.get("score_words", {})
     strong = w.get("strong", [])
     medium = w.get("medium", [])
     weak = w.get("weak", [])
@@ -165,9 +173,24 @@ def calculate_matching_score(job, detail, cfg):
     if "实习" in title or "实习生" in title:
         s += 3
         reasons.append("+3 intern")
-    if "产品" in title:
-        s += 2
-        reasons.append("+2 pm")
+
+    preset_id = cfg.get("preset") or ""
+    if preset_id == "tech_dev":
+        if any(k in title for k in ("开发", "工程师", "前端", "后端", "算法", "研发", "全栈")):
+            s += 2
+            reasons.append("+2 tech")
+    elif preset_id == "sales_bd":
+        if any(k in title for k in ("销售", "bd", "商务", "客户", "渠道", "顾问")):
+            s += 2
+            reasons.append("+2 sales")
+    elif preset_id == "general_ops":
+        if any(k in title for k in ("运营", "项目", "hr", "行政", "管培")):
+            s += 2
+            reasons.append("+2 ops")
+    else:
+        if "产品" in title:
+            s += 2
+            reasons.append("+2 pm")
 
     # 校园与时令规格动态调优（转正机会 +2.0，出勤天数匹配 +1.0，立即到岗 +0.5）
     specs = job.get("campus_specs")

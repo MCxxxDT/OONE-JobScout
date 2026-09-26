@@ -10,6 +10,10 @@ echo   BOSS直聘 智能接管平台 (OONE-JobScout) · 开箱即用一键启动
 echo ======================================================================
 echo.
 
+:: 0. 自动补全可能未加入系统 PATH 的 Python 与 Git 路径 (针对全新装机用户)
+if exist "%LOCALAPPDATA%\Programs\Python\Python312" set "PATH=%LOCALAPPDATA%\Programs\Python\Python312;%LOCALAPPDATA%\Programs\Python\Python312\Scripts;!PATH!"
+if exist "%LOCALAPPDATA%\Programs\Git\cmd" set "PATH=%LOCALAPPDATA%\Programs\Git\cmd;!PATH!"
+
 set "PY_BIN="
 
 :: 1. 优先使用已存在的虚拟环境
@@ -37,11 +41,11 @@ if not defined PY_BIN (
     :: 探测 uv (极速安装器)
     where uv >nul 2>&1
     if !errorlevel! equ 0 (
-        echo [初始化] 使用 uv 创建虚拟环境与安装依赖...
+        echo [初始化] 使用 uv 创建虚拟环境与安装依赖 (国内镜像加速)...
         uv venv .venv
         if exist "%~dp0.venv\Scripts\python.exe" (
             set "PY_BIN=%~dp0.venv\Scripts\python.exe"
-            uv pip install --python "!PY_BIN!" -r requirements.txt
+            uv pip install --python "!PY_BIN!" -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
         )
     )
 
@@ -49,11 +53,11 @@ if not defined PY_BIN (
     if not defined PY_BIN (
         where python >nul 2>&1
         if !errorlevel! equ 0 (
-            echo [初始化] 使用系统 Python 创建虚拟环境与安装依赖...
+            echo [初始化] 使用系统 Python 创建虚拟环境与安装依赖 (国内镜像加速)...
             python -m venv .venv
             if exist "%~dp0.venv\Scripts\python.exe" (
                 set "PY_BIN=%~dp0.venv\Scripts\python.exe"
-                "!PY_BIN!" -m pip install -r requirements.txt
+                "!PY_BIN!" -m pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
             )
         )
     )
@@ -62,11 +66,11 @@ if not defined PY_BIN (
     if not defined PY_BIN (
         where py >nul 2>&1
         if !errorlevel! equ 0 (
-            echo [初始化] 使用 py -3 创建虚拟环境与安装依赖...
+            echo [初始化] 使用 py -3 创建虚拟环境与安装依赖 (国内镜像加速)...
             py -3 -m venv .venv
             if exist "%~dp0.venv\Scripts\python.exe" (
                 set "PY_BIN=%~dp0.venv\Scripts\python.exe"
-                "!PY_BIN!" -m pip install -r requirements.txt
+                "!PY_BIN!" -m pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
             )
         )
     )
@@ -98,36 +102,20 @@ if not exist "%~dp0config.local.json" (
     )
 )
 
-:: 5. 自动检测并拉起独立调试 Chrome (端口 9335)
+:: 5. 自动检测并拉起独立调试浏览器 (端口 9335)
 echo [浏览器] 正在自检与准备专属调试浏览器 (端口 9335)...
-"!PY_BIN!" -c "from boss_apply import qr_login; ok = qr_login.ensure_chrome_running(); print('[浏览器] ' + ('调试专用 Chrome 已就绪并在 9335 端口监听' if ok else '未能自动拉起 Chrome，请确认是否已安装 Chrome/Edge 浏览器'))"
+"!PY_BIN!" -c "from boss_apply import qr_login; ok = qr_login.ensure_chrome_running(); print('[浏览器] ' + ('调试专用浏览器已就绪并在 9335 端口监听' if ok else '未能自动拉起浏览器，请确认是否已安装 Chrome/Edge 浏览器'))"
 
-:: 6. 以独立桌面软件窗口唤醒 Web 审批工作台 (App 模式，隐藏地址栏与标签页)
-echo [软件] 正在唤醒桌面端人机协同工作台 (独立软件窗口)...
+:: 5.1 自动清理可能残留的 8788 端口孤儿进程，确保端口监听 100% 成功
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8788" ^| findstr "LISTENING"') do (
+    taskkill /f /pid %%a >nul 2>&1
+)
+
+:: 6. 启动 Web 控制台主服务 (后台将在端口就绪后自动以独立 App 模式唤醒桌面端浏览器，彻底杜绝拒绝连接)
+echo [软件] 正在拉起人机协同运营中枢服务 (端口 8788)...
 echo [访问] http://127.0.0.1:8788/?token=boss-apply
 echo.
-
-set "APP_LAUNCHED="
-for %%P in (
-    "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-    "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
-    "%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-    "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-    "%LocalAppData%\Google\Chrome\Application\chrome.exe"
-) do (
-    if not defined APP_LAUNCHED (
-        if exist "%%~P" (
-            start "" "%%~P" --app="http://127.0.0.1:8788/?token=boss-apply"
-            set "APP_LAUNCHED=1"
-        )
-    )
-)
-if not defined APP_LAUNCHED (
-    start "" "http://127.0.0.1:8788/?token=boss-apply"
-)
-
-:: 7. 启动 Web 控制台主服务
-"!PY_BIN!" -m boss_apply.web_server
+"!PY_BIN!" -m boss_apply.web_server --auto-open
 
 if %errorlevel% neq 0 (
     echo.

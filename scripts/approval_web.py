@@ -164,19 +164,210 @@ def get_daemon_status():
     }
 
 
+def normalize_base_url(url: str) -> str:
+    """智能纠错常见大模型服务商 Base URL，防止小白误填 /chat/completions 或漏填 /v1 / 协议前缀导致 404。"""
+    u = (url or "").strip().rstrip("/")
+    if not u:
+        return ""
+    # 去除常见的结尾端点，Base URL 仅保留到版本号根路径
+    if u.endswith("/chat/completions"):
+        u = u[:-len("/chat/completions")].rstrip("/")
+    elif u.endswith("/completions"):
+        u = u[:-len("/completions")].rstrip("/")
+    elif u.endswith("/models"):
+        u = u[:-len("/models")].rstrip("/")
+
+    if not u.startswith("http://") and not u.startswith("https://"):
+        u = "https://" + u
+
+    # 针对国内常见大模型服务商智能修正缺省版本号
+    if ("askdiandian.com" in u or "api.siliconflow.cn" in u or "api.deepseek.com" in u or "api.moonshot.cn" in u or "api.openai.com" in u) and not u.endswith("/v1"):
+        return u + "/v1"
+    if "open.bigmodel.cn" in u and not u.endswith("/api/paas/v4"):
+        if "/api/paas" not in u:
+            return u + "/api/paas/v4"
+        return u + "/v4"
+    if "dashscope.aliyuncs.com" in u and not u.endswith("/compatible-mode/v1"):
+        if "/compatible-mode" not in u:
+            return u + "/compatible-mode/v1"
+        return u + "/v1"
+    if "openrouter.ai" in u and not u.endswith("/api/v1"):
+        return u + "/api/v1"
+    return u
+
+
+def parse_api_key_config(raw_text: str) -> dict:
+    """智能解析各种来源的 API 配置（支持 CC-Switch 导出 JSON、Cherry Studio 配置、.env 环境变量、curl 命令及自由文本）。"""
+    t = (raw_text or "").strip()
+    if not t:
+        return {"ok": False, "error": "配置内容为空"}
+
+    base_url = ""
+    api_key = ""
+    model = ""
+    provider_name = ""
+    provider_id = "custom"
+    format_type = "unknown"
+
+    # 1. 尝试 JSON 解析 (CC-Switch, Cherry Studio, OpenAI 规范 JSON)
+    clean_json_str = t
+    m_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", t)
+    if m_block:
+        clean_json_str = m_block.group(1).strip()
+
+    try:
+        data = json.loads(clean_json_str)
+        if isinstance(data, list) and len(data) > 0:
+            data = data[0]
+        if isinstance(data, dict):
+            # CC-Switch 多渠道导出格式: { "providers": [ ... ] }
+            if "providers" in data and isinstance(data["providers"], list) and len(data["providers"]) > 0:
+                format_type = "json_cc_switch_multi"
+                active_item = next((item for item in data["providers"] if item.get("active") or item.get("enabled")), data["providers"][0])
+                data = active_item
+
+            # 字段提取 (支持 camelCase 与 snake_case)
+            for k in ("apiKey", "api_key", "key", "token", "secret_key", "secretKey", "access_token"):
+                if data.get(k) and isinstance(data[k], str):
+                    api_key = data[k].strip()
+                    break
+
+            for k in ("baseUrl", "base_url", "url", "endpoint", "api_url", "host", "api_base"):
+                if data.get(k) and isinstance(data[k], str):
+                    base_url = data[k].strip()
+                    break
+
+            for k in ("model", "model_name", "modelName", "defaultModel", "modelId"):
+                if data.get(k) and isinstance(data[k], str):
+                    model = data[k].strip()
+                    break
+
+            if not model and "models" in data and isinstance(data["models"], list) and len(data["models"]) > 0:
+                m0 = data["models"][0]
+                if isinstance(m0, dict):
+                    model = m0.get("id") or m0.get("name") or ""
+                elif isinstance(m0, str):
+                    model = m0.strip()
+                format_type = "json_cherry"
+
+            for k in ("name", "provider", "provider_name", "id", "title"):
+                if data.get(k) and isinstance(data[k], str):
+                    provider_name = data[k].strip()
+                    break
+
+            if not format_type.startswith("json_"):
+                format_type = "json_standard"
+    except Exception:
+        pass
+
+    # 2. 若未提取到 key，尝试正则解析 (curl / env / 自由文本)
+    if not api_key:
+        m_bearer = re.search(r"Bearer\s+([a-zA-Z0-9_\-\.]{15,})", t, re.IGNORECASE)
+        if m_bearer:
+            api_key = m_bearer.group(1).strip()
+            format_type = "curl_or_header"
+        else:
+            m_sk = re.search(r"\b(sk-[a-zA-Z0-9_\-\.]{15,})\b", t)
+            if m_sk:
+                api_key = m_sk.group(1).strip()
+                format_type = "plain_text_sk"
+            else:
+                m_kv = re.search(r"(?:api_?key|token|secret|password|密钥|key)\s*[:=]\s*[\"']?([a-zA-Z0-9_\-\.]{15,})[\"']?", t, re.IGNORECASE)
+                if m_kv:
+                    api_key = m_kv.group(1).strip()
+                    format_type = "kv_text"
+
+    if not base_url:
+        urls = re.findall(r"https?://[a-zA-Z0-9_\-\.:]+(?:/[a-zA-Z0-9_\-\./]*)?", t)
+        for u in urls:
+            if not any(ex in u for ex in ("github.com", "google.com", "microsoft.com", "apple.com", "account/ak", "platform.keys", "docs.")):
+                base_url = u.strip()
+                break
+        if not base_url and urls:
+            base_url = urls[0].strip()
+
+    if not model:
+        m_model = re.search(r"(?:model|model_name|模型)\s*[:=]\s*[\"']?([a-zA-Z0-9_\-/\.:]+)[\"']?", t, re.IGNORECASE)
+        if m_model:
+            model = m_model.group(1).strip()
+
+    if not api_key:
+        return {"ok": False, "error": "未能从输入中识别到有效的 API Key (需包含 sk- 或有效密钥)"}
+
+    base_url = normalize_base_url(base_url)
+    lower_url = (base_url or "").lower()
+    lower_key = api_key.lower()
+
+    if "siliconflow" in lower_url or "sf-" in lower_key:
+        provider_id = "siliconflow"
+        provider_name = provider_name or "硅基流动 (SiliconFlow)"
+        base_url = base_url or "https://api.siliconflow.cn/v1"
+        model = model or "deepseek-ai/DeepSeek-V3"
+    elif "deepseek" in lower_url or (not base_url and api_key.startswith("sk-") and len(api_key) == 35):
+        provider_id = "deepseek"
+        provider_name = provider_name or "DeepSeek 官方直连"
+        base_url = base_url or "https://api.deepseek.com/v1"
+        model = model or "deepseek-chat"
+    elif "bigmodel" in lower_url or "zhipu" in lower_url or (not base_url and "." in api_key and len(api_key) > 30):
+        provider_id = "zhipu"
+        provider_name = provider_name or "智谱清言 (GLM-4-Flash)"
+        base_url = base_url or "https://open.bigmodel.cn/api/paas/v4"
+        model = model or "glm-4-flash"
+    elif "askdiandian" in lower_url or "dots" in lower_url:
+        provider_id = "dots3"
+        provider_name = provider_name or "小红书 Dots3"
+        base_url = base_url or "https://note3-prev-api.askdiandian.com/v1"
+        model = model or "dots-3-note-preview"
+    elif "dashscope" in lower_url or "aliyun" in lower_url:
+        provider_id = "dashscope"
+        provider_name = provider_name or "阿里通义千问"
+        base_url = base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        model = model or "qwen-plus"
+    elif "moonshot" in lower_url or "kimi" in lower_url:
+        provider_id = "moonshot"
+        provider_name = provider_name or "月之暗面 Kimi"
+        base_url = base_url or "https://api.moonshot.cn/v1"
+        model = model or "moonshot-v1-8k"
+    elif "openrouter" in lower_url:
+        provider_id = "openrouter"
+        provider_name = provider_name or "OpenRouter"
+        base_url = base_url or "https://openrouter.ai/api/v1"
+        model = model or "deepseek/deepseek-chat"
+    else:
+        provider_id = "custom"
+        provider_name = provider_name or "兼容 OpenAI 接口"
+        if not base_url:
+            base_url = "https://api.siliconflow.cn/v1"
+            provider_id = "siliconflow"
+            provider_name = "硅基流动 (自动推荐)"
+        if not model:
+            model = "deepseek-ai/DeepSeek-V3" if "siliconflow" in base_url else "deepseek-chat"
+
+    return {
+        "ok": True,
+        "provider": provider_id,
+        "provider_name": provider_name,
+        "base_url": base_url,
+        "api_key": api_key,
+        "model": model,
+        "format": format_type,
+    }
+
+
 def _llm_ping(base_url, api_key, model):
     """极小请求测试连通性。返回 (ok, latency_ms, error)。"""
     import time as _t
     import urllib.request
     try:
         t0 = _t.time()
-        url = base_url.rstrip("/") + "/chat/completions"
+        base = normalize_base_url(base_url)
+        url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
         payload = {"model": model, "messages": [{"role": "user", "content": "hi"}],
                    "max_tokens": 10}
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
                                      headers={"Content-Type": "application/json",
                                               "Authorization": "Bearer " + api_key})
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             json.loads(resp.read().decode("utf-8"))
         return True, int((_t.time() - t0) * 1000), None
     except Exception as e:
@@ -233,6 +424,7 @@ def api_settings_get(token: str = ""):
             "unknown_cities": eff["unknown"],
             "keywords": flows.effective_keywords(cfg)[:12],
         },
+        "preset": cfg.get("preset", "ai_pm"),
         "profile": profile_store.profile_meta(),
         "user_profile": qr_login.get_cached_user_profile(),
     }
@@ -255,7 +447,7 @@ async def api_settings_post(request: Request, token: str = ""):
             changed.append("API Key 已加密保存")
     llm_updates = {}
     if body.get("base_url"):
-        llm_updates["base_url"] = body["base_url"].strip()
+        llm_updates["base_url"] = normalize_base_url(body["base_url"].strip())
     if body.get("model"):
         llm_updates["model"] = body["model"].strip()
     if llm_updates:
@@ -267,6 +459,17 @@ async def api_settings_post(request: Request, token: str = ""):
     if "online_reply_enabled" in body:
         _write_local("online_reply_enabled", bool(body["online_reply_enabled"]))
         changed.append("全局在线回复门禁已更新")
+    if "preset" in body:
+        p_val = str(body["preset"]).strip()
+        from boss_apply import presets
+        if p_val in presets.PRESETS:
+            _write_local("preset", p_val)
+            changed.append(f"岗位预设已切换为: {presets.PRESETS[p_val]['name']}")
+            try:
+                from boss_apply import daily_apply
+                daily_apply.clear_candidate_pool()
+            except Exception:
+                pass
 
     # 隐私与自动化权限更新
     if "privacy_policy" in body and isinstance(body["privacy_policy"], dict):
@@ -359,6 +562,75 @@ async def api_settings_post(request: Request, token: str = ""):
         changed.append(f"已重置日扫描标记以激活额度补投 (缺口: {gap_count} 岗)")
 
     return {"ok": True, "changed": changed or ["无变更"], "quota_summary": g_set.summary()}
+
+
+@app.post("/api/settings/import_key")
+async def api_settings_import_key(request: Request, token: str = ""):
+    """一键智能导入大模型 API 配置（支持 CC-Switch 导出 JSON、Cherry Studio 配置、.env 环境变量、curl 及自由文本）。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    raw_text = (body.get("raw_text") or "").strip()
+    base_url = (body.get("base_url") or "").strip()
+    api_key = (body.get("api_key") or "").strip()
+    model = (body.get("model") or "").strip()
+
+    if raw_text:
+        parsed = parse_api_key_config(raw_text)
+        if not parsed.get("ok"):
+            return JSONResponse({"ok": False, "error": parsed.get("error", "未能识别到有效的 API 配置")}, status_code=400)
+        base_url = base_url or parsed.get("base_url") or ""
+        api_key = api_key or parsed.get("api_key") or ""
+        model = model or parsed.get("model") or ""
+        provider = parsed.get("provider", "custom")
+        provider_name = parsed.get("provider_name", "自定义渠道")
+    else:
+        if not api_key:
+            return JSONResponse({"ok": False, "error": "请提供 API Key 或待解析配置文本"}, status_code=400)
+        parsed = parse_api_key_config(f"{base_url} {api_key} {model}")
+        provider = parsed.get("provider", "custom")
+        provider_name = parsed.get("provider_name", "自定义渠道")
+        base_url = base_url or parsed.get("base_url") or ""
+        model = model or parsed.get("model") or ""
+
+    base_url = normalize_base_url(base_url)
+    if not base_url:
+        base_url = "https://api.siliconflow.cn/v1"
+        model = model or "deepseek-ai/DeepSeek-V3"
+        provider = "siliconflow"
+        provider_name = "硅基流动 (自动推荐)"
+
+    if not model:
+        model = "deepseek-ai/DeepSeek-V3" if "siliconflow" in base_url else "deepseek-chat"
+
+    # 1. 安全加密保存密钥至 Windows DPAPI
+    secrets_mod.set_secret("llm_api_key", api_key)
+
+    # 2. 原子写入本地私有配置
+    _write_local("llm", {"base_url": base_url, "model": model})
+
+    # 3. 极速 Ping 探测连通性 (15s 超时)
+    test_ok, latency, test_err = _llm_ping(base_url, api_key, model)
+
+    masked_key = api_key[:6] + "..." + api_key[-4:] if len(api_key) > 10 else "***"
+
+    return {
+        "ok": True,
+        "provider": provider,
+        "provider_name": provider_name,
+        "base_url": base_url,
+        "model": model,
+        "api_key_masked": masked_key,
+        "ping_ok": test_ok,
+        "latency_ms": latency,
+        "ping_error": test_err if not test_ok else None,
+    }
 
 
 @app.get("/api/browser/status")
@@ -634,6 +906,11 @@ async def api_prefs_post(request: Request, token: str = ""):
         jm = str(body["job_mode"]).strip().lower()
         if jm in ("intern", "campus", "mix", "all"):
             _write_local("job_mode", jm)
+    if "preset" in body:
+        p_val = str(body["preset"]).strip()
+        from boss_apply import presets
+        if p_val in presets.PRESETS:
+            _write_local("preset", p_val)
 
     # 用户偏好更新，清除旧画像候选缓存
     try:
@@ -647,6 +924,104 @@ async def api_prefs_post(request: Request, token: str = ""):
     return {"ok": True, "prefs": prefs,
             "effective_cities": [c["name"] for c in eff["cities"]],
             "unknown_cities": eff["unknown"]}
+
+
+@app.get("/api/presets")
+def api_presets_get(token: str = ""):
+    """获取所有可用岗位预设模板包列表及当前生效项。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from boss_apply import presets
+    return {
+        "presets": presets.list_presets(),
+        "active_preset": cfg.get("preset", presets.DEFAULT_PRESET_ID)
+    }
+
+
+@app.get("/api/wizard/status")
+def api_wizard_status(token: str = ""):
+    """获取首次开箱向导状态：若未显式完成向导且大模型未配置有效Key，提示自动唤起。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from boss_apply import presets
+    llm = cfg.get("llm") or {}
+    key = (llm.get("api_key") or "").strip()
+    has_valid_key = bool(key and key != "YOUR_LLM_API_KEY_HERE" and not key.startswith("YOUR_"))
+    wizard_completed = bool(cfg.get("wizard_completed", False))
+    return {
+        "wizard_completed": wizard_completed,
+        "should_prompt": not wizard_completed and not has_valid_key,
+        "active_preset": cfg.get("preset", presets.DEFAULT_PRESET_ID),
+        "presets": presets.list_presets(),
+        "has_key": has_valid_key
+    }
+
+
+@app.post("/api/wizard/apply")
+async def api_wizard_apply(request: Request, token: str = ""):
+    """3步开箱向导提交：原子写入岗位预设、目标城市、大模型端点与凭证，并清除历史候选缓存。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    from boss_apply import presets
+
+    # 1. 岗位预设包
+    preset_id = (body.get("preset") or "").strip()
+    if preset_id and preset_id in presets.PRESETS:
+        _write_local("preset", preset_id)
+
+    # 2. 目标城市列表
+    cities = body.get("cities") or []
+    if isinstance(cities, list) and cities:
+        clean_cities = [str(c).strip() for c in cities if str(c).strip()]
+        cur_prefs = dict(cfgmod.load().get("prefs") or {})
+        cur_prefs["want_cities"] = clean_cities
+        _write_local("prefs", cur_prefs)
+
+    # 3. 大模型配置 (Provider / Base URL / Model / API Key)
+    llm_info = body.get("llm") or {}
+    base_url = (llm_info.get("base_url") or "").strip()
+    model = (llm_info.get("model") or "").strip()
+    api_key = (llm_info.get("api_key") or "").strip()
+    provider = (llm_info.get("provider") or "").strip()
+
+    llm_updates = {}
+    if base_url:
+        llm_updates["base_url"] = normalize_base_url(base_url)
+    if model:
+        llm_updates["model"] = model
+    if provider:
+        llm_updates["provider"] = provider
+
+    if api_key and api_key != "YOUR_LLM_API_KEY_HERE" and not api_key.startswith("YOUR_"):
+        try:
+            secrets_mod.set_secret("llm_api_key", api_key)
+        except Exception:
+            llm_updates["api_key"] = api_key
+    if llm_updates:
+        _write_local("llm", llm_updates)
+
+    # 4. 标记向导已完成
+    _write_local("wizard_completed", True)
+
+    # 5. 立即清除旧候选池缓存
+    try:
+        from boss_apply import daily_apply
+        daily_apply.clear_candidate_pool()
+    except Exception:
+        pass
+
+    cfg_new = cfgmod.load()
+    eff = flows.effective_cities(cfg_new)
+    return {
+        "ok": True,
+        "message": "开箱向导配置成功，已安全写入本机配置！",
+        "active_preset": cfg_new.get("preset", presets.DEFAULT_PRESET_ID),
+        "effective_cities": [c["name"] for c in eff["cities"]],
+    }
 
 
 @app.get("/api/profile")
@@ -1932,6 +2307,83 @@ PAGE = """<!DOCTYPE html>
     transition: all 0.2s;
   }
   .setting-modal-close:hover { background: #0f172a; color: #fff; }
+
+  /* Setup Wizard Styles */
+  .wiz-step-pill {
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    border-radius: 20px;
+    background: #f1f5f9;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+  .wiz-step-pill:hover { background: #e2e8f0; color: #0f172a; }
+  .wiz-step-pill.active {
+    background: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  }
+  .wiz-preset-card {
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px 16px;
+    cursor: pointer;
+    background: #ffffff;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .wiz-preset-card:hover {
+    border-color: #93c5fd;
+    background: #f8fafc;
+    transform: translateY(-1px);
+  }
+  .wiz-preset-card.active {
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 0 0 1.5px #2563eb;
+  }
+  .provider-pill {
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    background: #ffffff;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .provider-pill:hover {
+    border-color: #93c5fd;
+    background: #f8fafc;
+    transform: translateY(-1px);
+  }
+  .provider-pill.active {
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 0 0 1.5px #2563eb;
+  }
+  .wiz-city-chip {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 18px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+  .wiz-city-chip:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+  }
+  .wiz-city-chip.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  }
   .setting-modal-footer {
     display: flex;
     align-items: center;
@@ -3575,7 +4027,10 @@ PAGE = """<!DOCTYPE html>
           </h5>
           <div class="text-muted" style="font-size:12px">极简模块化架构：点击任意功能卡片呼出专属弹窗进行精细化参数配置，杜绝视觉杂乱</div>
         </div>
-        <button class="btn-action-light" style="padding:6px 14px;border-radius:10px;font-size:12px" onclick="loadSettings()">🔄 刷新设置</button>
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn-primary" style="padding:6px 16px;border-radius:10px;font-size:12px;background:#2563eb;color:#fff;border:none;font-weight:700;box-shadow:0 2px 8px rgba(37,99,235,0.25)" onclick="openWizardModal()">✨ 3 步开箱向导</button>
+          <button class="btn-action-light" style="padding:6px 14px;border-radius:10px;font-size:12px" onclick="loadSettings()">🔄 刷新设置</button>
+        </div>
       </div>
 
       <!-- Setting Hub Cards Grid -->
@@ -3607,6 +4062,7 @@ PAGE = """<!DOCTYPE html>
             <div class="hub-title">求职偏好与定向模态</div>
             <div class="hub-desc">在校实习与校招应届双模切换，期望/排斥岗位与城市智能过滤黑白名单</div>
             <div class="hub-meta-tags">
+              <span class="soft-badge badge-ok" id="hubBadgePreset">🤖 AI/产品模版</span>
               <span class="soft-badge" id="hubBadgeRoles">全方向岗位</span>
               <span class="soft-badge" id="hubBadgeCities">全城扫描</span>
             </div>
@@ -3687,32 +4143,320 @@ PAGE = """<!DOCTYPE html>
     </div>
   </main>
 
+  <!-- Modal 0: 3步开箱向导 (Setup Wizard) -->
+  <div class="modal-overlay" id="modalWizard" onclick="if(event.target === this) closeSettingModal('modalWizard')">
+    <div class="setting-modal-card" style="max-width:700px">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title" style="display:flex;align-items:center;gap:8px">
+            <span>✨ 3 步开箱向导 (Setup Wizard)</span>
+            <span class="badge" style="background:#2563eb;color:#fff;font-size:11px;padding:3px 8px;border-radius:6px">推荐新手</span>
+          </div>
+          <div class="setting-modal-subtitle">彻底废除手动改 JSON！只需 3 步轻松配置求职方向与免翻/免费大模型</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalWizard')">✕</button>
+      </div>
+
+      <!-- Step Navigation Pills -->
+      <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid #e2e8f0;padding-bottom:12px">
+        <div id="wizStepTab1" class="wiz-step-pill active" onclick="switchWizardStep(1)">1. 求职方向与城市</div>
+        <div id="wizStepTab2" class="wiz-step-pill" onclick="switchWizardStep(2)">2. 大模型免翻直连</div>
+        <div id="wizStepTab3" class="wiz-step-pill" onclick="switchWizardStep(3)">3. 确认与极速起航</div>
+      </div>
+
+      <!-- Step 1 Content: 岗位预设与城市选择 -->
+      <div id="wizStep1Content">
+        <div class="mb-3">
+          <label style="font-size:13px;font-weight:700;margin-bottom:8px;display:block">🎯 第一步：选择您的求职方向模版</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="wizPresetGrid">
+            <div class="wiz-preset-card active" data-preset="ai_pm" onclick="selectWizardPreset('ai_pm')">
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px">🤖 AI / 智能体产品经理</div>
+              <div style="font-size:12px;color:var(--mut);line-height:1.4">Agent、Prompt、工作流编排、大模型应用与商业化 PRD</div>
+            </div>
+            <div class="wiz-preset-card" data-preset="tech_dev" onclick="selectWizardPreset('tech_dev')">
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px">💻 技术研发 / 软件工程</div>
+              <div style="font-size:12px;color:var(--mut);line-height:1.4">放行前端/后端/算法/架构师，聚焦系统架构与代码工程</div>
+            </div>
+            <div class="wiz-preset-card" data-preset="sales_bd" onclick="selectWizardPreset('sales_bd')">
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px">🤝 商务销售 / BD拓展</div>
+              <div style="font-size:12px;color:var(--mut);line-height:1.4">主动出击姿态，商务谈判、客户沉淀与积极微信电话推进</div>
+            </div>
+            <div class="wiz-preset-card" data-preset="general_ops" onclick="selectWizardPreset('general_ops')">
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px">📈 通用运营 / 综合职能</div>
+              <div style="font-size:12px;color:var(--mut);line-height:1.4">用户运营、项目管理、HRBP，强调闭环与跨部门协同</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label style="font-size:13px;font-weight:700;margin-bottom:8px;display:block">🏙️ 快速选择期望求职城市（多选）</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px" id="wizCityChips">
+            <span class="wiz-city-chip active" data-city="杭州" onclick="toggleWizCity(this)">杭州</span>
+            <span class="wiz-city-chip active" data-city="上海" onclick="toggleWizCity(this)">上海</span>
+            <span class="wiz-city-chip active" data-city="深圳" onclick="toggleWizCity(this)">深圳</span>
+            <span class="wiz-city-chip active" data-city="北京" onclick="toggleWizCity(this)">北京</span>
+            <span class="wiz-city-chip" data-city="广州" onclick="toggleWizCity(this)">广州</span>
+            <span class="wiz-city-chip" data-city="成都" onclick="toggleWizCity(this)">成都</span>
+            <span class="wiz-city-chip" data-city="武汉" onclick="toggleWizCity(this)">武汉</span>
+            <span class="wiz-city-chip" data-city="南京" onclick="toggleWizCity(this)">南京</span>
+            <span class="wiz-city-chip" data-city="苏州" onclick="toggleWizCity(this)">苏州</span>
+          </div>
+          <div style="font-size:11px;color:var(--mut);margin-top:6px">💡 可在后续设置中心的城市层级树中精细化选择更多省市及排斥城市</div>
+        </div>
+
+        <div class="setting-modal-footer">
+          <button type="button" class="btn-action-light" onclick="closeSettingModal('modalWizard')">稍后再配</button>
+          <button type="button" class="btn-black" onclick="switchWizardStep(2)">下一步：配置免翻大模型 →</button>
+        </div>
+      </div>
+
+      <!-- Step 2 Content: 大模型通道与连通测试 -->
+      <div id="wizStep2Content" style="display:none">
+        <!-- 一键智能导入横幅 (CC-Switch / 剪贴板 / 任意格式) -->
+        <div style="background:linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%);border:1.5px solid #bfdbfe;border-radius:14px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(37,99,235,0.06)">
+          <div>
+            <div style="font-weight:800;font-size:13px;color:#1e40af;display:flex;align-items:center;gap:6px">
+              <span>⚡ 支持像 CC-Switch 一样一键导入</span>
+              <span class="badge" style="background:#2563eb;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">小白推荐</span>
+            </div>
+            <div style="font-size:11.5px;color:#475569;margin-top:2px">
+              复制过 Key 或 CC-Switch 配置？点击即可从剪贴板全自动识别并填入！
+            </div>
+          </div>
+          <div class="d-flex gap-2" style="flex-shrink:0">
+            <button type="button" class="btn btn-sm" style="background:linear-gradient(135deg,#0284c7,#2563eb);color:#fff;border-radius:10px;font-weight:700;font-size:12px;padding:6px 14px;border:none;box-shadow:0 2px 6px rgba(37,99,235,0.3)" onclick="quickImportApiKey(true)">
+              📋 剪贴板一键导入
+            </button>
+            <button type="button" class="btn btn-sm btn-action-light" style="border-radius:10px;font-size:12px;padding:6px 10px" onclick="openImportModal(true)">
+              📥 粘贴/文件
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">⚡ 推荐大模型渠道（内置免翻免梯/高额度免费）</label>
+          <select id="wizProviderSelect" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px;font-weight:700" onchange="onWizProviderChange(this.value)">
+            <option value="siliconflow">🎁 硅基流动 (SiliconFlow 国内直连 · 注册即送千万 Token · 推荐)</option>
+            <option value="deepseek">🐳 DeepSeek 官方直连 (deepseek-chat · 极高性价比)</option>
+            <option value="zhipu">🇨🇳 智谱清言 (GLM-4-Flash · 个人开发者永久免费)</option>
+            <option value="dots3">🔴 小红书 Dots3 (OpenRouter 免费通道 · 512K超长上下文)</option>
+            <option value="dashscope">🏢 阿里通义千问 (DashScope · 百炼 Qwen-Plus)</option>
+            <option value="moonshot">🌙 月之暗面 Kimi (Moonshot AI · 8K/32K长文本)</option>
+            <option value="openrouter">🌐 OpenRouter (全球大模型聚合网关)</option>
+            <option value="custom">⚙️ 自定义兼容接口 (OpenAI 协议 / Ollama / OneAPI / CC-Switch)</option>
+          </select>
+          <div id="wizProviderTip" style="font-size:12px;color:#2563eb;margin-top:6px;padding:8px 12px;background:#eff6ff;border-radius:8px;display:none">
+            国内直连极速响应，支持 DeepSeek-V3/R1，手机号注册即赠送千万级 Token，求职期内基本免充值！
+          </div>
+        </div>
+
+        <!-- 1秒直达获取 Key 引导盒 -->
+        <div id="wizHelperBox" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span id="wizHelperName" style="font-weight:700;font-size:13px;color:#1e40af">🎁 硅基流动 (SiliconFlow)</span>
+            <a id="wizHelperLink" href="https://cloud.siliconflow.cn/account/ak" target="_blank" class="btn btn-sm btn-primary" style="border-radius:8px;font-size:12px;font-weight:700;padding:4px 12px;background:#2563eb;text-decoration:none">
+              🔗 1秒直达获取 API Key ↗
+            </a>
+          </div>
+          <div id="wizHelperSteps" style="font-size:12px;color:#1e3a8a;line-height:1.5">
+            ① 点击上方蓝色按钮快速注册/登录；<br>
+            ② 进入「API密钥」页面点击「新建 API 密钥」并复制；<br>
+            ③ 粘贴到下方输入框，点击测试即可！无需阅读开发文档。
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">
+            API Key
+            <span style="font-weight:normal;font-size:11px;color:var(--mut)">（Windows DPAPI 本机安全加密存储）</span>
+          </label>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="wizApiKey" class="form-control" style="border-radius:10px;font-size:13px" placeholder="粘贴您的 API Key (如 sk-...)">
+            <button type="button" class="btn-action-light" style="white-space:nowrap;padding:8px 14px;border-radius:10px;font-weight:700" onclick="testWizLLM()">
+              ⚡ 连通性测试
+            </button>
+          </div>
+          <div id="wizTestResult" style="font-size:12px;margin-top:6px;display:none"></div>
+        </div>
+
+        <!-- 高级技术参数折叠 -->
+        <details style="border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;margin-bottom:14px;background:#f8fafc">
+          <summary style="font-size:12px;font-weight:600;color:#64748b;cursor:pointer;user-select:none">
+            ⚙️ 高级技术参数（Base URL 与模型名称，选择上方渠道后已自动填充，小白无需修改）
+          </summary>
+          <div class="row g-2 mt-1">
+            <div class="col-8">
+              <label style="font-size:11px;font-weight:600;margin-bottom:2px;display:block">Base URL 端点</label>
+              <input type="text" id="wizBaseUrl" class="form-control" style="border-radius:8px;font-size:12px" value="https://api.siliconflow.cn/v1">
+            </div>
+            <div class="col-4">
+              <label style="font-size:11px;font-weight:600;margin-bottom:2px;display:block">模型名</label>
+              <input type="text" id="wizModelName" class="form-control" style="border-radius:8px;font-size:12px" value="deepseek-ai/DeepSeek-V3">
+            </div>
+          </div>
+        </details>
+
+        <div class="setting-modal-footer">
+          <button type="button" class="btn-action-light" onclick="switchWizardStep(1)">← 上一步</button>
+          <button type="button" class="btn-action-light" style="color:#64748b" onclick="skipWizardKeyAndProceed()">暂无 Key，跳过直接体验</button>
+          <button type="button" class="btn-black" onclick="switchWizardStep(3)">下一步：确认起航 →</button>
+        </div>
+      </div>
+
+      <!-- Step 3 Content: 确认与保存 -->
+      <div id="wizStep3Content" style="display:none">
+        <div class="p-3 mb-3" style="background:#f8fafc;border-radius:14px;border:1.5px solid #e2e8f0">
+          <h6 style="font-weight:700;margin-bottom:12px">📋 即将为您配置的求职环境概览：</h6>
+          <div style="font-size:13px;line-height:1.8">
+            <div>📌 <strong>求职方向预设</strong>：<span id="wizSummaryPreset" style="color:#2563eb;font-weight:700">AI / 智能体产品经理</span></div>
+            <div>🏙️ <strong>生效目标城市</strong>：<span id="wizSummaryCities" style="color:#111">杭州、上海、深圳、北京</span></div>
+            <div>🤖 <strong>大模型直连端点</strong>：<span id="wizSummaryLLM" style="font-family:monospace">https://api.siliconflow.cn/v1 (deepseek-ai/DeepSeek-V3)</span></div>
+            <div>🔑 <strong>凭证安全状态</strong>：<span id="wizSummaryKeyStatus" style="color:#10b981;font-weight:600">已填入 Key（DPAPI 本机加密存储）</span></div>
+          </div>
+        </div>
+
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;font-size:12px;color:#166534;margin-bottom:16px">
+          ✅ 点击“完成配置”后，后台将以<strong>原子写入</strong>方式安全更新 <code>config.local.json</code> 并刷新打分与沟通规则。您无需面对任何黑屏命令或 JSON 代码！
+        </div>
+
+        <div class="setting-modal-footer">
+          <button type="button" class="btn-action-light" onclick="switchWizardStep(2)">← 上一步修改</button>
+          <button type="button" class="btn-black" style="background:#2563eb;border-color:#2563eb" onclick="submitWizard()">🚀 完成配置，立即起航！</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal 1: 大模型 LLM 配置弹窗 -->
   <div class="modal-overlay" id="modalLLM" onclick="if(event.target === this) closeSettingModal('modalLLM')">
-    <div class="setting-modal-card">
+    <div class="setting-modal-card" style="max-width:580px">
       <div class="setting-modal-header">
         <div>
           <div class="setting-modal-title">🤖 大模型 LLM 配置</div>
-          <div class="setting-modal-subtitle">配置大模型端点与凭证，密钥由 Windows DPAPI 本机安全加密</div>
+          <div class="setting-modal-subtitle">内置主流免翻免费大模型渠道，密钥由 Windows DPAPI 本机安全加密</div>
         </div>
         <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalLLM')">✕</button>
       </div>
-      <div class="setting-help-box info" id="llmMeta">
+
+      <!-- 免 Key 运行温馨提示 -->
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#166534;line-height:1.6">
+        💡 <strong>小白须知</strong>：您完全可以<strong>不填任何 API Key</strong>！本软件的岗位抓取、真实打分、外包公司剔除均为 100% 本地算法，免 Key 也可正常浏览与筛选优质岗位。仅当您需要 AI 自动拟人聊天代聊时才需配置 Key。
+      </div>
+
+      <div class="setting-help-box info" id="llmMeta" style="margin-bottom:14px">
         正在读取 DPAPI 加密凭证状态…
       </div>
-      <div class="mb-3">
-        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">API Key（DPAPI 本机加密存储）</label>
-        <input type="password" id="inKey" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px" placeholder="留空 = 保持当前已保存密钥不变">
+
+      <!-- 一键智能导入横幅 (支持类似 CC-Switch / 剪贴板 / 任意格式) -->
+      <div style="background:linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%);border:1.5px solid #bfdbfe;border-radius:14px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(37,99,235,0.06)">
+        <div>
+          <div style="font-weight:800;font-size:13px;color:#1e40af;display:flex;align-items:center;gap:6px">
+            <span>⚡ 支持类似 CC-Switch 一键导入</span>
+            <span class="badge" style="background:#2563eb;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">极速免填</span>
+          </div>
+          <div style="font-size:11.5px;color:#475569;margin-top:2px">
+            支持 CC-Switch / Cherry Studio 导出 JSON、环境变量或包含 sk-... 的任意文本
+          </div>
+        </div>
+        <div class="d-flex gap-2" style="flex-shrink:0">
+          <button type="button" class="btn btn-sm" style="background:linear-gradient(135deg,#0284c7,#2563eb);color:#fff;border-radius:10px;font-weight:700;font-size:12px;padding:6px 14px;border:none;box-shadow:0 2px 6px rgba(37,99,235,0.3)" onclick="quickImportApiKey(false)">
+            📋 剪贴板一键导入
+          </button>
+          <button type="button" class="btn btn-sm btn-action-light" style="border-radius:10px;font-size:12px;padding:6px 10px" onclick="openImportModal(false)">
+            📥 粘贴/文件…
+          </button>
+        </div>
       </div>
+
+      <!-- 推荐服务商一键选择卡片 -->
       <div class="mb-3">
-        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">Base URL 端点</label>
-        <input type="text" id="inBase" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px" placeholder="https://api.openai.com/v1">
+        <label style="font-size:13px;font-weight:700;margin-bottom:8px;display:block">选择推荐大模型服务商（点击一键自动填入端点）</label>
+        <div class="row g-2">
+          <div class="col-4">
+            <div class="provider-pill active" id="modalPill_siliconflow" onclick="selectModalLLMProvider('siliconflow')">
+              <div style="font-weight:700;font-size:12.5px">🎁 硅基流动</div>
+              <div style="font-size:10.5px;color:#64748b">送千万Token·直连</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="provider-pill" id="modalPill_deepseek" onclick="selectModalLLMProvider('deepseek')">
+              <div style="font-weight:700;font-size:12.5px">🐳 DeepSeek</div>
+              <div style="font-size:10.5px;color:#64748b">官方直连·极高性价比</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="provider-pill" id="modalPill_zhipu" onclick="selectModalLLMProvider('zhipu')">
+              <div style="font-weight:700;font-size:12.5px">🇨🇳 智谱 GLM-4</div>
+              <div style="font-size:10.5px;color:#64748b">个人永久免费</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="provider-pill" id="modalPill_dots3" onclick="selectModalLLMProvider('dots3')">
+              <div style="font-weight:700;font-size:12.5px">🔴 小红书 Dots3</div>
+              <div style="font-size:10.5px;color:#64748b">512K超长上下文</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="provider-pill" id="modalPill_dashscope" onclick="selectModalLLMProvider('dashscope')">
+              <div style="font-weight:700;font-size:12.5px">🏢 通义千问</div>
+              <div style="font-size:10.5px;color:#64748b">阿里官方 Qwen-Plus</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="provider-pill" id="modalPill_moonshot" onclick="selectModalLLMProvider('moonshot')">
+              <div style="font-weight:700;font-size:12.5px">🌙 Kimi 月之暗面</div>
+              <div style="font-size:10.5px;color:#64748b">超长中文深度长文本</div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- 1秒直达获取 Key 引导盒 -->
+      <div id="modalLLMHelper" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 14px;margin-bottom:14px">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span id="modalHelperName" style="font-weight:700;font-size:13px;color:#1e40af">🎁 硅基流动 (SiliconFlow)</span>
+          <a id="modalHelperLink" href="https://cloud.siliconflow.cn/account/ak" target="_blank" class="btn btn-sm btn-primary" style="border-radius:8px;font-size:12px;font-weight:700;padding:4px 12px;background:#2563eb;text-decoration:none">
+            🔗 1秒直达获取 API Key ↗
+          </a>
+        </div>
+        <div id="modalHelperSteps" style="font-size:12px;color:#1e3a8a;line-height:1.5">
+          ① 点击上方蓝色按钮快速注册/登录；<br>
+          ② 进入「API密钥」页面，点击「新建 API 密钥」并复制；<br>
+          ③ 粘贴至下方输入框，点击「⚡ 测试连接」即可！无需看任何技术文档。
+        </div>
+      </div>
+
       <div class="mb-3">
-        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">模型名称</label>
-        <input type="text" id="inModel" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px" placeholder="deepseek-chat 或 gpt-4o">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">
+          API Key
+          <span style="font-weight:normal;font-size:11px;color:var(--mut)">（Windows DPAPI 本机安全加密存储）</span>
+        </label>
+        <div style="display:flex;gap:8px">
+          <input type="password" id="inKey" class="form-control" style="border-radius:12px;padding:10px 14px;font-size:13px" placeholder="在此粘贴获取到的密钥 (留空 = 保持已存密钥不变)">
+          <button type="button" class="btn-action-light" style="white-space:nowrap;padding:8px 16px;border-radius:12px;font-weight:700" onclick="testLLM()">
+            ⚡ 测试连接
+          </button>
+        </div>
       </div>
-      <div class="d-flex align-items-center justify-content-between p-3 mt-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
+
+      <!-- 高级参数折叠（隐藏 Base URL 和模型名称，消除小白恐惧） -->
+      <details style="border:1px solid #e2e8f0;border-radius:12px;padding:10px 14px;margin-bottom:14px;background:#f8fafc">
+        <summary style="font-size:12px;font-weight:700;color:#64748b;cursor:pointer;user-select:none">
+          ⚙️ 高级技术参数（Base URL 与模型名称，选择上方渠道后已自动填充，小白无需修改）
+        </summary>
+        <div style="padding-top:12px">
+          <div class="mb-2">
+            <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Base URL 端点</label>
+            <input type="text" id="inBase" class="form-control" style="border-radius:8px;padding:7px 12px;font-size:12px" placeholder="https://api.siliconflow.cn/v1">
+          </div>
+          <div class="mb-2">
+            <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">模型名称</label>
+            <input type="text" id="inModel" class="form-control" style="border-radius:8px;padding:7px 12px;font-size:12px" placeholder="deepseek-ai/DeepSeek-V3">
+          </div>
+        </div>
+      </details>
+
+      <div class="d-flex align-items-center justify-content-between p-3 mt-2 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
         <div>
           <strong style="font-size:13px;color:#111;display:block">启用 LLM 智能匹配打分</strong>
           <span style="font-size:11px;color:var(--mut)">开启后调用模型精读岗位深度打分，关闭则回退轻量关键词词表</span>
@@ -3722,10 +4466,10 @@ PAGE = """<!DOCTYPE html>
           <span class="switch-slider"></span>
         </label>
       </div>
+
       <div class="setting-modal-footer">
         <span id="resLLM" style="font-size:12px;margin-right:auto"></span>
         <button type="button" class="btn-action-light" onclick="closeSettingModal('modalLLM')">关闭</button>
-        <button type="button" class="btn-action-light" onclick="testLLM()">⚡ 测试连接</button>
         <button type="button" class="btn-action-light text-danger" style="border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.06)" onclick="clearApiKey()">清除 Key</button>
         <button type="button" class="btn-black" onclick="saveSettings()">保存配置</button>
       </div>
@@ -3744,6 +4488,15 @@ PAGE = """<!DOCTYPE html>
       </div>
       <div class="setting-help-box info">
         留空字段将由大模型结合简历画像与职位描述自主决断
+      </div>
+      <div class="mb-3">
+        <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">🏷️ 岗位偏好模板 (Preset Template)</label>
+        <select id="inPreset" style="width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;font-weight:700;background:#fff;color:#111">
+          <option value="ai_pm">🤖 AI / 智能体产品经理 (默认)</option>
+          <option value="tech_dev">💻 技术研发 / 软件工程 (放行前端/后端/算法)</option>
+          <option value="sales_bd">🤝 市场销售 / 商务拓展 (主动出击姿态)</option>
+          <option value="general_ops">📈 通用运营 / 综合职能 (闭环协作)</option>
+        </select>
       </div>
       <div class="mb-3">
         <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">🎯 求职定向模态 (Job Mode)</label>
@@ -4038,6 +4791,68 @@ PAGE = """<!DOCTYPE html>
         <span id="resBrowser" style="font-size:12px;margin-right:auto"></span>
         <button type="button" class="btn-action-light" onclick="closeSettingModal('modalBrowser')">取消</button>
         <button type="button" class="btn-black" onclick="saveBrowserSettings()">保存浏览器设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7: 一键智能导入 API 配置 (支持 CC-Switch / Cherry Studio / 环境变量 / 自由文本) -->
+  <div class="modal-overlay" id="modalOneClickImport" onclick="if(event.target === this) closeSettingModal('modalOneClickImport')">
+    <div class="setting-modal-card" style="max-width:560px">
+      <div class="setting-modal-header">
+        <div>
+          <div class="setting-modal-title" style="display:flex;align-items:center;gap:8px">
+            <span>📋 一键智能导入 API 配置</span>
+            <span class="badge" style="background:#0284c7;color:#fff;font-size:11px;padding:3px 8px;border-radius:6px">CC-Switch / Cherry 兼容</span>
+          </div>
+          <div class="setting-modal-subtitle">粘贴任意格式配置，系统将全自动识别渠道、Base URL 与 API Key 并纠错</div>
+        </div>
+        <button type="button" class="setting-modal-close" onclick="closeSettingModal('modalOneClickImport')">✕</button>
+      </div>
+
+      <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <label style="font-size:12.5px;font-weight:700;color:#334155">请粘贴配置内容或 JSON 代码：</label>
+          <button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 8px;border-radius:6px" onclick="pasteFromClipboardToImport()">
+            📋 从剪贴板粘贴
+          </button>
+        </div>
+        <textarea id="importRawText" class="form-control" rows="5" style="border-radius:12px;font-size:12px;font-family:'JetBrains Mono', Consolas, monospace" placeholder="支持任意以下格式：
+1. CC-Switch 导出 JSON (如 { &quot;baseUrl&quot;: &quot;...&quot;, &quot;apiKey&quot;: &quot;sk-...&quot; })
+2. Cherry Studio 或 OneAPI 导出格式
+3. 环境变量: export OPENAI_API_KEY=&quot;sk-...&quot;
+4. 包含 sk-... 的任意网页说明或控制台复制文本" oninput="onImportInputChanged(this.value)"></textarea>
+      </div>
+
+      <!-- 文件拖拽或选择上传 -->
+      <div class="d-flex align-items-center justify-content-between p-2 mb-3" style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:10px">
+        <span style="font-size:12px;color:#64748b">📁 或直接选择 CC-Switch / Cherry 导出的 .json 文件：</span>
+        <label class="btn btn-sm btn-action-light" style="margin:0;font-size:11.5px;cursor:pointer">
+          选择 JSON 文件
+          <input type="file" accept=".json,.txt" style="display:none" onchange="handleImportFileSelect(event)">
+        </label>
+      </div>
+
+      <!-- 实时智能识别状态卡片 -->
+      <div id="importPreviewCard" class="p-3 mb-3" style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:12px;display:none">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span style="font-size:12.5px;font-weight:700;color:#1e293b">🔍 智能识别结果预览</span>
+          <span id="importPreviewStatus" class="badge" style="background:#10b981;color:#fff;font-size:11px">已识别</span>
+        </div>
+        <div style="font-size:12px;line-height:1.7;color:#334155">
+          <div>🏷️ <strong>推断服务商</strong>: <span id="importResProvider" style="color:#0284c7;font-weight:700">--</span></div>
+          <div>🌐 <strong>Base URL</strong>: <span id="importResBase" style="font-family:monospace;color:#111">--</span></div>
+          <div>🤖 <strong>推荐模型</strong>: <span id="importResModel" style="font-family:monospace;color:#111">--</span></div>
+          <div>🔑 <strong>API Key</strong>: <span id="importResKey" style="font-family:monospace;color:#059669;font-weight:600">--</span></div>
+        </div>
+      </div>
+
+      <div id="importActionStatus" style="font-size:12px;margin-bottom:12px;display:none"></div>
+
+      <div class="setting-modal-footer">
+        <button type="button" class="btn-action-light" onclick="closeSettingModal('modalOneClickImport')">取消</button>
+        <button type="button" id="btnConfirmImport" class="btn-black" style="background:linear-gradient(135deg,#0284c7,#2563eb);border-color:#2563eb" onclick="executeOneClickImport()">
+          ⚡ 一键导入并测试生效
+        </button>
       </div>
     </div>
   </div>
@@ -5932,6 +6747,663 @@ function closeSettingModal(id) {
   }
 }
 
+// ==========================================
+// 3步开箱向导 (Setup Wizard) 前端交互引擎
+// ==========================================
+let selectedWizPreset = 'ai_pm';
+let selectedWizCities = ['杭州', '上海', '深圳', '北京'];
+
+const WIZ_PROVIDERS = {
+  siliconflow: {
+    name: '🎁 硅基流动 (SiliconFlow)',
+    base_url: 'https://api.siliconflow.cn/v1',
+    model: 'deepseek-ai/DeepSeek-V3',
+    key_url: 'https://cloud.siliconflow.cn/account/ak',
+    tip: '国内直连极速响应，支持 DeepSeek-V3/R1，手机号注册即赠送千万级 Token，求职期内基本免充值！',
+    steps: '① 点击右上角蓝色按钮快速注册/登录；<br>② 进入「API密钥」页面点击「新建 API 密钥」并复制；<br>③ 粘贴到下方输入框，点击测试即可！无需阅读开发文档。'
+  },
+  dots3: {
+    name: '🔴 小红书 Dots3 (Dots Studio 官方通道)',
+    base_url: 'https://note3-prev-api.askdiandian.com/v1',
+    model: 'dots-3-note-preview',
+    key_url: 'https://dots.ai/platform/keys',
+    tip: '小红书官方 AI 实验室开放平台，支持 Dots3 280B 模型，512K 超长上下文！',
+    steps: '① 点击右上角蓝色按钮登录 Dots 开放平台；<br>② 在左侧导航栏点击「API Keys」，点击「创建 API Key」并复制；<br>③ 粘贴到下方输入框，点击测试即可！（无需阅读接口文档）'
+  },
+  zhipu: {
+    name: '🇨🇳 智谱清言 (GLM-4-Flash)',
+    base_url: 'https://open.bigmodel.cn/api/paas/v4',
+    model: 'glm-4-flash',
+    key_url: 'https://open.bigmodel.cn/usercenter/apikeys',
+    tip: '智谱开放平台官方永久免费 API（GLM-4-Flash），国内直连响应极快。',
+    steps: '① 点击右上角蓝色按钮登录智谱大模型开放平台；<br>② 进入 API Keys 页面，点击「添加新密钥」并复制；<br>③ 粘贴到下方输入框，点击测试即可！（个人永久免费）'
+  },
+  deepseek: {
+    name: '🐳 DeepSeek 官方直连',
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-chat',
+    key_url: 'https://platform.deepseek.com/api_keys',
+    tip: '深度求索官方接口（deepseek-chat），性价比极高，需自行在平台充值获取 Key。',
+    steps: '① 点击右上角蓝色按钮登录 DeepSeek 开放平台；<br>② 点击「创建 API key」并复制；<br>③ 粘贴到下方输入框，点击测试即可！'
+  },
+  dashscope: {
+    name: '🏢 阿里通义千问 (DashScope)',
+    base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    model: 'qwen-plus',
+    key_url: 'https://bailian.console.aliyun.com/?apiKey=1#/api-key',
+    tip: '阿里云百炼官方大模型，Qwen-Plus / Qwen-Max 旗舰级中文理解与拟人回复。',
+    steps: '① 点击右上角进入阿里云百炼控制台；<br>② 获取 API-Key 并复制；<br>③ 粘贴到下方输入框，点击测试即可！'
+  },
+  moonshot: {
+    name: '🌙 月之暗面 Kimi (Moonshot)',
+    base_url: 'https://api.moonshot.cn/v1',
+    model: 'moonshot-v1-8k',
+    key_url: 'https://platform.moonshot.cn/console/api-keys',
+    tip: '月之暗面 Kimi 官方接口，长文本超群，拟人化自然沟通。',
+    steps: '① 点击右上角登录 Moonshot 开放平台；<br>② 进入 API Keys 页面生成密钥并复制；<br>③ 粘贴到下方输入框，点击测试即可！'
+  },
+  openrouter: {
+    name: '🌐 OpenRouter 全网聚合',
+    base_url: 'https://openrouter.ai/api/v1',
+    model: 'deepseek/deepseek-chat',
+    key_url: 'https://openrouter.ai/keys',
+    tip: '全球主流大模型聚合网关，一个 Key 调用全网任意顶级大模型。',
+    steps: '① 点击右上角登录 OpenRouter；<br>② 在 Keys 页面创建密钥并复制；<br>③ 粘贴到下方输入框，点击测试即可！'
+  },
+  custom: {
+    name: '⚙️ 自定义兼容接口',
+    base_url: '',
+    model: '',
+    key_url: '',
+    tip: '可对接本地 Ollama、OneAPI、NewAPI、CC-Switch 或其他兼容 OpenAI 接口规范的服务。',
+    steps: '请填入您的服务商 Base URL 端点、模型名称以及对应的授权密钥。'
+  }
+};
+
+// ==========================================
+// 一键智能导入 API Key (支持 CC-Switch / Cherry Studio / 剪贴板 / 自由文本)
+// ==========================================
+let importTargetIsWizard = false;
+
+function parseOneClickConfig(rawText) {
+  let t = (rawText || '').trim();
+  if (!t) return { ok: false, error: '输入内容为空' };
+
+  let base_url = '';
+  let api_key = '';
+  let model = '';
+  let provider_name = '';
+  let provider_id = 'custom';
+  let format_type = 'unknown';
+
+  // 1. JSON 解析 (CC-Switch, Cherry Studio, OpenAI JSON)
+  let cleanJson = t;
+  const mBlock = t.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/);
+  if (mBlock) cleanJson = mBlock[1].trim();
+
+  try {
+    let data = JSON.parse(cleanJson);
+    if (Array.isArray(data) && data.length > 0) data = data[0];
+    if (data && typeof data === 'object') {
+      if (Array.isArray(data.providers) && data.providers.length > 0) {
+        format_type = 'json_cc_switch_multi';
+        const active = data.providers.find(p => p.active || p.enabled) || data.providers[0];
+        data = active;
+      }
+      for (const k of ['apiKey', 'api_key', 'key', 'token', 'secret_key', 'secretKey', 'access_token']) {
+        if (data[k] && typeof data[k] === 'string') { api_key = data[k].trim(); break; }
+      }
+      for (const k of ['baseUrl', 'base_url', 'url', 'endpoint', 'api_url', 'host', 'api_base']) {
+        if (data[k] && typeof data[k] === 'string') { base_url = data[k].trim(); break; }
+      }
+      for (const k of ['model', 'model_name', 'modelName', 'defaultModel', 'modelId']) {
+        if (data[k] && typeof data[k] === 'string') { model = data[k].trim(); break; }
+      }
+      if (!model && Array.isArray(data.models) && data.models.length > 0) {
+        const m0 = data.models[0];
+        model = (typeof m0 === 'object' ? (m0.id || m0.name) : String(m0)) || '';
+        format_type = 'json_cherry';
+      }
+      for (const k of ['name', 'provider', 'provider_name', 'id', 'title']) {
+        if (data[k] && typeof data[k] === 'string') { provider_name = data[k].trim(); break; }
+      }
+      if (!format_type.startsWith('json_')) format_type = 'json_standard';
+    }
+  } catch (e) {}
+
+  // 2. 正则提取 key
+  if (!api_key) {
+    const mBearer = t.match(/Bearer\\s+([a-zA-Z0-9_\\-\\.]{15,})/i);
+    if (mBearer) {
+      api_key = mBearer[1].trim();
+      format_type = 'curl_or_header';
+    } else {
+      const mSk = t.match(/\\b(sk-[a-zA-Z0-9_\\-\\.]{15,})\\b/);
+      if (mSk) {
+        api_key = mSk[1].trim();
+        format_type = 'plain_text_sk';
+      } else {
+        const mKv = t.match(/(?:api_?key|token|secret|password|密钥|key)\\s*[:=]\\s*["']?([a-zA-Z0-9_\\-\\.]{15,})["']?/i);
+        if (mKv) {
+          api_key = mKv[1].trim();
+          format_type = 'kv_text';
+        }
+      }
+    }
+  }
+
+  // 正则提取 URL
+  if (!base_url) {
+    const urls = t.match(/https?:\\/\\/[a-zA-Z0-9_\\-\\.:]+(?:\\/[a-zA-Z0-9_\\-\\.\\/]*)?/g) || [];
+    for (const u of urls) {
+      if (!['github.com', 'google.com', 'microsoft.com', 'apple.com', 'account/ak', 'platform.keys', 'docs.'].some(ex => u.includes(ex))) {
+        base_url = u.trim();
+        break;
+      }
+    }
+    if (!base_url && urls.length > 0) base_url = urls[0].trim();
+  }
+
+  // 正则提取模型
+  if (!model) {
+    const mModel = t.match(/(?:model|model_name|模型)\\s*[:=]\\s*["']?([a-zA-Z0-9_\\-\\/\\.:]+)["']?/i);
+    if (mModel) model = mModel[1].trim();
+  }
+
+  if (!api_key) return { ok: false, error: '未能从输入中识别到有效的 API Key (需包含 sk- 或有效密钥)' };
+
+  // URL 智能修正
+  if (base_url.endsWith('/chat/completions')) base_url = base_url.replace(/\\/chat\\/completions$/, '');
+  if (base_url.endsWith('/completions')) base_url = base_url.replace(/\\/completions$/, '');
+  if (base_url.endsWith('/models')) base_url = base_url.replace(/\\/models$/, '');
+  if (base_url && !base_url.startsWith('http://') && !base_url.startsWith('https://')) base_url = 'https://' + base_url;
+
+  const lowUrl = base_url.toLowerCase();
+  const lowKey = api_key.toLowerCase();
+
+  if (lowUrl.includes('siliconflow') || lowKey.includes('sf-')) {
+    provider_id = 'siliconflow';
+    provider_name = provider_name || '🎁 硅基流动 (SiliconFlow)';
+    base_url = base_url || 'https://api.siliconflow.cn/v1';
+    if (!base_url.endsWith('/v1')) base_url += '/v1';
+    model = model || 'deepseek-ai/DeepSeek-V3';
+  } else if (lowUrl.includes('deepseek') || (!base_url && api_key.startsWith('sk-') && api_key.length === 35)) {
+    provider_id = 'deepseek';
+    provider_name = provider_name || '🐳 DeepSeek 官方直连';
+    base_url = base_url || 'https://api.deepseek.com/v1';
+    if (!base_url.endsWith('/v1')) base_url += '/v1';
+    model = model || 'deepseek-chat';
+  } else if (lowUrl.includes('bigmodel') || lowUrl.includes('zhipu') || (!base_url && api_key.includes('.') && api_key.length > 30)) {
+    provider_id = 'zhipu';
+    provider_name = provider_name || '🇨🇳 智谱清言 (GLM-4-Flash)';
+    base_url = base_url || 'https://open.bigmodel.cn/api/paas/v4';
+    if (!base_url.includes('/api/paas/v4')) base_url = 'https://open.bigmodel.cn/api/paas/v4';
+    model = model || 'glm-4-flash';
+  } else if (lowUrl.includes('askdiandian') || lowUrl.includes('dots')) {
+    provider_id = 'dots3';
+    provider_name = provider_name || '🔴 小红书 Dots3';
+    base_url = base_url || 'https://note3-prev-api.askdiandian.com/v1';
+    model = model || 'dots-3-note-preview';
+  } else if (lowUrl.includes('dashscope') || lowUrl.includes('aliyun')) {
+    provider_id = 'dashscope';
+    provider_name = provider_name || '🏢 阿里通义千问';
+    base_url = base_url || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+    model = model || 'qwen-plus';
+  } else if (lowUrl.includes('moonshot') || lowUrl.includes('kimi')) {
+    provider_id = 'moonshot';
+    provider_name = provider_name || '🌙 月之暗面 Kimi';
+    base_url = base_url || 'https://api.moonshot.cn/v1';
+    model = model || 'moonshot-v1-8k';
+  } else if (lowUrl.includes('openrouter')) {
+    provider_id = 'openrouter';
+    provider_name = provider_name || '🌐 OpenRouter';
+    base_url = base_url || 'https://openrouter.ai/api/v1';
+    model = model || 'deepseek/deepseek-chat';
+  } else {
+    provider_id = 'custom';
+    provider_name = provider_name || '⚙️ 兼容 OpenAI 接口';
+    if (!base_url) {
+      base_url = 'https://api.siliconflow.cn/v1';
+      provider_id = 'siliconflow';
+      provider_name = '🎁 硅基流动 (自动推荐)';
+    }
+    if (!model) model = base_url.includes('siliconflow') ? 'deepseek-ai/DeepSeek-V3' : 'deepseek-chat';
+  }
+
+  return {
+    ok: true,
+    provider: provider_id,
+    provider_name: provider_name,
+    base_url: base_url,
+    api_key: api_key,
+    model: model,
+    format: format_type
+  };
+}
+
+function openImportModal(isWizard = false) {
+  importTargetIsWizard = isWizard;
+  openSettingModal('modalOneClickImport');
+  const txt = document.getElementById('importRawText');
+  if (txt) {
+    txt.value = '';
+    onImportInputChanged('');
+    setTimeout(() => txt.focus(), 200);
+  }
+}
+
+async function pasteFromClipboardToImport() {
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    try {
+      const text = await navigator.clipboard.readText();
+      const txt = document.getElementById('importRawText');
+      if (txt && text) {
+        txt.value = text;
+        onImportInputChanged(text);
+        showToast('已从剪贴板粘贴内容！', 'info');
+      }
+    } catch (e) {
+      showToast('无法直接读取剪贴板，请手动按 Ctrl+V 粘贴', 'warning');
+    }
+  } else {
+    showToast('当前环境不支持剪贴板读取，请手动 Ctrl+V 粘贴', 'warning');
+  }
+}
+
+function handleImportFileSelect(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const txt = document.getElementById('importRawText');
+    if (txt) {
+      txt.value = text;
+      onImportInputChanged(text);
+      showToast(`已加载配置文件: ${file.name}`, 'info');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function onImportInputChanged(val) {
+  const parsed = parseOneClickConfig(val);
+  const card = document.getElementById('importPreviewCard');
+  const statusEl = document.getElementById('importPreviewStatus');
+  const pEl = document.getElementById('importResProvider');
+  const bEl = document.getElementById('importResBase');
+  const mEl = document.getElementById('importResModel');
+  const kEl = document.getElementById('importResKey');
+  const btn = document.getElementById('btnConfirmImport');
+
+  if (!card) return;
+
+  if (parsed.ok) {
+    card.style.display = 'block';
+    if (statusEl) {
+      statusEl.className = 'badge bg-success';
+      statusEl.textContent = '🟢 成功识别';
+    }
+    if (pEl) pEl.textContent = parsed.provider_name;
+    if (bEl) bEl.textContent = parsed.base_url;
+    if (mEl) mEl.textContent = parsed.model;
+    if (kEl) {
+      const k = parsed.api_key;
+      kEl.textContent = k.length > 10 ? (k.slice(0, 6) + '...' + k.slice(-4)) : '***';
+    }
+    if (btn) btn.disabled = false;
+  } else {
+    if (val.trim()) {
+      card.style.display = 'block';
+      if (statusEl) {
+        statusEl.className = 'badge bg-danger';
+        statusEl.textContent = '❌ 未识别到有效 Key';
+      }
+      if (pEl) pEl.textContent = '请确保内容包含 sk-... 格式密钥';
+      if (bEl) bEl.textContent = '--';
+      if (mEl) mEl.textContent = '--';
+      if (kEl) kEl.textContent = '--';
+      if (btn) btn.disabled = true;
+    } else {
+      card.style.display = 'none';
+      if (btn) btn.disabled = false;
+    }
+  }
+}
+
+async function executeOneClickImport() {
+  const txt = (document.getElementById('importRawText')?.value || '').trim();
+  const statusEl = document.getElementById('importActionStatus');
+  const btn = document.getElementById('btnConfirmImport');
+
+  if (!txt) {
+    showToast('请先输入或粘贴待导入的配置内容！', 'warning');
+    return;
+  }
+
+  const parsed = parseOneClickConfig(txt);
+  if (!parsed.ok) {
+    showToast(parsed.error || '未识别到有效的配置内容', 'error');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = '#2563eb';
+    statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>正在保存并测试连通性…';
+  }
+
+  try {
+    const res = await api('/api/settings/import_key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        raw_text: txt,
+        base_url: parsed.base_url,
+        api_key: parsed.api_key,
+        model: parsed.model
+      })
+    });
+
+    if (res && res.ok) {
+      showToast(`🎉 成功导入 [${res.provider_name}] 配置！${res.ping_ok ? '连通性良好 (' + res.latency_ms + 'ms)' : ''}`, 'success');
+
+      if (importTargetIsWizard) {
+        const inKey = document.getElementById('wizApiKey');
+        const inBase = document.getElementById('wizBaseUrl');
+        const inModel = document.getElementById('wizModelName');
+        const sel = document.getElementById('wizProviderSelect');
+        if (inKey) inKey.value = parsed.api_key;
+        if (inBase) inBase.value = res.base_url;
+        if (inModel) inModel.value = res.model;
+        if (sel && sel.querySelector(`option[value="${res.provider}"]`)) sel.value = res.provider;
+        const testRes = document.getElementById('wizTestResult');
+        if (testRes) {
+          testRes.style.display = 'block';
+          if (res.ping_ok) {
+            testRes.style.color = '#10b981';
+            testRes.textContent = `🟢 连通测试成功！响应延迟: ${res.latency_ms}ms`;
+          } else {
+            testRes.style.color = '#f59e0b';
+            testRes.textContent = `⚠️ 配置已保存，连通测试: ${res.ping_error || '响应超时'}`;
+          }
+        }
+      } else {
+        const inKey = document.getElementById('inKey');
+        const inBase = document.getElementById('inBase');
+        const inModel = document.getElementById('inModel');
+        if (inKey) inKey.value = parsed.api_key;
+        if (inBase) inBase.value = res.base_url;
+        if (inModel) inModel.value = res.model;
+        selectModalLLMProvider(res.provider);
+        const resLLM = document.getElementById('resLLM');
+        if (resLLM) {
+          resLLM.style.color = res.ping_ok ? 'var(--ok)' : 'var(--warn)';
+          resLLM.textContent = res.ping_ok ? `🟢 已保存并连通 (${res.latency_ms}ms)` : `⚠️ 已保存 (${res.ping_error || '超时'})`;
+        }
+      }
+
+      closeSettingModal('modalOneClickImport');
+      loadSettings();
+      load(true);
+    } else {
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#ef4444';
+        statusEl.textContent = '❌ 导入失败: ' + (res?.error || '接口返回异常');
+      }
+      showToast('导入失败: ' + (res?.error || '接口返回异常'), 'error');
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.style.color = '#ef4444';
+      statusEl.textContent = '❌ 导入异常: ' + e.message;
+    }
+    showToast('网络错误: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function quickImportApiKey(isWizard = false) {
+  importTargetIsWizard = isWizard;
+  if (!navigator.clipboard || !navigator.clipboard.readText) {
+    openImportModal(isWizard);
+    return;
+  }
+
+  showToast('正在读取剪贴板智能识别…', 'info');
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text || !text.trim()) {
+      showToast('剪贴板为空，已打开粘贴导入窗口', 'info');
+      openImportModal(isWizard);
+      return;
+    }
+
+    const parsed = parseOneClickConfig(text);
+    if (!parsed.ok) {
+      openImportModal(isWizard);
+      const txt = document.getElementById('importRawText');
+      if (txt) {
+        txt.value = text;
+        onImportInputChanged(text);
+      }
+      showToast('剪贴板未包含完整 Key，已粘贴至输入框供您查看', 'info');
+      return;
+    }
+
+    showToast(`⚡ 成功识别 [${parsed.provider_name}] 配置，正在测试并保存…`, 'info');
+    const res = await api('/api/settings/import_key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        raw_text: text,
+        base_url: parsed.base_url,
+        api_key: parsed.api_key,
+        model: parsed.model
+      })
+    });
+
+    if (res && res.ok) {
+      showToast(`🎉 剪贴板一键导入成功！已接入 [${res.provider_name}]${res.ping_ok ? ' (' + res.latency_ms + 'ms)' : ''}`, 'success');
+
+      if (isWizard) {
+        const inKey = document.getElementById('wizApiKey');
+        const inBase = document.getElementById('wizBaseUrl');
+        const inModel = document.getElementById('wizModelName');
+        const sel = document.getElementById('wizProviderSelect');
+        if (inKey) inKey.value = parsed.api_key;
+        if (inBase) inBase.value = res.base_url;
+        if (inModel) inModel.value = res.model;
+        if (sel && sel.querySelector(`option[value="${res.provider}"]`)) sel.value = res.provider;
+        const testRes = document.getElementById('wizTestResult');
+        if (testRes) {
+          testRes.style.display = 'block';
+          testRes.style.color = res.ping_ok ? '#10b981' : '#f59e0b';
+          testRes.textContent = res.ping_ok ? `🟢 连通测试成功！响应延迟: ${res.latency_ms}ms` : `⚠️ 配置已保存: ${res.ping_error || '连通超时'}`;
+        }
+      } else {
+        const inKey = document.getElementById('inKey');
+        const inBase = document.getElementById('inBase');
+        const inModel = document.getElementById('inModel');
+        if (inKey) inKey.value = parsed.api_key;
+        if (inBase) inBase.value = res.base_url;
+        if (inModel) inModel.value = res.model;
+        selectModalLLMProvider(res.provider);
+        const resLLM = document.getElementById('resLLM');
+        if (resLLM) {
+          resLLM.style.color = res.ping_ok ? 'var(--ok)' : 'var(--warn)';
+          resLLM.textContent = res.ping_ok ? `🟢 已保存并连通 (${res.latency_ms}ms)` : `⚠️ 已保存 (${res.ping_error || '超时'})`;
+        }
+      }
+      loadSettings();
+      load(true);
+    } else {
+      showToast('一键导入失败: ' + (res?.error || '未知错误'), 'error');
+      openImportModal(isWizard);
+    }
+  } catch (err) {
+    openImportModal(isWizard);
+  }
+}
+
+function selectModalLLMProvider(pid) {
+  const p = WIZ_PROVIDERS[pid] || WIZ_PROVIDERS.siliconflow;
+  document.querySelectorAll('#modalLLM .provider-pill').forEach(el => {
+    el.classList.toggle('active', el.id === `modalPill_${pid}`);
+  });
+  const inBase = document.getElementById('inBase');
+  const inModel = document.getElementById('inModel');
+  if (inBase) inBase.value = p.base_url;
+  if (inModel) inModel.value = p.model;
+  
+  const hName = document.getElementById('modalHelperName');
+  const hLink = document.getElementById('modalHelperLink');
+  const hSteps = document.getElementById('modalHelperSteps');
+  if (hName) hName.textContent = p.name;
+  if (hLink) {
+    if (p.key_url) {
+      hLink.href = p.key_url;
+      hLink.style.display = 'inline-block';
+    } else {
+      hLink.style.display = 'none';
+    }
+  }
+  if (hSteps) hSteps.innerHTML = p.steps;
+}
+
+function skipWizardKeyAndProceed() {
+  const inKey = document.getElementById('wizApiKey');
+  if (inKey) inKey.value = '';
+  switchWizardStep(3);
+}
+
+function onWizProviderChange(val) {
+  const p = WIZ_PROVIDERS[val] || WIZ_PROVIDERS.siliconflow;
+  const inBase = document.getElementById('wizBaseUrl');
+  const inModel = document.getElementById('wizModelName');
+  const tipEl = document.getElementById('wizProviderTip');
+  if (inBase) inBase.value = p.base_url;
+  if (inModel) inModel.value = p.model;
+  if (tipEl) tipEl.textContent = p.tip;
+  
+  const hName = document.getElementById('wizHelperName');
+  const hLink = document.getElementById('wizHelperLink');
+  const hSteps = document.getElementById('wizHelperSteps');
+  if (hName) hName.textContent = p.name;
+  if (hLink) {
+    if (p.key_url) {
+      hLink.href = p.key_url;
+      hLink.style.display = 'inline-block';
+    } else {
+      hLink.style.display = 'none';
+    }
+  }
+  if (hSteps) hSteps.innerHTML = p.steps;
+  const resEl = document.getElementById('wizTestResult');
+  if (resEl) resEl.style.display = 'none';
+}
+
+async function testWizLLM() {
+  const base = (document.getElementById('wizBaseUrl')?.value || '').trim();
+  const model = (document.getElementById('wizModelName')?.value || '').trim();
+  const key = (document.getElementById('wizApiKey')?.value || '').trim();
+  const resEl = document.getElementById('wizTestResult');
+  if (!resEl) return;
+  resEl.style.display = 'block';
+  if (!base || !key) {
+    resEl.style.color = '#ef4444';
+    resEl.textContent = '❌ 请先填写 Base URL 和 API Key！';
+    return;
+  }
+  resEl.style.color = '#2563eb';
+  resEl.textContent = '⏳ 正在进行连通性 Ping 测试…';
+  try {
+    const d = await api('/api/settings/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base_url: base, model: model, api_key: key })
+    });
+    if (d && d.ok) {
+      resEl.style.color = '#10b981';
+      resEl.textContent = `🟢 连通测试成功！响应延迟: ${d.latency_ms}ms`;
+    } else {
+      resEl.style.color = '#ef4444';
+      resEl.textContent = `❌ 连接失败: ${d?.error || '无法连通接口'}`;
+    }
+  } catch (e) {
+    resEl.style.color = '#ef4444';
+    resEl.textContent = '❌ 测试异常: ' + e.message;
+  }
+}
+
+function updateWizardSummary() {
+  const presetNames = {
+    ai_pm: '🤖 AI / 智能体产品经理',
+    tech_dev: '💻 技术研发 / 软件工程',
+    sales_bd: '🤝 商务销售 / BD拓展',
+    general_ops: '📈 通用运营 / 综合职能'
+  };
+  const sumPreset = document.getElementById('wizSummaryPreset');
+  const sumCities = document.getElementById('wizSummaryCities');
+  const sumLLM = document.getElementById('wizSummaryLLM');
+  const sumKey = document.getElementById('wizSummaryKeyStatus');
+  if (sumPreset) sumPreset.textContent = presetNames[selectedWizPreset] || selectedWizPreset;
+  if (sumCities) sumCities.textContent = selectedWizCities.length ? selectedWizCities.join('、') : '沿用全国默认';
+  const base = document.getElementById('wizBaseUrl')?.value || '';
+  const model = document.getElementById('wizModelName')?.value || '';
+  if (sumLLM) sumLLM.textContent = `${base} (${model})`;
+  const key = document.getElementById('wizApiKey')?.value || '';
+  if (sumKey) {
+    if (key.trim()) {
+      sumKey.textContent = '🟢 已输入 API Key（自动由 DPAPI 加密落盘）';
+      sumKey.style.color = '#10b981';
+    } else {
+      sumKey.textContent = '⚪ 暂未输入 Key（系统将运行在零 Key 规则筛选展示模式）';
+      sumKey.style.color = '#f59e0b';
+    }
+  }
+}
+
+async function submitWizard() {
+  const base = (document.getElementById('wizBaseUrl')?.value || '').trim();
+  const model = (document.getElementById('wizModelName')?.value || '').trim();
+  const key = (document.getElementById('wizApiKey')?.value || '').trim();
+  const provider = document.getElementById('wizProviderSelect')?.value || 'siliconflow';
+
+  const payload = {
+    preset: selectedWizPreset,
+    cities: selectedWizCities,
+    llm: {
+      provider: provider,
+      base_url: base,
+      model: model,
+      api_key: key
+    }
+  };
+
+  try {
+    const res = await api('/api/wizard/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res && res.ok) {
+      showToast('🎉 开箱向导配置成功并已安全生效！', 'ok');
+      closeSettingModal('modalWizard');
+      await loadSettings();
+      await load(true);
+    } else {
+      showToast('❌ 保存向导失败: ' + (res?.message || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('❌ 提交异常: ' + e.message, 'error');
+  }
+}
+
 function scrollSettingsSection(sec) {
   const pills = document.querySelectorAll('#settingsSubNav .sub-nav-pill');
   if (pills && pills.length) {
@@ -6481,8 +7953,18 @@ async function loadSettings() {
   const s = await api('/api/settings');
   window.__cachedSettings = s;
   document.getElementById('llmMeta').textContent = `当前Key：${s.llm.api_key_masked || '未配置'}（来源：${s.llm.key_source}）`;
-  document.getElementById('inBase').value = s.llm.base_url || '';
-  document.getElementById('inModel').value = s.llm.model || '';
+  const curBase = (s.llm.base_url || '').toLowerCase();
+  if (curBase.includes('askdiandian') || curBase.includes('dots')) {
+    selectModalLLMProvider('dots3');
+  } else if (curBase.includes('bigmodel')) {
+    selectModalLLMProvider('zhipu');
+  } else if (curBase.includes('deepseek')) {
+    selectModalLLMProvider('deepseek');
+  } else {
+    selectModalLLMProvider('siliconflow');
+  }
+  if (s.llm.base_url) document.getElementById('inBase').value = s.llm.base_url;
+  if (s.llm.model) document.getElementById('inModel').value = s.llm.model;
   document.getElementById('inLLMMatch').checked = s.llm_match.enabled;
   document.getElementById('inWantJobs').value = (s.prefs.want_jobs || []).join('，');
   document.getElementById('inAvoidJobs').value = (s.prefs.avoid_jobs || []).join('，');
@@ -6493,6 +7975,7 @@ async function loadSettings() {
   initCityTree();
   renderCitySelectedChips();
   if (document.getElementById('inJobMode')) document.getElementById('inJobMode').value = s.job_mode || 'intern';
+  if (document.getElementById('inPreset')) document.getElementById('inPreset').value = s.preset || 'ai_pm';
 
   const priv = s.privacy_policy || {};
   if (document.getElementById('inPolicyWechat')) document.getElementById('inPolicyWechat').value = priv.exchange_wechat || 'auto';
@@ -6633,6 +8116,29 @@ async function loadSettings() {
   }
   if (hSchool && pData.school) hSchool.textContent = pData.school;
   if (hMajor && pData.major) hMajor.textContent = pData.major;
+
+  // 更新预设标签徽标
+  const hPreset = document.getElementById('hubBadgePreset');
+  if (hPreset) {
+    const presetNames = {
+      ai_pm: '🤖 AI/产品模版',
+      tech_dev: '💻 技术研发模版',
+      sales_bd: '🤝 商务销售模版',
+      general_ops: '📈 通用职能模版'
+    };
+    hPreset.textContent = presetNames[s.preset] || (s.preset ? `模版: ${s.preset}` : '🤖 AI/产品模版');
+  }
+
+  // 首次访问或未配 Key 时自动唤起 3 步开箱向导
+  try {
+    const wiz = await api('/api/wizard/status');
+    if (wiz && wiz.should_prompt && !window.__wizardPrompted) {
+      window.__wizardPrompted = true;
+      setTimeout(() => openWizardModal(), 300);
+    }
+  } catch (e) {
+    console.debug('Wizard status check error:', e);
+  }
 }
 
 async function saveSettings() {
@@ -6678,7 +8184,8 @@ async function savePrefs() {
     avoid_jobs: document.getElementById('inAvoidJobs').value,
     want_cities: wantCitiesVal,
     avoid_cities: avoidCitiesVal,
-    job_mode: document.getElementById('inJobMode') ? document.getElementById('inJobMode').value : 'intern'
+    job_mode: document.getElementById('inJobMode') ? document.getElementById('inJobMode').value : 'intern',
+    preset: document.getElementById('inPreset') ? document.getElementById('inPreset').value : 'ai_pm'
   };
   const d = await api('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (el) {
@@ -7633,7 +9140,7 @@ function copyCurrentPromptInspector() {
   });
 }
 
-// 绑定输入框键盘回车事件
+// 绑定输入框键盘回车与外部一键导入链接侦听
 document.addEventListener('DOMContentLoaded', () => {
   const msgInput = document.getElementById('pgMsg');
   if (msgInput) {
@@ -7644,6 +9151,30 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // 检查 URL 是否携带一键导入参数 (支持 URL Scheme / 外部快速跳转一键导入)
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const impKey = urlParams.get('import_key') || urlParams.get('api_key');
+    const impBase = urlParams.get('import_base') || urlParams.get('base_url');
+    const impModel = urlParams.get('import_model') || urlParams.get('model');
+    const impConfig = urlParams.get('import_config');
+    if (impKey || impConfig) {
+      setTimeout(() => {
+        const textToParse = impConfig || `${impBase || ''} ${impKey} ${impModel || ''}`;
+        const parsed = parseOneClickConfig(textToParse);
+        if (parsed.ok) {
+          openImportModal(false);
+          const txt = document.getElementById('importRawText');
+          if (txt) {
+            txt.value = textToParse;
+            onImportInputChanged(textToParse);
+          }
+          showToast(`检测到外部一键导入链接: [${parsed.provider_name}]，已为您自动就绪！`, 'info');
+        }
+      }, 500);
+    }
+  } catch (e) {}
 });
 
 function copyCleanedReply() {
@@ -8428,10 +9959,56 @@ async def api_auth_clear_key(request: Request, token: str = ""):
     return {"ok": True, "message": f"已成功清除 {key_name}"}
 
 
+def _launch_browser_when_ready(port: int, token: str):
+    """在后台轮询直至本地端口就绪后，再自动以独立 App 模式唤醒桌面端浏览器（杜绝 ERR_CONNECTION_REFUSED）。"""
+    import time
+    import urllib.request
+    import subprocess
+    import webbrowser
+    url = f"http://127.0.0.1:{port}/?token={token}"
+    # 等待本地 Web 服务真正响应 200，杜绝 ERR_CONNECTION_REFUSED
+    for _ in range(30):
+        time.sleep(0.3)
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/wizard/status", timeout=0.8) as resp:
+                if resp.status == 200:
+                    break
+        except Exception:
+            pass
+
+    # 浏览器探测顺序与 qr_login.py 保持 100% 绝对一致：Chrome 优先，Edge 兜底
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe"),
+        r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        os.path.expanduser("~/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            try:
+                subprocess.Popen([p, f"--app={url}"])
+                return
+            except Exception:
+                pass
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+
+
 def main():
     parser = argparse.ArgumentParser(description="BOSS直聘求职守护审批台（Web工作台）")
     parser.add_argument("--host", default="127.0.0.1", help="绑定地址（默认 127.0.0.1 本地回环安全监听；局域网协作需显式指定 0.0.0.0）")
     parser.add_argument("--port", type=int, default=8788)
+    parser.add_argument("--auto-open", dest="auto_open", action="store_true", default=True, help="服务就绪后自动唤醒桌面端浏览器窗口")
+    parser.add_argument("--no-open", dest="auto_open", action="store_false", help="禁止自动唤醒浏览器窗口")
     args = parser.parse_args()
     import uvicorn
     cfg = cfgmod.load()
@@ -8445,6 +10022,9 @@ def main():
             print("  ⚠️  [安全告警] 远程网络开启但仍在使用默认弱令牌 'boss-apply'！")
             print("     建议在 config.local.json 的 web.token 中设置复杂密钥。")
     print("=" * 62)
+    if args.auto_open:
+        import threading
+        threading.Thread(target=_launch_browser_when_ready, args=(args.port, token), daemon=True).start()
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
