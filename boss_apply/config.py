@@ -66,6 +66,9 @@ def load():
         for k, v in DEFAULT_LLM.items():
             cfg["llm"].setdefault(k, v)
 
+    if "preset" not in cfg:
+        cfg["preset"] = "ai_pm"
+
     # 敏感值优先级：DPAPI secrets.json（Web 端保存，加密落盘）
     # > config.local.json > 环境变量。仅覆盖已存在的键路径，不改变其余结构。
     try:

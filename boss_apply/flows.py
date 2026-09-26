@@ -26,7 +26,14 @@ def _prefs(cfg):
 
 def effective_keywords(cfg):
     """生效扫描关键词：偏好向往岗位非空则替换默认词表（留空=沿用现有词表=LLM/系统默认决断）。"""
-    return _prefs(cfg)["want_jobs"] or list(cfg.get("keywords") or [])
+    want = _prefs(cfg)["want_jobs"]
+    if want:
+        return want
+    try:
+        from . import presets
+        return presets.resolve_keywords(cfg)
+    except Exception:
+        return list(cfg.get("keywords") or [])
 
 
 def effective_cities(cfg):

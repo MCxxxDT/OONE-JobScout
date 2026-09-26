@@ -277,6 +277,20 @@ def detect_privacy_leak(text: str, cfg: Optional[dict] = None, profile: Optional
     return False, ""
 
 
+def normalize_base_url(url: str) -> str:
+    """智能纠错常见大模型服务商 Base URL，防止小白漏填 /v1 或协议前缀导致 404。"""
+    u = (url or "").strip().rstrip("/")
+    if not u:
+        return ""
+    if not u.startswith("http://") and not u.startswith("https://"):
+        u = "https://" + u
+    if ("askdiandian.com" in u or "api.siliconflow.cn" in u or "api.deepseek.com" in u) and not u.endswith("/v1") and not u.endswith("/chat/completions"):
+        return u + "/v1"
+    if "open.bigmodel.cn" in u and not u.endswith("/api/paas/v4") and not u.endswith("/chat/completions"):
+        return u + "/api/paas/v4"
+    return u
+
+
 class AIReplyEngine:
     """纯 Agent / 大模型驱动的会话决策与回复生成引擎（彻底废除确定性模板降级）。"""
 
@@ -298,14 +312,23 @@ class AIReplyEngine:
         llm_cfg = self.cfg.get("llm") or {}
         if llm_cfg.get("api_key"):
             self.openai_key = llm_cfg["api_key"]
-            self.openai_base = llm_cfg.get("base_url") or "https://api.deepseek.com/v1"
+            self.openai_base = normalize_base_url(llm_cfg.get("base_url") or "https://api.deepseek.com/v1")
             self.llm_model = llm_cfg.get("model") or "deepseek-chat"
             self.openrouter_key = llm_cfg.get("openrouter_key") or ""
         else:
             self.openrouter_key = (llm_cfg.get("openrouter_key") or "").strip() or os.getenv("OPENROUTER_API_KEY") or ""
             self.openai_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
-            self.openai_base = llm_cfg.get("base_url") or os.getenv("OPENAI_BASE_URL") or "https://api.deepseek.com/v1"
+            self.openai_base = normalize_base_url(llm_cfg.get("base_url") or os.getenv("OPENAI_BASE_URL") or "https://api.deepseek.com/v1")
             self.llm_model = llm_cfg.get("model") or os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "deepseek-chat"
+
+    def _get_stance_desc(self) -> str:
+        """根据当前生效预设返回沟通心法描述。"""
+        try:
+            from . import presets
+            active_p = presets.get_preset(self.cfg.get("preset"))
+            return active_p.get("stance_intro") or "结合JD研判，核心岗提升热情，杂役销售岗点到为止"
+        except Exception:
+            return "结合JD研判，核心岗提升热情，杂役销售岗点到为止"
 
     def build_agent_prompt(self, conv: dict) -> str:
         """根据当前会话构建供 Agent/大模型思考的标准化决策 Prompt 与心法。
@@ -435,7 +458,7 @@ class AIReplyEngine:
             f"3. 【闭合性问题直球回答与严格收敛】：遇到诸如“能否线下面试？”、“早九晚七能接受吗？”、“需要长期驻场你能接受吗？”、“目前在职还是离职？”等闭合提问，必须在 15-25 字内基于候选人实际情况直截了当明确回答（结合候选人画像中常驻地/到岗时间，能即直言能，不能或需协调亦如实简练告知），绝不允许顾左右而言他，严禁借题发挥推销自身优势或顺势反客为主，回答聚焦在问题本身直接收敛闭环；\n"
             f"4. 【问常驻地 / 地点】：结合候选人画像如实告知常驻【{cur_city}】，意向奔赴【{target_reg}】；初试可提议先通过线上高效推进；\n"
             f"5. 【问薪资 / 待遇】：说明希望能覆盖当地基础租房与生活开销（参考诉求：{self.profile.get('salary_requirement', '按企业标准与岗位价值面议')}），以业务和团队匹配为主；\n"
-            f"6. 【三不原则与见人下菜碟】：不承诺死时间、不拒绝机会、见人下菜碟（结合JD研判，核心岗提升热情，杂役销售岗点到为止；但注意闭合性提问的直接回答优先级高于热情度展开，严禁在闭合回答中画蛇添足推销；严禁泄露真实11位手机号、微信号）；\n"
+            f"6. 【三不原则与见人下菜碟】：不承诺死时间、不拒绝机会、见人下菜碟（{self._get_stance_desc()}；但注意闭合性提问的直接回答优先级高于热情度展开，严禁在闭合回答中画蛇添足推销；严禁泄露真实11位手机号、微信号）；\n"
             f"7. 【动作协同与多意图/复合问题处理规则】：\n"
             f"   - 【复合问题必须完整回应】：若 HR 在一条消息中提出了复合问题（例如既询问个人情况/人情关怀/生日/到岗时间/业务问题，又提出索要微信/简历/电话等），【绝对严禁】仅机械复读一句动作通知！必须【先真诚、得体、就事论事地回答 HR 提出的前半部分问题】（如对方询问生日入职蛋糕，结合候选人真实画像如实告知生日，并对入职蛋糕关怀礼貌致谢，例如“太贴心了谢谢公司关怀！”；询问到岗则告知到岗时间），【然后再自然告知已在平台发起相应动作】（如“已在平台向您发起交换微信申请，期待进一步交流”）；\n"
             f"   - 若对方仅单纯索要简历：action=\"send_resume\"，reply_text=\"已发您附件简历，请查收\"（若对方伴随提问，则先答复提问，再附带告知已发简历）；\n"
