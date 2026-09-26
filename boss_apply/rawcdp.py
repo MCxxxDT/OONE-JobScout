@@ -824,6 +824,10 @@ def set_win32_browser_visibility(port: int = 9335, visible: bool = None, mode: s
                 user32.ShowWindow(hwnd, 7)  # SW_SHOWMINNOACTIVE (7)
                 user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE (6)
             else:
+                rect = wintypes.RECT()
+                user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                if rect.left < -500 or rect.top < -500:
+                    user32.SetWindowPos(hwnd, 0, 100, 100, 1280, 800, 0x0040)  # SWP_SHOWWINDOW
                 user32.ShowWindow(hwnd, 9)  # SW_RESTORE (9)
                 try:
                     user32.SetForegroundWindow(hwnd)

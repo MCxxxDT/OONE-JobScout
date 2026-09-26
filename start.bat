@@ -102,17 +102,9 @@ if not exist "%~dp0config.local.json" (
     )
 )
 
-:: 5. 自动检测并拉起独立调试浏览器 (端口 9335)
-echo [浏览器] 正在自检与准备专属调试浏览器 (端口 9335)...
-"!PY_BIN!" -c "from boss_apply import qr_login; ok = qr_login.ensure_chrome_running(); print('[浏览器] ' + ('调试专用浏览器已就绪并在 9335 端口监听' if ok else '未能自动拉起浏览器，请确认是否已安装 Chrome/Edge 浏览器'))"
-
-:: 5.1 自动清理可能残留的 8788 端口孤儿进程，确保端口监听 100% 成功
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8788" ^| findstr "LISTENING"') do (
-    taskkill /f /pid %%a >nul 2>&1
-)
-
-:: 6. 启动 Web 控制台主服务 (后台将在端口就绪后自动以独立 App 模式唤醒桌面端浏览器，彻底杜绝拒绝连接)
+:: 5. 极速拉起人机协同运营中枢与隐形守护内核 [后台并发就绪，毫秒级唤醒工作台]
 echo [软件] 正在拉起人机协同运营中枢服务 (端口 8788)...
+echo [模式] BOSS 自动化内核将默认在后台隐形静默运行 [零打扰桌面]
 echo [访问] http://127.0.0.1:8788/?token=boss-apply
 echo.
 "!PY_BIN!" -m boss_apply.web_server --auto-open
