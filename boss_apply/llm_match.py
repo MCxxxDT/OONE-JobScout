@@ -123,9 +123,14 @@ def _call_once(batch, cfg, start_idx=0):
             "temperature": 0.3,
             "max_tokens": 8192,
         }
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + llm["api_key"],
+            "api-key": llm["api_key"],
+            "User-Agent": "boss-apply/1.0"
+        }
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
-                                     headers={"Content-Type": "application/json",
-                                              "Authorization": "Bearer " + llm["api_key"]})
+                                     headers=headers)
         with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         content = (data["choices"][0]["message"].get("content") or "").strip()
