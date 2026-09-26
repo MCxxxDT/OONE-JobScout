@@ -29,7 +29,7 @@ if not defined PY_BIN (
         mklink /J "%~dp0.venv" "%~dp0..\..\.venv" >nul 2>&1
         if exist "%~dp0.venv\Scripts\python.exe" (
             set "PY_BIN=%~dp0.venv\Scripts\python.exe"
-            echo [环境] 成功映射主仓库 .venv (零等待、免重新装包)
+            echo [环境] 成功映射主仓库 .venv [零等待、免重新装包]
         )
     )
 )
@@ -38,10 +38,10 @@ if not defined PY_BIN (
 if not defined PY_BIN (
     echo [初始化] 正在初始化项目运行环境...
     
-    :: 探测 uv (极速安装器)
+    REM 探测 uv (极速安装器)
     where uv >nul 2>&1
     if !errorlevel! equ 0 (
-        echo [初始化] 使用 uv 创建虚拟环境与安装依赖 (国内镜像加速)...
+        echo [初始化] 使用 uv 创建虚拟环境与安装依赖 [国内镜像加速]...
         uv venv .venv
         if exist "%~dp0.venv\Scripts\python.exe" (
             set "PY_BIN=%~dp0.venv\Scripts\python.exe"
@@ -49,11 +49,11 @@ if not defined PY_BIN (
         )
     )
 
-    :: 探测 python
+    REM 探测 python
     if not defined PY_BIN (
         where python >nul 2>&1
         if !errorlevel! equ 0 (
-            echo [初始化] 使用系统 Python 创建虚拟环境与安装依赖 (国内镜像加速)...
+            echo [初始化] 使用系统 Python 创建虚拟环境与安装依赖 [国内镜像加速]...
             python -m venv .venv
             if exist "%~dp0.venv\Scripts\python.exe" (
                 set "PY_BIN=%~dp0.venv\Scripts\python.exe"
@@ -62,11 +62,11 @@ if not defined PY_BIN (
         )
     )
 
-    :: 探测 py -3
+    REM 探测 py -3
     if not defined PY_BIN (
         where py >nul 2>&1
         if !errorlevel! equ 0 (
-            echo [初始化] 使用 py -3 创建虚拟环境与安装依赖 (国内镜像加速)...
+            echo [初始化] 使用 py -3 创建虚拟环境与安装依赖 [国内镜像加速]...
             py -3 -m venv .venv
             if exist "%~dp0.venv\Scripts\python.exe" (
                 set "PY_BIN=%~dp0.venv\Scripts\python.exe"
