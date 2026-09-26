@@ -611,6 +611,7 @@ class AIReplyEngine:
                 base = self.openai_base.rstrip("/")
                 url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
                 headers["Authorization"] = f"Bearer {self.openai_key}"
+                headers["api-key"] = self.openai_key
                 model = self.llm_model
 
             temp = round(random.uniform(0.72, 0.88), 2)
@@ -694,6 +695,7 @@ def generate_dynamic_greeting(cfg: dict, job: dict, profile: Optional[dict] = No
                 base = engine.openai_base.rstrip("/")
                 url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
                 headers["Authorization"] = f"Bearer {engine.openai_key}"
+                headers["api-key"] = engine.openai_key
                 model = engine.llm_model
 
             cur_city = prof.get("current_city") or "当地"

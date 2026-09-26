@@ -267,10 +267,10 @@ def parse_api_key_config(raw_text: str) -> dict:
             api_key = m_bearer.group(1).strip()
             format_type = "curl_or_header"
         else:
-            m_sk = re.search(r"\b(sk-[a-zA-Z0-9_\-\.]{15,})\b", t)
+            m_sk = re.search(r"\b((?:sk|ak)[-_][a-zA-Z0-9_\-\.]{15,})\b", t)
             if m_sk:
                 api_key = m_sk.group(1).strip()
-                format_type = "plain_text_sk"
+                format_type = "plain_text_key"
             else:
                 m_kv = re.search(r"(?:api_?key|token|secret|password|密钥|key)\s*[:=]\s*[\"']?([a-zA-Z0-9_\-\.]{15,})[\"']?", t, re.IGNORECASE)
                 if m_kv:
@@ -313,11 +313,11 @@ def parse_api_key_config(raw_text: str) -> dict:
         provider_name = provider_name or "智谱清言 (GLM-4-Flash)"
         base_url = base_url or "https://open.bigmodel.cn/api/paas/v4"
         model = model or "glm-4-flash"
-    elif "askdiandian" in lower_url or "dots" in lower_url:
+    elif "askdiandian" in lower_url or "dots" in lower_url or (not base_url and api_key.startswith("ak_") and len(api_key) == 32):
         provider_id = "dots3"
-        provider_name = provider_name or "小红书 Dots3"
+        provider_name = provider_name or "小红书 Dots3 (Dots Studio)"
         base_url = base_url or "https://note3-prev-api.askdiandian.com/v1"
-        model = model or "dots-3-note-preview"
+        model = model or "dots3-note-prev"
     elif "dashscope" in lower_url or "aliyun" in lower_url:
         provider_id = "dashscope"
         provider_name = provider_name or "阿里通义千问"
@@ -358,18 +358,39 @@ def _llm_ping(base_url, api_key, model):
     """极小请求测试连通性。返回 (ok, latency_ms, error)。"""
     import time as _t
     import urllib.request
+    import urllib.error
     try:
         t0 = _t.time()
         base = normalize_base_url(base_url)
         url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
         payload = {"model": model, "messages": [{"role": "user", "content": "hi"}],
                    "max_tokens": 10}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + api_key,
+            "api-key": api_key,
+            "User-Agent": "boss-apply/1.0"
+        }
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
-                                     headers={"Content-Type": "application/json",
-                                              "Authorization": "Bearer " + api_key})
+                                     headers=headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
             json.loads(resp.read().decode("utf-8"))
         return True, int((_t.time() - t0) * 1000), None
+    except urllib.error.HTTPError as e:
+        err_msg = ""
+        try:
+            body_text = e.read().decode("utf-8", errors="ignore")
+            body_json = json.loads(body_text)
+            err_msg = body_json.get("detail") or body_json.get("message")
+            if not err_msg and isinstance(body_json.get("error"), dict):
+                err_msg = body_json["error"].get("message")
+            elif not err_msg and isinstance(body_json.get("error"), str):
+                err_msg = body_json["error"]
+            if not err_msg:
+                err_msg = body_text[:120]
+        except Exception:
+            err_msg = str(e)
+        return False, 0, f"HTTP {e.code}: {err_msg}" if err_msg else str(e)[:150]
     except Exception as e:
         return False, 0, str(e)[:150]
 
@@ -4490,7 +4511,7 @@ PAGE = """<!DOCTYPE html>
             <option value="siliconflow">🎁 硅基流动 (SiliconFlow 国内直连 · 注册即送千万 Token · 推荐)</option>
             <option value="deepseek">🐳 DeepSeek 官方直连 (deepseek-chat · 极高性价比)</option>
             <option value="zhipu">🇨🇳 智谱清言 (GLM-4-Flash · 个人开发者永久免费)</option>
-            <option value="dots3">🔴 小红书 Dots3 (OpenRouter 免费通道 · 512K超长上下文)</option>
+            <option value="dots3">🔴 小红书 Dots3 (Dots Studio 官方直连 · 512K超长上下文)</option>
             <option value="dashscope">🏢 阿里通义千问 (DashScope · 百炼 Qwen-Plus)</option>
             <option value="moonshot">🌙 月之暗面 Kimi (Moonshot AI · 8K/32K长文本)</option>
             <option value="openrouter">🌐 OpenRouter (全球大模型聚合网关)</option>
@@ -7021,7 +7042,7 @@ const WIZ_PROVIDERS = {
   dots3: {
     name: '🔴 小红书 Dots3 (Dots Studio 官方通道)',
     base_url: 'https://note3-prev-api.askdiandian.com/v1',
-    model: 'dots-3-note-preview',
+    model: 'dots3-note-prev',
     key_url: 'https://dots.ai/platform/keys',
     tip: '小红书官方 AI 实验室开放平台，支持 Dots3 280B 模型，512K 超长上下文！',
     steps: '① 点击右上角蓝色按钮登录 Dots 开放平台；<br>② 在左侧导航栏点击「API Keys」，点击「创建 API Key」并复制；<br>③ 粘贴到下方输入框，点击测试即可！（无需阅读接口文档）'
@@ -7134,10 +7155,10 @@ function parseOneClickConfig(rawText) {
       api_key = mBearer[1].trim();
       format_type = 'curl_or_header';
     } else {
-      const mSk = t.match(/\\b(sk-[a-zA-Z0-9_\\-\\.]{15,})\\b/);
+      const mSk = t.match(/\\b((?:sk|ak)[-_][a-zA-Z0-9_\\-\\.]{15,})\\b/);
       if (mSk) {
         api_key = mSk[1].trim();
-        format_type = 'plain_text_sk';
+        format_type = 'plain_text_key';
       } else {
         const mKv = t.match(/(?:api_?key|token|secret|password|密钥|key)\\s*[:=]\\s*["']?([a-zA-Z0-9_\\-\\.]{15,})["']?/i);
         if (mKv) {
@@ -7195,11 +7216,11 @@ function parseOneClickConfig(rawText) {
     base_url = base_url || 'https://open.bigmodel.cn/api/paas/v4';
     if (!base_url.includes('/api/paas/v4')) base_url = 'https://open.bigmodel.cn/api/paas/v4';
     model = model || 'glm-4-flash';
-  } else if (lowUrl.includes('askdiandian') || lowUrl.includes('dots')) {
+  } else if (lowUrl.includes('askdiandian') || lowUrl.includes('dots') || (!base_url && api_key.startsWith('ak_') && api_key.length === 32)) {
     provider_id = 'dots3';
-    provider_name = provider_name || '🔴 小红书 Dots3';
+    provider_name = provider_name || '🔴 小红书 Dots3 (Dots Studio)';
     base_url = base_url || 'https://note3-prev-api.askdiandian.com/v1';
-    model = model || 'dots-3-note-preview';
+    model = model || 'dots3-note-prev';
   } else if (lowUrl.includes('dashscope') || lowUrl.includes('aliyun')) {
     provider_id = 'dashscope';
     provider_name = provider_name || '🏢 阿里通义千问';
