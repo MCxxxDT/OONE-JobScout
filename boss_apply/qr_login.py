@@ -38,6 +38,13 @@ def ensure_chrome_running(cfg=None) -> bool:
 
     try:
         urlopen(cdp_http + "/json/version", timeout=1.5)
+        is_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
+        if is_silent:
+            try:
+                from boss_apply import rawcdp
+                rawcdp.set_win32_browser_visibility(port=9335, mode="hide")
+            except Exception:
+                pass
         return True
     except Exception:
         pass
@@ -93,6 +100,8 @@ def ensure_chrome_running(cfg=None) -> bool:
         window_arg,
         "https://www.zhipin.com/web/geek/jobs"
     ]
+    if is_silent:
+        cmd.append("--window-position=-3000,-3000")
 
     popen_kwargs = {
         "stdin": subprocess.DEVNULL,

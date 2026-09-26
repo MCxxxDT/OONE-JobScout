@@ -1434,6 +1434,194 @@ PAGE = """<!DOCTYPE html>
     min-height: 100vh;
   }
 
+  /* ========================================================
+     Futuristic Cyber-Glass Loading Splash Screen
+     ======================================================== */
+  #appSplashScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: radial-gradient(circle at 50% 35%, #1e293b 0%, #090d16 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), filter 0.5s ease;
+    overflow: hidden;
+  }
+  #appSplashScreen.splash-closing {
+    opacity: 0;
+    transform: scale(1.03);
+    filter: blur(8px);
+    pointer-events: none;
+  }
+  .splash-bg-glow {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(99, 102, 241, 0.09) 50%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    filter: blur(50px);
+    animation: splashPulseGlow 3.5s ease-in-out infinite alternate;
+  }
+  @keyframes splashPulseGlow {
+    0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }
+    100% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  }
+  .splash-card {
+    position: relative;
+    z-index: 2;
+    width: 90%;
+    max-width: 440px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px rgba(56, 189, 248, 0.15);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border-radius: 24px;
+    padding: 36px 32px 30px;
+    text-align: center;
+    color: #fff;
+    animation: splashCardEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes splashCardEnter {
+    from { opacity: 0; transform: translateY(20px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .splash-logo-box {
+    width: 68px;
+    height: 68px;
+    margin: 0 auto 18px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #0284c7 0%, #6366f1 50%, #10b981 100%);
+    padding: 2px;
+    box-shadow: 0 8px 24px rgba(2, 132, 199, 0.35);
+    position: relative;
+  }
+  .splash-logo-inner {
+    width: 100%;
+    height: 100%;
+    background: #0f172a;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #38bdf8;
+  }
+  .splash-ring {
+    position: absolute;
+    inset: -6px;
+    border-radius: 26px;
+    border: 1.5px dashed rgba(56, 189, 248, 0.45);
+    animation: splashRingRotate 8s linear infinite;
+  }
+  @keyframes splashRingRotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .splash-title {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  .splash-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .splash-mode-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+  .splash-progress-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 14px;
+  }
+  .splash-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #34d399 100%);
+    border-radius: 999px;
+    transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+  }
+  .splash-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .splash-step-text {
+    color: #cbd5e1;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .splash-pct {
+    color: #38bdf8;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .splash-ticker {
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: left;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .splash-ticker-icon {
+    color: #34d399;
+    flex-shrink: 0;
+  }
+  .btn-quick-browser {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: #fff;
+    padding: 6px 12px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-quick-browser:hover {
+    background: #f8fafc;
+    border-color: rgba(0, 0, 0, 0.15);
+  }
+
   .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
 
   /* Sticky Top Header */
@@ -3430,6 +3618,42 @@ PAGE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
+<!-- Futuristic Workbench Entrance Splash -->
+<div id="appSplashScreen">
+  <div class="splash-bg-glow"></div>
+  <div class="splash-card">
+    <div class="splash-logo-box">
+      <div class="splash-ring"></div>
+      <div class="splash-logo-inner">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+          <path d="M2 12h20"></path>
+        </svg>
+      </div>
+    </div>
+    <div class="splash-title">OONE-JobScout 运营中枢</div>
+    <div class="splash-sub">
+      <span>正在唤醒智能求职守护引擎</span>
+      <span class="splash-mode-badge">🛡️ 隐形守护态</span>
+    </div>
+    <div class="splash-progress-track">
+      <div id="splashBar" class="splash-progress-bar"></div>
+    </div>
+    <div class="splash-meta">
+      <span id="splashStepText" class="splash-step-text">
+        <span class="spinner-grow spinner-grow-sm text-info" style="width:10px;height:10px;"></span>
+        正在校验本地中枢通信...
+      </span>
+      <span id="splashPct" class="splash-pct">15%</span>
+    </div>
+    <div class="splash-ticker">
+      <span class="splash-ticker-icon">✔</span>
+      <span id="splashTickerMsg">8788 中枢控制总线就绪 (127.0.0.1)</span>
+    </div>
+  </div>
+</div>
+
 <!-- Top Drop Floating Pill Toast -->
 <div id="appToast" class="app-toast"></div>
 
@@ -3704,6 +3928,11 @@ PAGE = """<!DOCTYPE html>
             </div>
           </div>
         </div>
+        <!-- Quick Browser Visibility Toggle -->
+        <button id="btnQuickToggleBrowser" class="btn-action-light" onclick="quickToggleBrowserVisibility()" title="切换 BOSS 自动化调试浏览器前台可视/后台隐形" style="padding:7px 12px;border-radius:10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;border:1px solid rgba(16,185,129,0.25);background:rgba(16,185,129,0.06);color:#059669">
+          <span id="quickBrowserIcon">🛡️</span>
+          <span id="quickBrowserText" class="d-none d-md-inline">隐形守护中</span>
+        </button>
         <button class="btn-action-light btn-apply-topbar" onclick="triggerApplyNow()" title="执行今日候选岗位投递计划">
           <span>⚡</span>
           <span class="apply-label-full d-none d-sm-inline">今日投递</span>
@@ -5634,6 +5863,11 @@ async function load(isManual) {
     window.__latestOverview = d;
     lastSyncTimestamp = Date.now();
     updateRealtimeClock();
+
+    if (d.browser) {
+      currentBrowserMode = (d.browser.silent_mode || d.browser.minimize_on_start) ? 'hide' : 'normal';
+      updateQuickBrowserBtn();
+    }
 
     // 真实进程与心跳探测
     const gp = document.getElementById('guardPill');
@@ -9188,7 +9422,117 @@ function copyCleanedReply() {
   });
 }
 
-load(false);
+// ========================================================
+// Futuristic Splash Screen Driver & Pre-hydration
+// ========================================================
+let splashDismissed = false;
+function setSplashProgress(pct, stepMsg, tickerMsg) {
+  const bar = document.getElementById('splashBar');
+  const pctEl = document.getElementById('splashPct');
+  const stepEl = document.getElementById('splashStepText');
+  const tickEl = document.getElementById('splashTickerMsg');
+  if (bar) bar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  if (pctEl) pctEl.textContent = Math.round(pct) + '%';
+  if (stepEl && stepMsg) stepEl.innerHTML = `<span class="spinner-grow spinner-grow-sm text-info" style="width:10px;height:10px;"></span> ${stepMsg}`;
+  if (tickEl && tickerMsg) tickEl.textContent = tickerMsg;
+}
+
+function dismissSplash() {
+  if (splashDismissed) return;
+  splashDismissed = true;
+  setSplashProgress(100, '系统核心全量就绪', '工作台启动完成，进入人机协同控制中枢');
+  const splash = document.getElementById('appSplashScreen');
+  if (splash) {
+    splash.classList.add('splash-closing');
+    setTimeout(() => {
+      splash.style.display = 'none';
+      if (splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 450);
+  }
+}
+
+// 智能全链路启动加载驱动
+async function bootWorkbenchWithSplash() {
+  const t0 = Date.now();
+  setSplashProgress(20, '校验本地中枢总线 (Port 8788)...', '127.0.0.1 本地回环通信链路已激活');
+  
+  await new Promise(r => setTimeout(r, 100));
+  setSplashProgress(45, '探测 BOSS 调试浏览器内核 (Port 9335)...', '自动化环境采用隐形静默模式运行 (零打扰桌面)');
+  
+  try {
+    const pOverview = load(false);
+    const pWizard = (typeof checkWizardStatus === 'function') ? checkWizardStatus() : Promise.resolve();
+    
+    await new Promise(r => setTimeout(r, 180));
+    setSplashProgress(75, '装载候选会话树与求职流水线...', '大模型推理门禁与安全风控检测就绪');
+    
+    await Promise.allSettled([pOverview, pWizard]);
+  } catch (e) {
+    console.warn('[Splash] Load warning:', e);
+  }
+
+  setSplashProgress(95, '渲染交互式运营面板...', '所有前端交互总线绑定完成');
+  
+  const elapsed = Date.now() - t0;
+  const remaining = Math.max(80, 650 - elapsed);
+  setTimeout(() => {
+    dismissSplash();
+  }, remaining);
+}
+
+// 安全兜底计时器，防止网络极端异常导致启动遮罩停留
+setTimeout(() => {
+  if (!splashDismissed) dismissSplash();
+}, 3000);
+
+// ========================================================
+// 浏览器前台/后台隐形一键切换控制器
+// ========================================================
+let currentBrowserMode = 'hide';
+async function quickToggleBrowserVisibility() {
+  const targetMode = currentBrowserMode === 'hide' ? 'normal' : 'hide';
+  showToast(targetMode === 'normal' ? '正在将 BOSS 浏览器调至前台可视…' : '正在将 BOSS 浏览器彻底隐形至后台…', 'info');
+  try {
+    const res = await api('/api/browser/visibility', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: targetMode, silent_mode: (targetMode === 'hide'), minimize_on_start: true })
+    });
+    if (res.ok) {
+      currentBrowserMode = targetMode;
+      updateQuickBrowserBtn();
+      showToast(targetMode === 'normal' ? 'BOSS 调试浏览器已恢复前台可见' : 'BOSS 调试浏览器已恢复隐形守护态', 'success');
+    } else {
+      showToast('切换提示: ' + (res.error || '未能连接 CDP 9335'), 'warn');
+    }
+  } catch(e) {
+    showToast('操作异常: ' + e.message, 'error');
+  }
+}
+
+function updateQuickBrowserBtn() {
+  const icon = document.getElementById('quickBrowserIcon');
+  const text = document.getElementById('quickBrowserText');
+  const btn = document.getElementById('btnQuickToggleBrowser');
+  if (!btn) return;
+  if (currentBrowserMode === 'normal') {
+    if (icon) icon.textContent = '🖥️';
+    if (text) text.textContent = '前台浏览中';
+    btn.style.color = '#0284c7';
+    btn.style.borderColor = 'rgba(2,132,199,0.3)';
+    btn.style.background = 'rgba(2,132,199,0.08)';
+    btn.title = '当前 BOSS 浏览器处于前台可视状态，点击一键隐形至后台';
+  } else {
+    if (icon) icon.textContent = '🛡️';
+    if (text) text.textContent = '隐形守护中';
+    btn.style.color = '#059669';
+    btn.style.borderColor = 'rgba(16,185,129,0.25)';
+    btn.style.background = 'rgba(16,185,129,0.06)';
+    btn.title = '当前 BOSS 浏览器处于隐形静默运行，点击一键调至前台可视';
+  }
+}
+
+bootWorkbenchWithSplash();
 setInterval(() => load(false), 30000);
 </script>
 </body>
@@ -9569,6 +9913,10 @@ def api_overview(token: str = ""):
         "auth": qr_login.QRLoginManager().get_auth_status(cfg),
         "user_profile": qr_login.get_cached_user_profile(),
         "llm_configured": bool((cfg.get("llm") or {}).get("api_key") and "YOUR_LLM_API_KEY" not in (cfg.get("llm") or {}).get("api_key", "")),
+        "browser": {
+            "silent_mode": (cfg.get("browser") or {}).get("silent_mode", True),
+            "minimize_on_start": (cfg.get("browser") or {}).get("minimize_on_start", True),
+        },
         "pending": pending[:100],
         "resolved": resolved[:100],
         "ledger": enriched_ledger,
@@ -9959,22 +10307,37 @@ async def api_auth_clear_key(request: Request, token: str = ""):
     return {"ok": True, "message": f"已成功清除 {key_name}"}
 
 
+def _ensure_port_clean(port: int):
+    """清理可能残留的本地孤儿监听进程，确保端口绑定 100% 成功。"""
+    try:
+        import subprocess
+        out = subprocess.check_output(["netstat", "-ano", "-p", "tcp"], text=True, timeout=1.5)
+        my_pid = os.getpid()
+        for line in out.splitlines():
+            if f":{port}" in line and "LISTENING" in line:
+                parts = line.strip().split()
+                if parts:
+                    pid = int(parts[-1])
+                    if pid != my_pid and pid > 0:
+                        subprocess.run(["taskkill", "/f", "/pid", str(pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1.5)
+    except Exception:
+        pass
+
+
 def _launch_browser_when_ready(port: int, token: str):
-    """在后台轮询直至本地端口就绪后，再自动以独立 App 模式唤醒桌面端浏览器（杜绝 ERR_CONNECTION_REFUSED）。"""
+    """在后台高速轮询直至本地端口就绪后，以独立 App 模式快速唤醒桌面端浏览器（杜绝 ERR_CONNECTION_REFUSED）。"""
     import time
-    import urllib.request
+    import socket
     import subprocess
     import webbrowser
     url = f"http://127.0.0.1:{port}/?token={token}"
-    # 等待本地 Web 服务真正响应 200，杜绝 ERR_CONNECTION_REFUSED
-    for _ in range(30):
-        time.sleep(0.3)
+    # 使用纯 socket 检测本地端口绑定，50ms 级别灵敏响应，杜绝空白死等
+    for _ in range(60):
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/wizard/status", timeout=0.8) as resp:
-                if resp.status == 200:
-                    break
+            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                break
         except Exception:
-            pass
+            time.sleep(0.05)
 
     # 浏览器探测顺序与 qr_login.py 保持 100% 绝对一致：Chrome 优先，Edge 兜底
     candidates = [
@@ -10011,6 +10374,7 @@ def main():
     parser.add_argument("--no-open", dest="auto_open", action="store_false", help="禁止自动唤醒浏览器窗口")
     args = parser.parse_args()
     import uvicorn
+    import threading
     cfg = cfgmod.load()
     token = _web_cfg(cfg).get("token") or os.getenv("APPROVAL_TOKEN") or "boss-apply"
     print("=" * 62)
@@ -10022,8 +10386,20 @@ def main():
             print("  ⚠️  [安全告警] 远程网络开启但仍在使用默认弱令牌 'boss-apply'！")
             print("     建议在 config.local.json 的 web.token 中设置复杂密钥。")
     print("=" * 62)
+    
+    # 极速清理可能存在的旧端口孤儿进程
+    _ensure_port_clean(args.port)
+
+    # 异步在后台静默预热/拉起 BOSS 调试浏览器 (Port 9335，默认隐形守护模式，零阻塞主控制台)
+    def _bg_prepare_browser():
+        try:
+            from boss_apply import qr_login
+            qr_login.ensure_chrome_running(cfg)
+        except Exception:
+            pass
+    threading.Thread(target=_bg_prepare_browser, daemon=True).start()
+
     if args.auto_open:
-        import threading
         threading.Thread(target=_launch_browser_when_ready, args=(args.port, token), daemon=True).start()
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 

@@ -29,7 +29,7 @@
     "apply_fetch_detail": true
   },
   "browser": {
-    "silent_mode": false,
-    "minimize_on_start": false
+    "silent_mode": true,
+    "minimize_on_start": true
   }
 }
