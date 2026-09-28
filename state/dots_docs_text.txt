@@ -1,0 +1,1167 @@
+API 开放平台
+API Keys
+用量管理
+接口文档
+反馈与建议
+登录
+用户协议
+隐私政策
+开放平台服务协议
+接口文档
+模型定价
+API 概述
+POST OpenAI 聊天补全
+POST Anthropic 消息
+模型定价
+Model Pricing
+
+USD / 1M tokens
+
+Model	Input /M	Output /M
+dots3-note-prev	$0.14	$0.28
+
+免费体验
+
+当前免费体验，暂不收费。恢复收费前将通过官网及 API 页面提前告知。
+
+Free trial
+
+The service is currently available free of charge. We will announce it in advance on the official website and API documentation before billing resumes.
+
+API 文档
+
+API 概述
+
+Dots API 开放平台提供兼容 OpenAI Chat Completions 与 Anthropic Messages 格式的模型调用接口。使用平台创建的 API Key 完成认证后，即可选择对应协议端点调用 Dots 模型。
+
+当前文档示例通过端点 https://note3-prev-api.askdiandian.com 访问，并在请求头中携带 API Key。
+
+基础 URL
+URL
+复制
+https://note3-prev-api.askdiandian.com
+认证与请求头
+
+每次请求都需要通过 api-key 请求头传入平台生成的 API Key。请勿将完整 Key 写入前端代码、URL、日志或公开仓库。
+
+请求头	必填	说明
+Content-Type	是	固定为 application/json。
+api-key	是	在 API Keys 页面创建并妥善保存的完整 API Key。
+默认限流值
+
+RPM 和 TPM 均按单个 API Key 分别计算。RPM 表示每分钟请求数，TPM 表示每分钟 Token 数。
+
+限流指标	默认值
+RPM（每分钟请求数）	60 次/分钟
+TPM（每分钟 Token 数）	1,500,000 Tokens/分钟
+POST
+/v1/chat/completions
+OpenAI 聊天补全
+
+根据输入的消息列表生成模型回复。当前 dots3-note-prev 的上下文窗口为 512K Token。接口支持文本、图片、视频和音频输入，以及工具调用、深度思考和流式响应。为便于直接对照输入与完整输出，以下示例统一设置 stream: false 并展示实际调用返回的 JSON；如需流式响应，可将 stream 设置为 true 并按 SSE 解析增量事件。
+
+请求参数
+参数	类型	必填	说明
+model	string	是	要调用的模型名称，当前示例为 dots3-note-prev。
+messages	array	是	按顺序排列的对话消息列表；content 可使用文本字符串或包含图片、视频、音频等内容块的数组。
+stream	boolean	否	是否以流式方式返回结果；本页示例统一关闭，设置为 true 时需按 SSE 解析增量事件。
+max_tokens	integer	否	本次生成允许使用的最大输出 Token 数，基础调用示例值为 1024；省略时由服务端默认策略决定。dots3-note-prev 的上下文窗口上限为 524,288 Token（512K），输入 Token 数与本参数设置的最大输出 Token 数之和不能超过该上限。
+stop	array	否	指定一个或多个停止序列；模型生成到任一停止序列时结束输出，响应内容不包含停止序列。请使用字符串数组传入。
+tools	array	否	当前请求可供模型选择的工具列表，具体结构见工具调用章节。
+tool_choice	string | object	否	控制模型是否以及如何选择工具，可使用 none、auto、required，或通过对象指定函数；使用前需先通过 tools 声明工具。
+chat_template_kwargs	object	否	模型生成行为的可选配置对象；可通过 enable_thinking 控制深度思考，具体说明见深度思考章节。
+基础调用
+
+最小文本对话示例，使用 system 和 user 消息发起请求，并一次性接收完整 JSON 响应。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是一个AI助手"
+      },
+      {
+        "role": "user",
+        "content": "你好，请介绍一下自己"
+      }
+    ],
+    "stream": false,
+    "max_tokens": 1024
+  }'
+响应示例
+
+以下完整 JSON 来自使用上述输入的实际接口调用。模型输出具有随机性，重新调用时内容、ID、时间和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "bb04ce6f700f4b748c5819aa4a5eed8c",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "你好！我是 dots，中文名叫点点，是小红书 Dots Studio 开发的 AI 大模型。在我们的设计理念里，“点”代表微小的个体。「点」也蕴含了 AI 串联每一个人、连接生活与知识的意味。我可以陪你聊天、帮你分析图片和文件，也能查资料、写代码。希望我能成为你身边自然、可靠又温暖的伙伴。",
+        "reasoning_content": "用户问了一个简单的自我介绍问题。我需要简洁自然地介绍自己—— dots，可以 Mention 我是小红书 Dots Studio 开发的 AI 大模型，名字的含义，以及我存在的定位。不要堆砌背景，保持温暖友好。用户没有指定语言，我会用中文回答。\n"
+      }
+    }
+  ],
+  "created": 1786528606,
+  "model": "dots3-note-prev",
+  "object": "chat.completion",
+  "system_fingerprint": "",
+  "usage": {
+    "prompt_tokens": 13,
+    "completion_tokens": 155,
+    "total_tokens": 168
+  }
+}
+图片输入
+
+将消息 content 改为内容数组即可同时传入文本和图片。示例使用可公开访问的真实图片 URL，实际接入时请替换为自己的图片地址。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "我是你的生活助手。"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "请描述这张图片。"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "https://picasso-static.xiaohongshu.com/fe-platform/e6d7a4f5dd20a3574caaa72b2b68217bc2e5e2e7.png",
+              "detail": "medium"
+            }
+          }
+        ]
+      }
+    ],
+    "stream": false,
+    "max_tokens": 1024,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  }'
+响应示例
+
+以下完整 JSON 来自使用上述图片输入的实际接口调用。模型输出具有随机性，重新调用时内容、ID、时间和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "b412073c0a5d46a1bd3a46e0afd17275",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "这是一张风格可爱、简约的卡通角色插图。以下是对该图片的详细描述：\n\n### **整体形象**\n图中的主体是一个拟人化的卡通角色，外形圆润，类似一个倒三角形或一颗饱满的种子/果实。它具有典型的 **Kawaii（可爱）** 风格，线条简单、色彩柔和。\n\n### **头部与面部特征**\n*   **脸型与肤色**：脸部呈淡粉色（或肉色），轮廓圆滑，顶部稍微向右上方隆起。\n*   **眼睛**：两只黑色的大圆点眼睛，显得十分无辜和有神。\n*   **眉毛**：眼睛上方有两个黑色的倒“V”形（或拱形）细眉毛，微微弯曲，透露出喜悦和温和的神情。\n*   **嘴巴**：位于两只眼睛中间下方，是一个小小的黑色弧线，呈现出甜美的微笑。\n*   **腮红**：脸颊两侧各有一个淡粉红色的圆形腮红，增强了角色的可爱感与红润气色。\n\n### **底部与装饰**\n*   **红色底座/叶子**：角色的下半部分被一层鲜红色的弧形区域包裹，像是一片红色的叶子、果肉，或者是一件红色的小衣服，边缘有黑色的描边。\n*   **头顶的绿叶**：在角色头顶偏右的位置，长着一片心形的绿色小叶子（或芽），叶尖朝上，为整体造型增添了一抹生机勃勃的绿色，显得清新自然。\n\n### **色彩与风格**\n*   **色彩搭配**：主要由淡粉、鲜红、翠绿和黑色（五官及轮廓线）组成，色彩对比鲜明但柔和。\n*   **线条**：角色有粗细均匀的黑色外轮廓线，使形象更加立体和突出。背景为纯黑色（或透明底），使角色主体非常醒目。"
+      }
+    }
+  ],
+  "created": 1786528610,
+  "model": "dots3-note-prev",
+  "object": "chat.completion",
+  "system_fingerprint": "",
+  "usage": {
+    "prompt_tokens": 278,
+    "completion_tokens": 400,
+    "total_tokens": 678
+  }
+}
+相关参数
+参数	类型	必填	说明
+messages[].content	array	是	多模态内容数组，按输入顺序包含文本或图片内容块。
+content[].type	string	是	内容块类型；文本使用 text，图片使用 image_url。
+content[].text	string	文本块必填	type 为 text 时的文本内容。
+content[].image_url.url	string	图片块必填	模型服务可以访问的图片 URL。
+content[].image_url.detail	string	否	图片处理的细节级别，当前示例使用 medium。
+chat_template_kwargs.enable_thinking	boolean	否	深度思考默认开启；当前图片示例设置为 false，表示手动关闭深度思考。
+视频输入
+
+在消息内容数组中使用 video_url 传入模型服务可访问的视频 URL，也可以同时加入图片和文本，让模型结合多种输入进行理解。视频输入的 TTFT（Time to First Token，首 Token 延迟）通常比纯文本输入更长，即使开启流式响应，首个增量事件前也可能需要等待较长时间，请为客户端预留充足的等待和超时时间。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "我是你的生活助手。"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "https://ci.xiaohongshu.com/1040g2sg31stpngqdlm6g5qbe3vodp7j07rja8mg?imageView2/2/w/1080/format/jpg"
+            }
+          },
+          {
+            "type": "video_url",
+            "video_url": {
+              "url": "https://avtshare01.rz.tu-ilmenau.de/avt-vqdb-uhd-1/test_1/segments/bigbuck_bunny_8bit_200kbps_360p_60.0fps_h264.mp4"
+            }
+          },
+          {
+            "type": "text",
+            "text": "图片和视频有什么关联？"
+          }
+        ]
+      }
+    ],
+    "stream": false,
+    "max_tokens": 4096,
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    }
+  }'
+响应示例
+
+以下完整 JSON 来自使用上述视频输入的实际接口调用。模型输出具有随机性，重新调用时内容、ID、时间和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "219ee70c91f44bf09ffd5871286a8cec",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "基于对图片的视觉元素和文字信息的分析，我们可以逐步推导图片与“视频”之间的关联：\n\n### 推理步骤：\n\n1. **识别核心视觉主体：**\n   * 图片左侧是一个绿色的 **Fujifilm SUPERIA X-TRA 400 胶卷（底片）罐**。\n   * 右侧和下方排版成了**电影胶片（胶卷）的多格画面排版**。\n   * 胶片格子里展示了小狗在草地上奔跑的静态卡通图片。\n\n2. **分析文字与概念隐喻：**\n   * 顶部文字写着：“📷 咔嚓 青春已存档”（Click, youth archived）。\n   * “咔嚓”代表拍照（捕捉静态瞬间），而“青春已存档”和胶卷的结合，暗示将零散的静态照片（青春瞬间）通过某种方式串联起来，像电影一样记录成一个连续的故事。\n\n3. **物理介质与技术属性的关联（胶卷与视频/电影）：**\n   * **胶片（Film）是视频/电影的物理载体：** 如图片中所示的 135 格式胶卷（如 FUJI RDP II），在传统电影工业中是专门用来拍摄电影、动态视频的介质。一格格静态的胶片图像，通过高速播放，就会产生动态的**视频/电影**效果。\n   * **视觉符号的象征意义：** 在社交媒体和视觉设计中，这种“胶卷排版”是一种经典的视觉符号，常用来象征“电影感”、“视频动态感”或“微电影式的纪录”。\n\n4. **图片的实际用途（功能性关联）：**\n   * 这张图片是一个典型的社交媒体排版模板（带有“取消”和“发表”按钮）。用户通过将多张静态照片套入胶卷模板，并配上“青春已存档”之类的文字，来模拟一种**“将静态照片制作成视频/电影预告片”**的视觉效果，赋予静态图片一种时间流逝、动态生长的叙事感。\n\n---\n\n### 结论（图片与视频的关联）：\n\n图片通过模拟**物理胶卷（电影胶片）的排版与形态**，将**静态的图片**（小狗奔跑的画面）包装成**动态视频（电影）的序列感**。它在概念上代表了**将零散的静态照片（“青春存档”）串联、剪辑成一部属于个人青春的“电影/视频”叙事**。胶卷是视频的物理载体，而该图片是用视觉形式表达了“用胶卷记录并生成动态视频/电影记忆”的创作意图。",
+        "reasoning_content": "Here's a thinking process that leads to the desired answer:\n\n1.  **Analyze the User's Request:**\n    *   **Question:** What is the relationship between the image and video? (图片和视频有什么关联？)\n    *   **Requirements:** Provide a detailed reasoning process first, then give the final answer.\n\n2.  **Analyze the Image provided:**\n    *   **Visual Elements:**\n        *   At the top, there is text: \"咔嚓 青春已存档\" (Click, youth has been archived/saved) with a camera emoji.\n        *   On the left, there is a roll of Fujifilm X-TRA 400 SUPERIA 35mm film canister (green color).\n        *   On the right and below, there is a layout mimicking a film strip (specifically a 35mm film strip layout).\n        *   Within the film frames, there are cartoon illustrations of puppies running in a grassy field under a blue sky with clouds.\n        *   The overall layout looks like a social media post interface (with \"取消\" / Cancel and \"发表\" / Post buttons at the top corners).\n\n3.  **Identify the Core Subject Matter (Image vs. Video):**\n    *   The core object shown is a **roll of photographic film (胶卷)**, specifically Fujifilm Superia 400.\n    *   The layout represents a \"film strip\" (电影胶片 / 胶卷底片) template.\n    *   **What is film used for?** Historically, and conceptually, film is used to capture a sequence of static images over time, which, when projected rapidly, creates the illusion of motion—i.e., **video / movies (电影/视频)**.\n    *   Specifically, 35mm film is the standard format for cinema (movies/video).\n    *   The visual metaphor here is \"archiving youth\" (青春已存档) using a film strip template, implying capturing moments of life, turning static memories into a \"movie\" of one's youth.\n    *   *Self-Correction/Refinement on the \"video\" aspect:* Is there an actual video in the prompt? No, only an image. But the image is a template designed to look like a film strip, often used as a cover, a transition, or a visual representation of \"capturing moments / creating a video / saving memories like a movie.\"\n\n4.  **Formulate the Relationship between \"Image\" (the picture shown) and \"Video\" (what the template represents / how they are used):**\n    *   **Visual Representation:** The image uses the visual format of a **film strip (胶片/电影胶片)** to display multiple frames.\n    *   **Functional/Conceptual Connection:**\n        *   **Film as the medium for video:** Physical film rolls (like the Fujifilm X-TRA 400 shown on the left) are the physical medium used to shoot movies/videos (specifically motion pictures).\n        *   **Metaphor for archiving memories:** The text says \"咔嚓 青春已存档\" (Click, youth archived). The image represents a visual way to \"store\" life's moments, like frames in a movie, turning static images (photos) into a continuous story (video/narrative of youth).\n        *   **Template Use:** This image is likely a template for a social media post (like Xiaohongshu, WeChat moments, etc.) where users upload a series of photos to mimic a film roll, creating a \"movie-like\" feel for their static photos.\n\n5.  **Draft the Reasoning Steps (推理步骤):**\n\n    *   *Step 1: Identify the main objects in the image.*\n        *   The image contains a green canister of Fujifilm SUPERIA X-TRA 400 film (36 exposures).\n        *   It features a multi-frame film strip layout showing repeated cartoon images of puppies running.\n    *   *Step 2: Interpret the textual cues.*\n        *   The text \"咔嚓 青春已存档\" (Click, youth archived) alongside a camera icon indicates capturing moments of life, treating youth like a recorded sequence of events.\n    *   *Step 3: Understand the connection between \"film\" (the visual theme) and \"video/cinema\".*\n        *   Film (胶片) is historically the physical medium for capturing motion, producing movies/videos when projected frame-by-frame.\n        *   The layout mimicking a film strip is a classic visual symbol for **cinema, film, and video sequences**.\n    *   *Step 4: Determine the conceptual link.*\n        *   By presenting static images (the puppy cartoons) in a film strip layout, the image represents the concept of **converting static images into a visual narrative / movie-like sequence**.\n        *   It serves as a visual template to make static photos look like a dynamic, sequential video story (specifically about \"archiving youth\").\n\n6.  **Synthesize the Final Answer (结论):**\n    *   The image uses the visual form of a **film roll/strip** (which is the physical medium for shooting and displaying **movies/videos**) to represent the concept of capturing and archiving static moments (\"youth\") into a continuous, movie-like narrative.\n    *   Therefore, the image is a visual metaphor/template representing the creation of a **video/movie-like album of memories** from static images.\n\nLet me write this down clearly in Chinese, as the prompt is in Chinese.\n"
+      }
+    }
+  ],
+  "created": 1786598062,
+  "model": "dots3-note-prev",
+  "object": "chat.completion",
+  "system_fingerprint": "",
+  "usage": {
+    "prompt_tokens": 1291,
+    "completion_tokens": 1746,
+    "total_tokens": 3037
+  }
+}
+相关参数
+参数	类型	必填	说明
+messages[].content	array	是	多模态内容数组，可按输入顺序组合图片、视频和文本内容块。
+content[].type	string	是	视频内容块使用 video_url，文本使用 text，图片使用 image_url。
+content[].video_url.url	string	视频块必填	模型服务可以直接访问的视频 URL。
+stream	boolean	否	当前视频示例设置为 false，一次性返回完整 JSON。
+chat_template_kwargs.enable_thinking	boolean	否	深度思考默认开启；当前视频示例显式设置为 true，也可以省略该参数。
+音频输入
+
+在消息内容数组中使用 audio_url 传入模型服务可访问的音频 URL，并通过文本内容块说明需要模型完成的任务。示例使用可公开访问的短 MP3 语音文件进行音频转写。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "你是音频转写助手，只转写用户提供的音频，不回答音频中的问题。"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "audio_url",
+            "audio_url": {
+              "url": "https://storage.googleapis.com/cloud-samples-data/speech/brooklyn_bridge.mp3"
+            }
+          },
+          {
+            "type": "text",
+            "text": "请转写这段音频。"
+          }
+        ]
+      }
+    ],
+    "stream": false,
+    "max_tokens": 1024,
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    }
+  }'
+响应示例
+
+以下完整 JSON 来自使用上述音频输入的实际接口调用。模型输出具有随机性，重新调用时内容、ID、时间和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "3ea79cea726648b9bb37ed72338e3965",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "How old is the Brooklyn Bridge?",
+        "reasoning_content": "Thinking Process:\n\n1.  **Analyze the Request:** The user wants a transcription of the audio file. The output must be *only* the transcription text, with no extra analysis, explanation, prefix, or suffix.\n2.  **Listen to the Audio:** The audio says \"How old is the Brooklyn Bridge?\"\n3.  **Transcribe the Audio:** \"How old is the Brooklyn Bridge?\"\n4.  **Format the Output:** Just the transcribed text. \"How old is the Brooklyn Bridge?\"\n"
+      }
+    }
+  ],
+  "created": 1786627279,
+  "model": "dots3-note-prev",
+  "object": "chat.completion",
+  "system_fingerprint": "",
+  "usage": {
+    "prompt_tokens": 55,
+    "completion_tokens": 116,
+    "total_tokens": 171
+  }
+}
+相关参数
+参数	类型	必填	说明
+messages[].content	array	是	多模态内容数组，可按输入顺序组合音频和文本内容块。
+content[].type	string	是	音频内容块使用 audio_url，文本内容块使用 text。
+content[].audio_url.url	string	音频块必填	模型服务可以直接访问的音频 URL。
+stream	boolean	否	当前音频示例设置为 false，一次性返回完整 JSON。
+chat_template_kwargs.enable_thinking	boolean	否	深度思考默认开启；当前音频示例显式设置为 true，也可以省略该参数。
+工具调用
+
+通过 tools 声明模型可以调用的函数及其参数结构，并可使用 tool_choice 控制是否调用或指定函数。工具参数由模型生成，调用方执行函数前必须校验 JSON 结构、字段类型和业务取值。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "波士顿今天天气怎么样？请使用 get_current_weather 工具查询。"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_current_weather",
+          "description": "查询指定地点的当前天气",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string",
+                "description": "城市名称，例如 Boston"
+              },
+              "state": {
+                "type": "string",
+                "description": "州名的两个字母缩写，例如 MA"
+              },
+              "unit": {
+                "type": "string",
+                "description": "温度单位",
+                "enum": ["celsius"]
+              }
+            },
+            "required": ["city", "state", "unit"]
+          }
+        }
+      }
+    ],
+    "stream": false,
+    "max_tokens": 1024
+  }'
+响应示例
+
+以下完整 JSON 来自使用上述工具声明的实际接口调用。函数信息位于 message.tool_calls，调用方在 finish_reason 为 tool_calls 后执行函数。
+
+JSON
+复制
+{
+  "id": "1f79f7638fa145de844a0851a892d01f",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "tool_calls",
+      "message": {
+        "role": "assistant",
+        "reasoning_content": "用户想查询波士顿的天气。我们需要调用 get_current_weather 工具，传入 city=\"Boston\" 和 state=\"MA\"（马萨诸塞州的缩写）。单位使用摄氏度。\n",
+        "tool_calls": [
+          {
+            "index": 0,
+            "type": "function",
+            "id": "call_9ef22900ae524ce4a94120a0",
+            "function": {
+              "name": "get_current_weather",
+              "arguments": "{\"city\": \"Boston\", \"state\": \"MA\", \"unit\": \"celsius\"}"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "created": 1786528610,
+  "model": "dots3-note-prev",
+  "object": "chat.completion",
+  "system_fingerprint": "",
+  "usage": {
+    "prompt_tokens": 246,
+    "completion_tokens": 99,
+    "total_tokens": 345
+  }
+}
+相关参数
+参数	类型	必填	说明
+tools	array	否	当前请求可供模型选择的工具列表。
+tool_choice	string | object	否	控制模型调用工具的行为：none 表示禁止调用，auto 表示由模型选择，required 表示必须调用，也可以通过对象指定函数名称。
+tools[].type	string	定义工具时必填	工具类型，函数工具固定为 function。
+tools[].function.name	string	定义工具时必填	函数名称，应与调用方实际可执行的函数保持一致。
+tools[].function.description	string	否	函数用途说明，帮助模型判断何时调用该工具。
+tools[].function.parameters	object	定义工具时必填	函数参数的 JSON Schema，使用 properties 描述字段，并用 required 声明必填字段。
+深度思考
+
+深度思考默认开启，无需额外传参。如需关闭，请将 chat_template_kwargs.enable_thinking 设置为 false；本示例显式设置为 true。实际回复和思考内容以接口返回为准。
+
+dots3-note-prev 模型仅支持 max 思考档位，reasoning_effort 参数可以省略。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是一个AI助手"
+      },
+      {
+        "role": "user",
+        "content": "你好，请介绍一下自己"
+      }
+    ],
+    "stream": false,
+    "max_tokens": 1024,
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    }
+  }'
+响应示例
+
+以下完整 JSON 来自使用上述深度思考输入的实际接口调用，最终回答和思考内容分别位于 message.content 与 message.reasoning_content。
+
+JSON
+复制
+{
+  "id": "5656f21c7eca48cd86e752cf2e79b16b",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "你好！我是 dots，中文名叫点点，是小红书 Dots Studio 开发的 AI 大模型。我可以帮你解答问题、梳理思路、分析图片或文件，也能陪你聊天、一起探讨生活里的各种小事。今天是想聊点什么呢？",
+        "reasoning_content": "用户问的是自我介绍，需要简洁自然地说明我的身份、由谁开发、能做什么，同时保持友好和有温度的语气。不需要列一大串功能清单，重点突出核心能力和陪伴感。最后可以自然地反问一句，让对话活起来。\n"
+      }
+    }
+  ],
+  "created": 1786528611,
+  "model": "dots3-note-prev",
+  "object": "chat.completion",
+  "system_fingerprint": "",
+  "usage": {
+    "prompt_tokens": 13,
+    "completion_tokens": 118,
+    "total_tokens": 131
+  }
+}
+关闭深度思考
+
+如需关闭深度思考，请将 chat_template_kwargs.enable_thinking 设置为 false。
+
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是一个AI助手"
+      },
+      {
+        "role": "user",
+        "content": "你好，请介绍一下自己"
+      }
+    ],
+    "stream": false,
+    "max_tokens": 1024,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  }'
+相关参数
+参数	类型	必填	说明
+chat_template_kwargs	object	否	模型生成行为的可选配置对象。
+chat_template_kwargs.enable_thinking	boolean	否	控制是否启用深度思考。默认值为 true，省略时仍保持开启；设置为 false 时关闭。
+POST
+/v1/messages
+Anthropic 消息
+
+根据输入的消息列表生成模型回复，采用 Anthropic Messages 请求与响应格式。 当前示例模型 dots3-note-prev 的上下文窗口为 512K Token，输入 Token 数与 max_tokens 设置的最大输出 Token 数之和不能超过该上限。接口支持文本和图片输入、工具调用、深度思考，以及非流式 JSON 与 SSE 流式响应。
+
+请求头
+
+除平台通用认证请求头外，Messages 请求还需要通过 anthropic-version 指定协议版本。
+
+请求头	必填	说明
+Content-Type	是	固定为 application/json。
+api-key	是	在 API Keys 页面创建并妥善保存的完整 API Key。
+anthropic-version	是	Anthropic 协议版本，本页示例使用 2023-06-01。
+请求参数
+参数	类型	必填	说明
+model	string	是	要调用的模型名称，当前示例为 dots3-note-prev。
+messages	array	是	按时间顺序排列的对话历史，消息角色使用 user 或 assistant。
+max_tokens	integer	是	本次生成允许使用的最大输出 Token 数；模型可能在达到该值前结束。
+system	string	否	系统指令。应使用此顶层字段，不要在 messages 中放置 system 角色。
+stream	boolean	否	是否使用 SSE 流式响应；本页非流式示例显式设置为 false。
+tools	array	否	当前请求可供模型选择的工具列表。
+tool_choice	object	否	控制模型如何选择工具；本页示例使用 auto，由模型决定是否调用工具。
+thinking	object	否	深度思考配置。type 使用 disabled 时关闭，使用 adaptive 时开启自适应深度思考。
+output_config	object	否	深度思考的输出配置；本页示例通过 effort: medium 设置思考强度。
+消息结构
+
+messages 按时间顺序保存对话历史，消息角色使用 user 或 assistant。系统指令通过顶层 system 参数传入，不要在 messages 中添加 system 角色。
+
+参数	类型	必填	说明
+messages[].role	string	是	消息角色，使用 user 或 assistant。
+messages[].content	string | array	是	文本字符串或由 text、image、tool_use、tool_result 等组成的内容块数组。
+常用内容块
+type	方向	说明
+text	输入、输出	文本内容。
+image	输入	URL 或 Base64 图片内容。
+thinking	输出	模型的思考内容；仅在相关能力开启并返回时出现。
+tool_use	输出	模型请求调用客户端工具。
+tool_result	输入	调用方执行工具后返回的结果。
+文本消息示例
+JSON
+复制
+{
+  "role": "user",
+  "content": [
+    {
+      "type": "text",
+      "text": "你好，请介绍一下自己"
+    }
+  ]
+}
+基础调用
+
+基础文本对话示例。系统指令位于顶层 system，示例关闭深度思考和流式响应，并一次性接收完整 JSON。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "dots3-note-prev",
+    "system": "你是一个专业、可靠的 AI 助手。",
+    "messages": [
+      {
+        "role": "user",
+        "content": "你好，请介绍一下自己"
+      }
+    ],
+    "max_tokens": 1024,
+    "stream": false,
+    "thinking": {
+      "type": "disabled"
+    }
+  }'
+响应示例
+
+以下完整 JSON 来自上述请求的实际调用。模型输出具有随机性，重新调用时回答内容、响应 ID 和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "msg_e6c1458beb264e458d078e0f29ea42dc",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "你好！我是 dots，由小红书 Dots Studio 开发，是一个 AI 大模型。很高兴认识你，有什么我可以帮你的吗？"
+    }
+  ],
+  "model": "dots3-note-prev",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 24,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 32
+  }
+}
+图片输入
+
+在 messages[].content 中使用 image 内容块传入图片，并在同一内容数组中加入文本指令。图片来源可以是模型服务能够访问的公开 URL，也可以是 Base64 数据。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image",
+            "source": {
+              "type": "url",
+              "url": "https://picasso-static.xiaohongshu.com/fe-platform/e6d7a4f5dd20a3574caaa72b2b68217bc2e5e2e7.png"
+            }
+          },
+          {
+            "type": "text",
+            "text": "请用一句话描述这张图片。"
+          }
+        ]
+      }
+    ],
+    "max_tokens": 2048,
+    "stream": false,
+    "thinking": {
+      "type": "disabled"
+    }
+  }'
+响应示例
+
+以下完整 JSON 来自上述请求的实际调用。模型输出具有随机性，重新调用时描述内容、响应 ID 和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "msg_369fac81869f4b7a8fb1eddedb8039b9",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "这是一个可爱的卡通形象，它有着粉红色的脸颊、黑色的眼睛和微笑，头顶有一片绿色的叶子，下半身是红色的，像是一个拟人化的水果或种子。"
+    }
+  ],
+  "model": "dots3-note-prev",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1324,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 40
+  }
+}
+Base64 图片来源
+
+使用 Base64 时，data 只包含编码后的数据，不要携带 Data URL 前缀。
+
+JSON
+复制
+{
+  "type": "image",
+  "source": {
+    "type": "base64",
+    "media_type": "image/png",
+    "data": "BASE64_ENCODED_IMAGE_DATA"
+  }
+}
+相关参数
+参数	类型	必填	说明
+content[].type	string	是	图片内容块固定为 image。
+content[].source.type	string	是	使用 url 或 base64。
+content[].source.url	string	URL 来源必填	模型服务可以直接访问的公开图片 URL。
+content[].source.media_type	string	Base64 来源必填	图片 MIME 类型，必须与 data 的实际格式一致；本页示例使用 image/png。
+content[].source.data	string	Base64 来源必填	不包含 Data URL 前缀的 Base64 图片数据。
+工具调用
+
+通过 tools 声明模型可以选择的工具。模型不会直接执行工具；调用方需要读取 tool_use 内容块、校验参数并执行工具，再使用 tool_result 返回结果。
+
+发送工具定义和用户问题。
+模型返回 tool_use，且 stop_reason 为 tool_use。
+调用方校验参数、权限和业务取值后执行工具。
+在新的 user 消息中发送对应的 tool_result。
+模型根据工具结果生成最终回复；如再次返回 tool_use，继续上述循环。
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "user",
+        "content": "波士顿今天天气怎么样？请使用 get_current_weather 工具查询。"
+      }
+    ],
+    "tools": [
+      {
+        "name": "get_current_weather",
+        "description": "查询指定地点的当前天气",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "celsius"
+              ]
+            }
+          },
+          "required": [
+            "city",
+            "state",
+            "unit"
+          ]
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "auto"
+    },
+    "max_tokens": 1024,
+    "stream": false,
+    "thinking": {
+      "type": "disabled"
+    }
+  }'
+响应示例
+
+以下完整 JSON 来自上述请求的实际调用。工具参数由模型生成，重新调用时响应 ID、文本内容和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "msg_a61a2da6c80e438897932c37ea3f16a1",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "我需要使用 get_current_weather 工具来查询波士顿的天气，但该工具需要提供州（state）参数。波士顿位于马萨诸塞州（Massachusetts），因此我将使用该信息进行查询。"
+    },
+    {
+      "type": "tool_use",
+      "id": "call_8bf8d5e73316496b9d9181e0",
+      "name": "get_current_weather",
+      "input": {
+        "city": "Boston",
+        "state": "Massachusetts",
+        "unit": "celsius"
+      }
+    }
+  ],
+  "model": "dots3-note-prev",
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 219,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 100
+  }
+}
+模型生成的工具参数不可信。执行工具前必须校验 JSON Schema、字段类型、必填字段、业务取值和调用权限。
+返回工具执行结果
+
+后续请求必须保留此前完整对话和模型返回的完整 assistant.content 数组，并确保 tool_result.tool_use_id 与对应的 tool_use.id 完全一致。如需允许模型继续调用工具，还应保留 tools 定义。
+
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "user",
+        "content": "波士顿今天天气怎么样？请使用 get_current_weather 工具查询。"
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "我需要使用 get_current_weather 工具来查询波士顿的天气，但该工具需要提供州（state）参数。波士顿位于马萨诸塞州（Massachusetts），因此我将使用该信息进行查询。"
+          },
+          {
+            "type": "tool_use",
+            "id": "call_8bf8d5e73316496b9d9181e0",
+            "name": "get_current_weather",
+            "input": {
+              "city": "Boston",
+              "state": "Massachusetts",
+              "unit": "celsius"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_8bf8d5e73316496b9d9181e0",
+            "content": "当前温度 24°C，晴，湿度 42%"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "name": "get_current_weather",
+        "description": "查询指定地点的当前天气",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "celsius"
+              ]
+            }
+          },
+          "required": [
+            "city",
+            "state",
+            "unit"
+          ]
+        }
+      }
+    ],
+    "thinking": {
+      "type": "disabled"
+    },
+    "max_tokens": 1024,
+    "stream": false
+  }'
+最终响应示例
+
+以下完整 JSON 来自上述工具结果请求的实际调用。重新调用时回答内容、响应 ID 和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "msg_438923e2d61a442aa1851518de0bd8e1",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "波士顿今天的天气是：当前温度24°C，晴朗，湿度42%。"
+    }
+  ],
+  "model": "dots3-note-prev",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 344,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 22
+  }
+}
+相关参数
+参数	类型	必填	说明
+tools[].name	string	定义工具时必填	工具名称，应与调用方实际可执行的函数保持一致。
+tools[].description	string	否	工具用途说明，帮助模型判断何时调用。
+tools[].input_schema	object	定义工具时必填	工具输入参数的 JSON Schema。
+tool_choice.type	string	否	本页示例使用 auto，由模型决定是否调用工具。
+tool_result.tool_use_id	string	返回工具结果时必填	必须与对应的 tool_use.id 完全一致。
+tool_result.content	string	否	工具执行结果文本。
+深度思考
+
+通过 thinking 配置深度思考。启用后，响应的 content 数组可能同时包含 thinking 和 text 内容块；调用方应按 type 解析，不要假设文本内容始终位于索引 0。
+
+输入示例
+BASH
+复制
+curl -X POST https://note3-prev-api.askdiandian.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请计算 27 × 43，并简要说明计算过程。"
+      }
+    ],
+    "thinking": {
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "medium"
+    },
+    "max_tokens": 4096,
+    "stream": false
+  }'
+响应示例
+
+以下完整 JSON 来自上述请求的实际调用。重新调用时思考内容、回答内容、响应 ID 和 Token 用量可能不同。
+
+JSON
+复制
+{
+  "id": "msg_4352cea7df6a42859f37129b8b2fcafd",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "thinking",
+      "thinking": "计算 27 × 43 可以拆成 (20 + 7) × (40 + 3)，用分配律展开成 20×40 + 20×3 + 7×40 + 7×3，即 800 + 60 + 280 + 21，逐项相加得 1161。\n"
+    },
+    {
+      "type": "text",
+      "text": "27 × 43 = 1161。\n\n计算过程：把 27 拆成 20 + 7，43 拆成 40 + 3，用分配律展开：20×40 = 800，20×3 = 60，7×40 = 280，7×3 = 21；再把四项相加：800 + 60 = 860，860 + 280 = 1140，1140 + 21 = 1161。"
+    }
+  ],
+  "model": "dots3-note-prev",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 27,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 228
+  }
+}
+流式响应
+
+设置 stream: true 后，接口通过 SSE（Server-Sent Events，服务器发送事件）持续返回增量事件，响应媒体类型为 text/event-stream。
+
+输入示例
+BASH
+复制
+curl -N -X POST https://note3-prev-api.askdiandian.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "dots3-note-prev",
+    "messages": [
+      {
+        "role": "user",
+        "content": "用一句话介绍 Dots。"
+      }
+    ],
+    "max_tokens": 256,
+    "stream": true,
+    "thinking": {
+      "type": "disabled"
+    }
+  }'
+响应示例
+
+以下 SSE 事件来自上述请求的实际调用。重新调用时增量事件数量、内容和 Token 用量可能不同。
+
+TEXT
+复制
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_d51dff47f30340d7b840525d036cba4c","type":"message","role":"assistant","content":[],"model":"dots3-note-prev","usage":{"input_tokens":22,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"D","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ots","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" 是由","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"小红书 D","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ots Studio 开发","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"的 AI","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" 大模型，","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"致力于提供","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"自然","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"、智能且贴近","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"生活的","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"对话与多","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"模态交互体验","stop_sequence":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"。","stop_sequence":null}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":35}}
+
+event: message_stop
+data: {"type":"message_stop"}
+事件顺序
+message_start：开始一条消息。
+一个或多个内容块，每个内容块依次经历 content_block_start、一个或多个 content_block_delta 和 content_block_stop。
+message_delta：返回停止原因和累计输出用量等消息级增量。
+message_stop：当前消息流正常结束。
+
+网络读取边界不等于 SSE 事件边界；客户端应以空行分隔事件，并按内容块 index 累积增量。
+
+delta 类型	所属内容块	增量字段	说明
+text_delta	text	text	追加文本。
+响应字段
+字段	类型	说明
+id	string	本次响应的唯一消息 ID。
+type	string	固定为 message。
+role	string	固定为 assistant。
+model	string	实际响应使用的模型。
+content	array	模型生成的内容块数组。
+stop_reason	string | null	模型停止生成的原因；流式响应在 message_delta 事件中返回。
+usage.input_tokens	integer	输入 Token 数。
+usage.output_tokens	integer	输出 Token 数；流式 message_delta 中为累计值。
+usage.cache_creation_input_tokens	integer	用于创建缓存的输入 Token 数。
+usage.cache_read_input_tokens	integer	从缓存读取的输入 Token 数。
+usage.cache_creation.ephemeral_5m_input_tokens	integer	写入 5 分钟有效期缓存的输入 Token 数。
+usage.cache_creation.ephemeral_1h_input_tokens	integer	写入 1 小时有效期缓存的输入 Token 数。
+常见停止原因
+stop_reason	说明
+end_turn	模型自然结束当前回复。
+max_tokens	达到请求的最大输出 Token 数。
+tool_use	模型请求调用客户端工具。
+
+非流式响应通过 HTTP 状态码表示请求结果；流式响应应在收到 message_stop 后结束本次消息处理。
+
+常见响应状态
+
+接口使用标准 HTTP 状态码表示请求结果。
+
+状态码	说明
+200	请求成功。
+400	请求参数或 JSON 格式不正确。
+401	API Key 缺失或无效。
+403	当前 API Key 无权访问请求资源。
+429	请求过于频繁，请稍后重试。
+500	服务内部错误。

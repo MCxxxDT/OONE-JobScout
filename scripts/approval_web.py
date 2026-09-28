@@ -354,6 +354,94 @@ def parse_api_key_config(raw_text: str) -> dict:
     }
 
 
+def _detect_provider_name(base_url: str, model: str = "") -> str:
+    """智能识别易读的大模型服务商中文名称。"""
+    b = (base_url or "").lower()
+    m = (model or "").lower()
+    if "siliconflow" in b:
+        return "硅基流动 (SiliconFlow)"
+    if "deepseek" in b:
+        return "DeepSeek 官方"
+    if "bigmodel" in b or "zhipu" in b or "glm" in m:
+        return "智谱 GLM-4"
+    if "volces" in b or "volcengine" in b:
+        return "字节火山引擎方舟"
+    if "dots" in b or "askdiandian" in b:
+        return "小红书 Dots3"
+    if "dashscope" in b or "aliyun" in b or "qwen" in m:
+        return "阿里通义千问"
+    if "moonshot" in b or "kimi" in b:
+        return "月之暗面 Kimi"
+    if "openrouter" in b:
+        return "OpenRouter"
+    if "api.openai.com" in b:
+        return "OpenAI 官方"
+    if "11434" in b or "ollama" in b:
+        return "本地 Ollama"
+    return "自定义渠道"
+
+
+def _format_llm_error(code_or_str: str) -> str:
+    """将大模型报错转换为对小白极其友好的中文诊断说明。"""
+    s = str(code_or_str or "").strip()
+    s_low = s.lower()
+    if "401" in s or "auth" in s_low or "invalid_api_key" in s_low or "invalid api key" in s_low:
+        return f"HTTP 401 密钥鉴权失败（API Key 无效、已失效或填错）: {s[:120]}"
+    if "429" in s or "rate limit" in s_low or "quota" in s_low or "insufficient" in s_low:
+        return f"HTTP 429 访问受限（接口请求频次过高或免费 Token 额度已耗尽）: {s[:120]}"
+    if "404" in s:
+        return f"HTTP 404 端点未找到（请检查 Base URL 或模型名称拼写）: {s[:120]}"
+    if any(c in s for c in ("500", "502", "503", "504")):
+        return f"HTTP 5xx 服务端异常（服务商服务器暂时不可用或维护中）: {s[:120]}"
+    if "timed out" in s_low or "timeout" in s_low:
+        return "网络连接超时（无法连接大模型服务商服务器，请检查网络）"
+    if "connection refused" in s_low:
+        return "网络连接被拒绝（服务商端点不可达）"
+    return s[:150]
+
+
+_LLM_HEALTH_CACHE = {
+    "status": "untested",  # "connected" | "auth_error" | "unreachable" | "unconfigured" | "untested"
+    "latency_ms": 0,
+    "error": None,
+    "ts": 0,
+    "provider": "",
+    "model": "",
+    "base_url": "",
+    "api_key_masked": "",
+}
+
+
+def _update_llm_health(ok: bool, latency: int, err: str, base_url: str, model: str, api_key: str = ""):
+    global _LLM_HEALTH_CACHE
+    import time as _t
+    prov = _detect_provider_name(base_url, model)
+    masked_k = secrets_mod.masked(api_key) if api_key else _LLM_HEALTH_CACHE.get("api_key_masked", "")
+    if ok:
+        status = "connected"
+        err_msg = None
+    else:
+        err_str = str(err or "")
+        err_low = err_str.lower()
+        if "401" in err_str or "auth" in err_low:
+            status = "auth_error"
+        else:
+            status = "unreachable"
+        err_msg = _format_llm_error(err_str)
+
+    _LLM_HEALTH_CACHE = {
+        "status": status,
+        "latency_ms": latency if ok else 0,
+        "error": err_msg,
+        "ts": int(_t.time()),
+        "provider": prov,
+        "model": model,
+        "base_url": base_url,
+        "api_key_masked": masked_k,
+    }
+    return _LLM_HEALTH_CACHE
+
+
 def _llm_ping(base_url, api_key, model):
     """极小请求测试连通性。返回 (ok, latency_ms, error)。"""
     import time as _t
@@ -363,8 +451,16 @@ def _llm_ping(base_url, api_key, model):
         t0 = _t.time()
         base = normalize_base_url(base_url)
         url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
-        payload = {"model": model, "messages": [{"role": "user", "content": "hi"}],
-                   "max_tokens": 10}
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 64
+        }
+        b_low = (base or "").lower()
+        m_low = (model or "").lower()
+        if "askdiandian" in b_low or "dots" in b_low or "dots" in m_low:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + api_key,
@@ -421,6 +517,15 @@ def api_settings_get(token: str = ""):
             "key_source": _key_source(cfg),
             "base_url": llm.get("base_url") or "",
             "model": llm.get("model") or "",
+            "provider": _detect_provider_name(llm.get("base_url") or "", llm.get("model") or ""),
+        },
+        "llm_health": {
+            "status": _LLM_HEALTH_CACHE.get("status", "untested"),
+            "latency_ms": _LLM_HEALTH_CACHE.get("latency_ms", 0),
+            "error": _LLM_HEALTH_CACHE.get("error"),
+            "provider": _detect_provider_name(llm.get("base_url") or "", llm.get("model") or ""),
+            "model": llm.get("model") or "",
+            "last_tested_at": _LLM_HEALTH_CACHE.get("ts", 0),
         },
         "llm_match": {"enabled": (cfg.get("llm_match") or {}).get("enabled", True)},
         "privacy_policy": {
@@ -638,6 +743,7 @@ async def api_settings_import_key(request: Request, token: str = ""):
 
     # 3. 极速 Ping 探测连通性 (15s 超时)
     test_ok, latency, test_err = _llm_ping(base_url, api_key, model)
+    h = _update_llm_health(test_ok, latency, test_err, base_url, model, api_key)
 
     masked_key = api_key[:6] + "..." + api_key[-4:] if len(api_key) > 10 else "***"
 
@@ -650,7 +756,8 @@ async def api_settings_import_key(request: Request, token: str = ""):
         "api_key_masked": masked_key,
         "ping_ok": test_ok,
         "latency_ms": latency,
-        "ping_error": test_err if not test_ok else None,
+        "ping_error": h["error"] if not test_ok else None,
+        "status": h["status"],
     }
 
 
@@ -873,8 +980,12 @@ def api_system_health(token: str = ""):
         },
         "llm": {
             "configured": bool(api_key and "YOUR_LLM_API_KEY" not in api_key),
-            "provider": llm_cfg.get("provider", "DeepSeek"),
+            "provider": _detect_provider_name(llm_cfg.get("base_url", ""), llm_cfg.get("model", "")),
             "model": llm_cfg.get("model", "deepseek-chat"),
+            "status": _LLM_HEALTH_CACHE.get("status", "untested"),
+            "latency_ms": _LLM_HEALTH_CACHE.get("latency_ms", 0),
+            "error": _LLM_HEALTH_CACHE.get("error"),
+            "api_key_masked": secrets_mod.masked(api_key) if api_key and "YOUR_LLM_API_KEY" not in api_key else "",
         },
         "daemon": get_daemon_status(),
     }
@@ -896,18 +1007,83 @@ def api_browser_launch(token: str = ""):
 
 @app.post("/api/settings/test")
 async def api_settings_test(request: Request, token: str = ""):
+    """大模型连通性探测接口。支持留空 body 自动测试当前 DPAPI 已保存凭证。"""
     cfg = cfgmod.load()
     if not _check_token(cfg, token):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    body = await request.json()
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
     llm = cfg.get("llm") or {}
     base = (body.get("base_url") or llm.get("base_url") or "").strip()
     model = (body.get("model") or llm.get("model") or "").strip()
     key = (body.get("api_key") or "").strip() or llm.get("api_key") or ""
-    if not (base and key):
-        return {"ok": False, "error": "缺少 base_url 或 api_key"}
-    ok, ms, err = await asyncio.to_thread(_llm_ping, base, key, model)
-    return {"ok": ok, "latency_ms": ms, "error": err}
+    if not (base and key and key != "YOUR_LLM_API_KEY_HERE" and not key.startswith("YOUR_")):
+        _update_llm_health(False, 0, "缺少有效 API Key 或 Base URL，请先填写或导入密钥", base, model, "")
+        return {
+            "ok": False,
+            "latency_ms": 0,
+            "status": "unconfigured",
+            "error": "缺少有效 API Key 或 Base URL，请在设置中输入密钥或一键导入"
+        }
+    ok, ms, raw_err = await asyncio.to_thread(_llm_ping, base, key, model)
+    h = _update_llm_health(ok, ms, raw_err, base, model, key)
+    return {
+        "ok": ok,
+        "latency_ms": ms,
+        "error": h["error"],
+        "status": h["status"],
+        "provider": h["provider"],
+        "model": model,
+        "api_key_masked": h["api_key_masked"]
+    }
+
+
+@app.get("/api/llm/status")
+async def api_llm_status(token: str = ""):
+    """实时读取当前生效的大模型配置与连通性健康状态。"""
+    cfg = cfgmod.load()
+    if not _check_token(cfg, token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    llm = cfg.get("llm") or {}
+    key = (llm.get("api_key") or "").strip()
+    base = (llm.get("base_url") or "").strip()
+    model = (llm.get("model") or "").strip()
+    has_key = bool(key and key != "YOUR_LLM_API_KEY_HERE" and not key.startswith("YOUR_"))
+    masked_k = secrets_mod.masked(key) if has_key else ""
+    prov = _detect_provider_name(base, model) if base else "未配置"
+
+    if not has_key:
+        return {
+            "ok": False,
+            "configured": False,
+            "status": "unconfigured",
+            "provider": prov,
+            "model": model,
+            "base_url": base,
+            "api_key_masked": "",
+            "key_source": _key_source(cfg),
+            "latency_ms": 0,
+            "error": "未配置大模型 API Key",
+            "last_tested_at": _LLM_HEALTH_CACHE.get("ts", 0),
+        }
+
+    status = _LLM_HEALTH_CACHE.get("status", "untested")
+    return {
+        "ok": status == "connected",
+        "configured": True,
+        "status": status,
+        "provider": prov,
+        "model": model,
+        "base_url": base,
+        "api_key_masked": masked_k,
+        "key_source": _key_source(cfg),
+        "latency_ms": _LLM_HEALTH_CACHE.get("latency_ms", 0),
+        "error": _LLM_HEALTH_CACHE.get("error"),
+        "last_tested_at": _LLM_HEALTH_CACHE.get("ts", 0),
+    }
 
 
 @app.post("/api/prefs")
@@ -1304,6 +1480,7 @@ async def api_playground_simulate(request: Request, token: str = ""):
                 base = engine.openai_base.rstrip("/")
                 url = base if base.endswith("/chat/completions") else f"{base}/chat/completions"
                 headers["Authorization"] = f"Bearer {engine.openai_key}"
+                headers["api-key"] = engine.openai_key
                 model = engine.llm_model
 
             payload = {
@@ -1381,17 +1558,28 @@ async def api_playground_simulate(request: Request, token: str = ""):
     # 隐私泄密检测（挂接配置的 contact_phone 与 contact_wechat，100% 对齐线上 detect_privacy_leak 门禁）
     is_leak, leak_detail = air.detect_privacy_leak(cleaned_reply, cfg)
     privacy_blocked = is_leak or greeter.privacy_blocked(cleaned_reply)
-    if not leak_detail and privacy_blocked:
-        leak_detail = "文案中疑似含有联系方式意图或号码"
-
     # 隐私策略审查
     from scripts.daemon_auto_reply import check_privacy_permission
     allow_policy, policy_reason = check_privacy_permission(parsed_decision.get("action", "reply"), cfg, hi_flag)
 
+    is_native = bool(llm_res is not None)
+    if is_native:
+        llm_source = "llm_native"
+        fallback_reason = None
+        _update_llm_health(True, latency_ms, "", engine.openai_base, engine.llm_model, engine.openai_key)
+    else:
+        llm_source = "rule_fallback"
+        formatted_err = _format_llm_error(llm_error)
+        fallback_reason = "未配置大模型 API Key（处于本地离线规则兜底模式）" if not has_key else f"大模型未成功响应: {formatted_err}"
+        if has_key:
+            _update_llm_health(False, latency_ms, llm_error, engine.openai_base, engine.llm_model, engine.openai_key)
+
     return {
-        "ok": bool(llm_res is not None),
+        "ok": is_native,
+        "llm_source": llm_source,
+        "fallback_reason": fallback_reason,
         "llm_called": has_key,
-        "llm_error": llm_error,
+        "llm_error": _format_llm_error(llm_error) if llm_error else None,
         "latency_ms": latency_ms,
         "conv": conv,
         "system_prompt": system_prompt,
@@ -3971,6 +4159,12 @@ PAGE = """<!DOCTYPE html>
             </div>
           </div>
         </div>
+        <!-- Global LLM Status Pill & Diagnostics -->
+        <button id="btnTopLLMStatus" class="btn-action-light" onclick="openSettingModal('modalLLM')" title="大模型连通状态与快速测速（点击一键诊断）" style="padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;border:1px solid #e2e8f0;background:#ffffff;transition:all 0.2s ease">
+          <span id="topLLMDot" class="pulse-dot dot-gray" style="width:7px;height:7px"></span>
+          <span>🤖</span>
+          <span id="topLLMText" class="d-none d-md-inline">LLM: 检测中…</span>
+        </button>
         <!-- Quick Browser Visibility Toggle -->
         <button id="btnQuickToggleBrowser" class="btn-action-light" onclick="quickToggleBrowserVisibility()" title="切换 BOSS 自动化调试浏览器前台可视/后台隐形" style="padding:7px 12px;border-radius:10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;border:1px solid rgba(16,185,129,0.25);background:rgba(16,185,129,0.06);color:#059669">
           <span id="quickBrowserIcon">🛡️</span>
@@ -4318,10 +4512,14 @@ PAGE = """<!DOCTYPE html>
             <div class="hub-desc">OpenAI / DeepSeek / FastMCP 端点接入与 DPAPI 本机安全密钥加密存储</div>
             <div class="hub-meta-tags">
               <span class="soft-badge badge-ok" id="hubBadgeKey">🔒 DPAPI加密</span>
+              <span class="soft-badge" id="hubBadgeLLMStatus">⚪ 状态待测</span>
               <span class="soft-badge" id="hubBadgeMatch">⚡ 智能打分</span>
             </div>
           </div>
-          <button type="button" class="hub-card-btn">⚙️ 配置模型与端点</button>
+          <div class="d-flex gap-2 w-100 mt-2">
+            <button type="button" class="hub-card-btn flex-grow-1" onclick="openSettingModal('modalLLM')">⚙️ 配置模型与端点</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" style="border-radius:10px;font-size:12px;font-weight:700;padding:6px 12px;white-space:nowrap" onclick="event.stopPropagation(); testSavedLLM(true)">⚡ 立即测速</button>
+          </div>
         </div>
 
         <!-- Card 2: Prefs & Job Mode -->
@@ -4615,10 +4813,46 @@ PAGE = """<!DOCTYPE html>
         💡 <strong>小白须知</strong>：您完全可以<strong>不填任何 API Key</strong>！本软件的岗位抓取、真实打分、外包公司剔除均为 100% 本地算法，免 Key 也可正常浏览与筛选优质岗位。仅当您需要 AI 自动拟人聊天代聊时才需配置 Key。
       </div>
 
+      <!-- 当前已激活密钥状态卡片 (当检测到已存 Key 时高亮显示) -->
+      <div id="activeLLMCard" style="display:none;background:linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%);border:1.5px solid #86efac;border-radius:14px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(16,185,129,0.06)">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="d-flex align-items-center gap-2">
+            <span style="font-size:16px">🔐</span>
+            <span style="font-weight:800;font-size:13.5px;color:#0f172a">当前已生效大模型密钥</span>
+            <span id="activeLLMSourceBadge" class="badge" style="background:#10b981;color:#fff;font-size:10px;padding:2px 7px;border-radius:6px">DPAPI 硬件加密</span>
+          </div>
+          <span id="activeLLMPingBadge" class="soft-badge badge-ok" style="font-size:11px">检测中…</span>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.7;margin-bottom:10px">
+          <div class="d-flex justify-content-between flex-wrap gap-1">
+            <span>🏢 <strong>当前渠道</strong>: <span id="activeLLMProvider" style="color:#2563eb;font-weight:700">--</span></span>
+            <span>🏷️ <strong>模型代号</strong>: <code id="activeLLMModel" style="color:#475569">--</code></span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mt-1">
+            <span>🔑 <strong>已存密钥</strong>: <code id="activeLLMMaskedKey" style="font-weight:700;color:#059669">●●●●●●●●</code></span>
+            <span id="activeLLMLastTest" style="font-size:11px;color:#94a3b8">随时可重测</span>
+          </div>
+          <div id="activeLLMErrorBox" style="display:none;margin-top:8px;padding:8px 10px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:11.5px"></div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <button type="button" id="btnTestSavedKey" class="btn btn-sm" style="background:#059669;color:#fff;font-weight:700;padding:6px 14px;border-radius:10px;border:none;display:flex;align-items:center;gap:6px" onclick="testSavedLLM()">
+            <span id="testSavedIcon">⚡</span>
+            <span id="testSavedText">一键测试已存密钥连通性</span>
+          </button>
+          <button type="button" class="btn btn-sm btn-action-light" style="font-size:11.5px;padding:5px 12px;border-radius:10px" onclick="toggleLLMReplaceSection()">
+            <span id="toggleReplaceText">🔄 更换/录入新密钥 ▼</span>
+          </button>
+        </div>
+      </div>
+
       <div class="setting-help-box info" id="llmMeta" style="margin-bottom:14px">
         正在读取 DPAPI 加密凭证状态…
       </div>
 
+      <!-- 更换/配置新密钥区域 -->
+      <div id="llmEditSection">
       <!-- 一键智能导入横幅 (支持类似 CC-Switch / 剪贴板 / 任意格式) -->
       <div style="background:linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%);border:1.5px solid #bfdbfe;border-radius:14px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(37,99,235,0.06)">
         <div>
@@ -4727,6 +4961,7 @@ PAGE = """<!DOCTYPE html>
           </div>
         </div>
       </details>
+      </div>
 
       <div class="d-flex align-items-center justify-content-between p-3 mt-2 mb-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px">
         <div>
@@ -5291,6 +5526,19 @@ PAGE = """<!DOCTYPE html>
               <button class="btn-action-light" style="padding:4px 12px;font-size:11px;border-radius:12px" onclick="clearPlaygroundChat()">
                 🗑️ 清空会话
               </button>
+            </div>
+          </div>
+
+          <!-- Playground LLM Status Strip -->
+          <div class="playground-llm-strip" id="pgLLMStrip" style="padding:7px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;font-size:12px">
+            <div class="d-flex align-items-center gap-2">
+              <span style="font-weight:700;color:#334155">🤖 推理底座:</span>
+              <span id="pgLLMBadge" class="soft-badge badge-pub">正在检测…</span>
+              <span id="pgLLMDetail" style="color:#64748b;font-size:11.5px">--</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <button type="button" class="btn btn-sm btn-action-light" style="font-size:11px;padding:3px 10px;border-radius:8px;font-weight:600" onclick="testSavedLLM(true)">⚡ 立即测速</button>
+              <button type="button" class="btn btn-sm btn-action-light" style="font-size:11px;padding:3px 10px;border-radius:8px;font-weight:600" onclick="openSettingModal('modalLLM')">⚙️ 更换模型/Key</button>
             </div>
           </div>
 
@@ -8228,8 +8476,36 @@ function syncFromCityTextarea(type) {
 
 async function loadSettings() {
   const s = await api('/api/settings');
-  window.__cachedSettings = s;
-  document.getElementById('llmMeta').textContent = `当前Key：${s.llm.api_key_masked || '未配置'}（来源：${s.llm.key_source}）`;
+  const hasSavedKey = Boolean(s.llm && s.llm.api_key_masked);
+  const activeCard = document.getElementById('activeLLMCard');
+  const inKey = document.getElementById('inKey');
+  const metaBox = document.getElementById('llmMeta');
+  const helperBox = document.getElementById('modalLLMHelper');
+
+  if (activeCard) activeCard.style.display = hasSavedKey ? 'block' : 'none';
+  if (metaBox) metaBox.style.display = hasSavedKey ? 'none' : 'block';
+
+  if (hasSavedKey) {
+    const provName = s.llm.provider || '自定义渠道';
+    const curModel = s.llm.model || '--';
+    if (document.getElementById('activeLLMProvider')) document.getElementById('activeLLMProvider').textContent = provName;
+    if (document.getElementById('activeLLMModel')) document.getElementById('activeLLMModel').textContent = curModel;
+    if (document.getElementById('activeLLMMaskedKey')) document.getElementById('activeLLMMaskedKey').textContent = s.llm.api_key_masked;
+    if (document.getElementById('activeLLMSourceBadge')) document.getElementById('activeLLMSourceBadge').textContent = s.llm.key_source || 'DPAPI加密';
+    if (inKey) inKey.placeholder = '●●●●●●●● (已安全加密存储，留空保持不变；如需更换直接粘贴新密钥)';
+    toggleLLMReplaceSection(false);
+    if (helperBox) helperBox.style.display = 'none';
+  } else {
+    if (inKey) inKey.placeholder = '在此粘贴获取到的密钥 (留空 = 保持已存密钥不变)';
+    toggleLLMReplaceSection(true);
+    if (helperBox) helperBox.style.display = 'block';
+  }
+
+  if (s.llm_health) {
+    window.__latestLLMHealth = s.llm_health;
+    renderLLMStatus(s.llm_health);
+  }
+
   const curBase = (s.llm.base_url || '').toLowerCase();
   if (curBase.includes('askdiandian') || curBase.includes('dots')) {
     selectModalLLMProvider('dots3');
@@ -8432,24 +8708,221 @@ async function saveSettings() {
   if (d.ok) {
     showToast('LLM 配置保存成功！', 'success');
     document.getElementById('inKey').value = '';
-    loadSettings();
+    await loadSettings();
+    await refreshLLMStatus(false);
     setTimeout(() => closeSettingModal('modalLLM'), 600);
   }
 }
 
-async function testLLM() {
-  const el = document.getElementById('resLLM');
-  if (el) { el.style.color = 'var(--acc)'; el.textContent = '测试中（深度思考约15-60s）…'; }
-  const body = { base_url: document.getElementById('inBase').value, model: document.getElementById('inModel').value };
-  const k = document.getElementById('inKey').value.trim();
-  if (k) body.api_key = k;
-  const d = await api('/api/settings/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (el) {
-    el.style.color = d.ok ? 'var(--ok)' : 'var(--dan)';
-    el.textContent = d.ok ? `✅ 连通（${d.latency_ms}ms）` : ('❌ ' + (d.error || '失败'));
+let isLLMReplaceExpanded = false;
+function toggleLLMReplaceSection(force) {
+  const sec = document.getElementById('llmEditSection');
+  const txt = document.getElementById('toggleReplaceText');
+  if (!sec) return;
+  isLLMReplaceExpanded = (force !== undefined) ? force : !isLLMReplaceExpanded;
+  sec.style.display = isLLMReplaceExpanded ? 'block' : 'none';
+  if (txt) {
+    txt.textContent = isLLMReplaceExpanded ? '▲ 收起更换新密钥' : '🔄 更换/录入新密钥 ▼';
   }
-  if (d.ok) showToast(`大模型连通测试成功 (${d.latency_ms}ms)`, 'success');
-  else showToast('连接失败: ' + (d.error || ''), 'error');
+}
+
+function renderLLMStatus(h) {
+  if (!h) return;
+  const status = h.status || 'untested';
+  const prov = h.provider || '大模型';
+  const ms = h.latency_ms || 0;
+  const err = h.error || '';
+
+  // 1. Topbar Pill (#btnTopLLMStatus)
+  const topDot = document.getElementById('topLLMDot');
+  const topText = document.getElementById('topLLMText');
+  const topBtn = document.getElementById('btnTopLLMStatus');
+  if (topDot && topText) {
+    if (status === 'connected') {
+      topDot.className = 'pulse-dot dot-green';
+      topText.textContent = `${prov} · ${ms}ms`;
+      if (topBtn) topBtn.title = `大模型已连通 (${prov} / ${h.model || ''}) · 响应延迟 ${ms}ms (点击测试或配置)`;
+    } else if (status === 'auth_error') {
+      topDot.className = 'pulse-dot dot-red';
+      topText.textContent = 'LLM 密钥失效';
+      if (topBtn) topBtn.title = `大模型鉴权失败 (401 密钥失效) · 点击立即诊断与修复`;
+    } else if (status === 'unreachable') {
+      topDot.className = 'pulse-dot dot-red';
+      topText.textContent = 'LLM 连通异常';
+      if (topBtn) topBtn.title = `大模型连接失败: ${err} · 点击排查`;
+    } else if (status === 'unconfigured') {
+      topDot.className = 'pulse-dot dot-gray';
+      topText.textContent = 'LLM 未配置';
+      if (topBtn) topBtn.title = '未配置大模型密钥 · 点击一键配置';
+    } else {
+      topDot.className = 'pulse-dot dot-blue';
+      topText.textContent = `${prov} (待测速)`;
+      if (topBtn) topBtn.title = '已配置大模型密钥 · 点击一键测试连通性';
+    }
+  }
+
+  // 2. Settings Hub Card (#hubBadgeLLMStatus)
+  const hubStatus = document.getElementById('hubBadgeLLMStatus');
+  if (hubStatus) {
+    if (status === 'connected') {
+      hubStatus.className = 'soft-badge badge-ok';
+      hubStatus.textContent = `🟢 已连通 (${ms}ms)`;
+    } else if (status === 'auth_error') {
+      hubStatus.className = 'soft-badge badge-rej';
+      hubStatus.textContent = '🔴 密钥失效 (401)';
+    } else if (status === 'unreachable') {
+      hubStatus.className = 'soft-badge badge-rej';
+      hubStatus.textContent = '🔴 连通异常';
+    } else if (status === 'unconfigured') {
+      hubStatus.className = 'soft-badge';
+      hubStatus.textContent = '⚪ 未配置';
+    } else {
+      hubStatus.className = 'soft-badge badge-pub';
+      hubStatus.textContent = '⚪ 状态待测';
+    }
+  }
+
+  // 3. Modal Active Card (#activeLLMPingBadge & #activeLLMErrorBox)
+  const pingBadge = document.getElementById('activeLLMPingBadge');
+  const errBox = document.getElementById('activeLLMErrorBox');
+  if (pingBadge) {
+    if (status === 'connected') {
+      pingBadge.className = 'soft-badge badge-ok';
+      pingBadge.textContent = `🟢 连通正常 (${ms}ms)`;
+    } else if (status === 'auth_error') {
+      pingBadge.className = 'soft-badge badge-rej';
+      pingBadge.textContent = '🔴 鉴权失败 (401 密钥无效)';
+    } else if (status === 'unreachable') {
+      pingBadge.className = 'soft-badge badge-rej';
+      pingBadge.textContent = '🔴 连接异常';
+    } else {
+      pingBadge.className = 'soft-badge badge-pub';
+      pingBadge.textContent = '⚪ 尚未测试';
+    }
+  }
+  if (errBox) {
+    if (err && status !== 'connected') {
+      errBox.style.display = 'block';
+      errBox.innerHTML = `<strong>⚠️ 诊断提示:</strong> ${esc(err)}`;
+    } else {
+      errBox.style.display = 'none';
+    }
+  }
+
+  // 4. Playground Header Strip (#pgLLMBadge & #pgLLMDetail)
+  const pgBadge = document.getElementById('pgLLMBadge');
+  const pgDetail = document.getElementById('pgLLMDetail');
+  if (pgBadge && pgDetail) {
+    if (status === 'connected') {
+      pgBadge.className = 'soft-badge badge-ok';
+      pgBadge.textContent = `🟢 ${prov} 已就绪`;
+      pgDetail.textContent = `(${h.model || ''} · 延迟 ${ms}ms)`;
+    } else if (status === 'auth_error') {
+      pgBadge.className = 'soft-badge badge-rej';
+      pgBadge.textContent = '🔴 密钥失效 / 未就绪';
+      pgDetail.textContent = '(HTTP 401 鉴权未通过，推演将启用本地规则兜底)';
+    } else if (status === 'unreachable') {
+      pgBadge.className = 'soft-badge badge-rej';
+      pgBadge.textContent = '🔴 服务商连通异常';
+      pgDetail.textContent = `(${esc(err || '网络连接失败')}，推演将启用本地规则兜底)`;
+    } else if (status === 'unconfigured') {
+      pgBadge.className = 'soft-badge';
+      pgBadge.textContent = '⚪ 未配置大模型';
+      pgDetail.textContent = '(当前为本地离线规则兜底模式)';
+    } else {
+      pgBadge.className = 'soft-badge badge-pub';
+      pgBadge.textContent = `⚪ ${prov}`;
+      pgDetail.textContent = '(随时可点击测速)';
+    }
+  }
+}
+
+async function refreshLLMStatus(forceTest = false) {
+  try {
+    let h = null;
+    if (forceTest) {
+      h = await api('/api/settings/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+    } else {
+      h = await api('/api/llm/status');
+    }
+    if (h) {
+      window.__latestLLMHealth = h;
+      renderLLMStatus(h);
+    }
+  } catch (e) {
+    console.debug('Failed to refresh LLM status:', e);
+  }
+}
+
+async function testSavedLLM(showToastNotice = true) {
+  const btn = document.getElementById('btnTestSavedKey');
+  const icon = document.getElementById('testSavedIcon');
+  const txt = document.getElementById('testSavedText');
+  const resLLM = document.getElementById('resLLM');
+  if (btn) btn.disabled = true;
+  if (txt) txt.textContent = '正在测速（约3-15秒）…';
+  if (icon) icon.textContent = '⏳';
+  if (resLLM) { resLLM.style.color = 'var(--acc)'; resLLM.textContent = '正在测试当前已保存凭证…'; }
+
+  if (showToastNotice) showToast('正在向大模型端点发送极速连通探测…', 'info');
+
+  try {
+    const d = await api('/api/settings/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    window.__latestLLMHealth = d;
+    renderLLMStatus(d);
+    if (d.ok) {
+      if (resLLM) { resLLM.style.color = 'var(--ok)'; resLLM.textContent = `✅ 连通正常（${d.latency_ms}ms）`; }
+      if (showToastNotice) showToast(`🎉 大模型连通测试成功！响应延迟: ${d.latency_ms}ms`, 'success');
+    } else {
+      if (resLLM) { resLLM.style.color = 'var(--dan)'; resLLM.textContent = `❌ ${d.error || '连通失败'}`; }
+      if (showToastNotice) showToast(`连接失败: ${d.error || '未知错误'}`, 'error');
+    }
+    return d;
+  } catch (e) {
+    if (showToastNotice) showToast('测试请求异常: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (txt) txt.textContent = '一键测试已存密钥连通性';
+    if (icon) icon.textContent = '⚡';
+  }
+}
+
+async function testLLM() {
+  const k = document.getElementById('inKey').value.trim();
+  // 小白友好设计：若输入框留空，自动一键测试已存密钥，无需重复粘贴
+  if (!k) {
+    return await testSavedLLM(true);
+  }
+
+  const el = document.getElementById('resLLM');
+  if (el) { el.style.color = 'var(--acc)'; el.textContent = '正在测试输入的新密钥（约5-20秒）…'; }
+  const body = {
+    base_url: document.getElementById('inBase').value,
+    model: document.getElementById('inModel').value,
+    api_key: k
+  };
+  try {
+    const d = await api('/api/settings/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    window.__latestLLMHealth = d;
+    renderLLMStatus(d);
+    if (el) {
+      el.style.color = d.ok ? 'var(--ok)' : 'var(--dan)';
+      el.textContent = d.ok ? `✅ 新密钥连通正常（${d.latency_ms}ms）` : ('❌ ' + (d.error || '失败'));
+    }
+    if (d.ok) showToast(`新密钥连通测试成功 (${d.latency_ms}ms)`, 'success');
+    else showToast('连接失败: ' + (d.error || ''), 'error');
+  } catch(e) {
+    if (el) { el.style.color = 'var(--dan)'; el.textContent = '❌ 测试异常: ' + e.message; }
+    showToast('测试异常: ' + e.message, 'error');
+  }
 }
 
 async function savePrefs() {
@@ -9112,15 +9585,35 @@ function appendChatMessage(role, text, meta) {
       </div>
     `;
   } else {
+    const isFallback = Boolean(meta && meta.is_fallback);
     const actBadge = meta && meta.action ? `<span class="chat-bubble-action-badge">${esc(meta.action)}</span>` : '';
     const latency = meta && meta.latency_ms ? `<span>· 耗时 ${meta.latency_ms}ms</span>` : '';
+    const sourceBadge = isFallback
+      ? '<span class="chat-bubble-action-badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">⚠️ 本地规则兜底</span>'
+      : '<span class="chat-bubble-action-badge" style="background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0">🤖 LLM 原生</span>';
+
+    const fallbackAlert = isFallback ? `
+      <div style="background:#fff1f2;border:1.5px solid #fecdd3;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#9f1239;line-height:1.5">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <span style="font-weight:800;display:flex;align-items:center;gap:4px">
+            <span>⚠️ 本地离线规则兜底回复</span>
+            <span class="badge" style="background:#e11d48;color:#fff;font-size:9.5px;padding:2px 6px;border-radius:4px">大模型未就绪</span>
+          </span>
+          <button type="button" class="btn btn-sm btn-outline-danger" style="font-size:10.5px;padding:2px 8px;border-radius:6px;font-weight:700;background:#fff" onclick="openSettingModal('modalLLM')">🔧 排查 / 配置密钥</button>
+        </div>
+        <div style="font-size:11.5px;color:#be123c">${esc(meta.fallback_reason || '大模型未能成功响应，系统已启用安全本地兜底话术')}</div>
+      </div>
+    ` : '';
+
     row.innerHTML = `
-      <div class="chat-avatar agent">AI</div>
+      <div class="chat-avatar agent" style="${isFallback ? 'background:#ef4444;color:#fff' : ''}">${isFallback ? '⚡' : 'AI'}</div>
       <div>
-        <div class="chat-bubble">
-          ${esc(text)}
+        <div class="chat-bubble ${isFallback ? 'fallback-mode' : ''}">
+          ${fallbackAlert}
+          <div>${esc(text)}</div>
         </div>
         <div class="chat-bubble-meta">
+          ${sourceBadge}
           ${actBadge}
           ${latency}
           <span>· ${esc(timeStr)}</span>
@@ -9272,7 +9765,14 @@ async function runPlaygroundSimulation() {
     const dec = d.parsed_decision || {};
     const act = dec.action || 'reply';
     const replyText = d.cleaned_reply || dec.reply_text || dec.suggested_reply || `(执行动作：${act})`;
-    appendChatMessage('agent', replyText, { action: act, latency_ms: d.latency_ms });
+    const isFallback = d.llm_source === 'rule_fallback' || !d.ok;
+    appendChatMessage('agent', replyText, {
+      action: act,
+      latency_ms: d.latency_ms,
+      is_fallback: isFallback,
+      fallback_reason: d.fallback_reason || d.llm_error,
+      llm_source: d.llm_source
+    });
 
     if (!isSingle) {
       // 仅在多轮推演模式下，把当前 HR 消息与 Agent 回复一并沉淀入连续历史池
@@ -9287,8 +9787,11 @@ async function runPlaygroundSimulation() {
 
     // 右侧更新透视与门禁数据
     renderPlaygroundResult(d);
-    showToast(`推演完成！耗时 ${d.latency_ms}ms`, 'success');
-    if (statusEl) { statusEl.style.color = 'var(--ok)'; statusEl.textContent = `推演完成 (${d.latency_ms}ms)`; }
+    showToast(isFallback ? `推演完成（已安全启用本地规则兜底，耗时 ${d.latency_ms}ms）` : `推演完成！耗时 ${d.latency_ms}ms`, isFallback ? 'info' : 'success');
+    if (statusEl) {
+      statusEl.style.color = isFallback ? 'var(--warn)' : 'var(--ok)';
+      statusEl.textContent = isFallback ? `本地规则兜底 (${d.latency_ms}ms)` : `推演完成 (${d.latency_ms}ms)`;
+    }
   } catch(e) {
     removeChatThinking();
     showToast('推演异常: ' + e, 'error');
@@ -9305,10 +9808,28 @@ function renderPlaygroundResult(d) {
     let modeBadge = d.safety_audit && !d.safety_audit.online_reply_enabled
       ? '<span class="soft-badge badge-rej">🛡️ 线上拦截锁死</span>'
       : '<span class="soft-badge badge-ai">线上回复开启</span>';
-    let llmBadge = d.llm_called
-      ? '<span class="soft-badge badge-pub">🤖 LLM 直通</span>'
-      : '<span class="soft-badge badge-blue">⚡ 启发式离线</span>';
+    let llmBadge = '';
+    if (d.llm_source === 'llm_native' || (d.ok && !d.llm_error)) {
+      llmBadge = '<span class="soft-badge badge-pub">🤖 LLM 原生推理</span>';
+    } else {
+      llmBadge = `<span class="soft-badge badge-rej" title="${esc(d.fallback_reason || d.llm_error || '本地规则兜底')}">⚠️ 本地规则兜底 (LLM未就绪)</span>`;
+    }
     badgesContainer.innerHTML = modeBadge + ' ' + llmBadge;
+  }
+
+  // 1.1 Update Playground LLM Status Strip
+  const pgBadge = document.getElementById('pgLLMBadge');
+  const pgDetail = document.getElementById('pgLLMDetail');
+  if (pgBadge && pgDetail) {
+    if (d.llm_source === 'llm_native' || (d.ok && !d.llm_error)) {
+      pgBadge.className = 'soft-badge badge-ok';
+      pgBadge.textContent = '🟢 LLM 原生推理就绪';
+      pgDetail.textContent = `(响应延迟: ${d.latency_ms}ms)`;
+    } else {
+      pgBadge.className = 'soft-badge badge-rej';
+      pgBadge.textContent = '🔴 本地离线规则兜底';
+      pgDetail.textContent = `(${d.fallback_reason || d.llm_error || 'LLM 调用失败'})`;
+    }
   }
 
   // 2. Action & Decision
@@ -9956,6 +10477,15 @@ def api_overview(token: str = ""):
         "auth": qr_login.QRLoginManager().get_auth_status(cfg),
         "user_profile": qr_login.get_cached_user_profile(),
         "llm_configured": bool((cfg.get("llm") or {}).get("api_key") and "YOUR_LLM_API_KEY" not in (cfg.get("llm") or {}).get("api_key", "")),
+        "llm": {
+            "configured": bool((cfg.get("llm") or {}).get("api_key") and "YOUR_LLM_API_KEY" not in (cfg.get("llm") or {}).get("api_key", "")),
+            "status": _LLM_HEALTH_CACHE.get("status", "untested"),
+            "latency_ms": _LLM_HEALTH_CACHE.get("latency_ms", 0),
+            "error": _LLM_HEALTH_CACHE.get("error"),
+            "provider": _detect_provider_name((cfg.get("llm") or {}).get("base_url", ""), (cfg.get("llm") or {}).get("model", "")),
+            "model": (cfg.get("llm") or {}).get("model", ""),
+            "api_key_masked": secrets_mod.masked((cfg.get("llm") or {}).get("api_key", "")),
+        },
         "browser": {
             "silent_mode": (cfg.get("browser") or {}).get("silent_mode", True),
             "minimize_on_start": (cfg.get("browser") or {}).get("minimize_on_start", True),
@@ -10347,6 +10877,12 @@ async def api_auth_clear_key(request: Request, token: str = ""):
                         json.dump(local_data, f, ensure_ascii=False, indent=2)
             except Exception:
                 pass
+        _LLM_HEALTH_CACHE.update({
+            "status": "unconfigured",
+            "latency_ms": 0,
+            "error": "未配置大模型 API Key",
+            "api_key_masked": "",
+        })
     return {"ok": True, "message": f"已成功清除 {key_name}"}
 
 

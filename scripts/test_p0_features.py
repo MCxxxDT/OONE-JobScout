@@ -106,6 +106,17 @@ class TestWizardAPIs(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
         self.token = "boss-apply"
+        from boss_apply import secrets as secrets_mod
+        self.secrets_path = secrets_mod.SECRETS_PATH
+        self.secrets_backup = None
+        if os.path.exists(self.secrets_path):
+            with open(self.secrets_path, "rb") as f:
+                self.secrets_backup = f.read()
+
+        self.cfg_backup = None
+        if os.path.exists(cfgmod.LOCAL_CFG_PATH):
+            with open(cfgmod.LOCAL_CFG_PATH, "rb") as f:
+                self.cfg_backup = f.read()
 
     def test_api_presets(self):
         res = self.client.get(f"/api/presets?token={self.token}")
@@ -147,20 +158,48 @@ class TestWizardAPIs(unittest.TestCase):
         self.assertEqual(prefs.get("want_cities"), ["杭州", "上海", "深圳"])
 
     def tearDown(self):
-        # 恢复初始状态，避免影响其他全局测试
-        import shutil
-        if os.path.exists(cfgmod.LOCAL_CFG_PATH):
-            example_cfg = os.path.join(ROOT, "config.local.example.json")
-            if os.path.exists(example_cfg):
-                shutil.copy2(example_cfg, cfgmod.LOCAL_CFG_PATH)
-            else:
-                os.remove(cfgmod.LOCAL_CFG_PATH)
+        # 恢复初始配置与密钥状态，绝对避免测试 mock key 污染用户真实 DPAPI 密钥
+        if self.secrets_backup is not None:
+            with open(self.secrets_path, "wb") as f:
+                f.write(self.secrets_backup)
+        elif os.path.exists(self.secrets_path):
+            os.remove(self.secrets_path)
+
+        if self.cfg_backup is not None:
+            with open(cfgmod.LOCAL_CFG_PATH, "wb") as f:
+                f.write(self.cfg_backup)
+        elif os.path.exists(cfgmod.LOCAL_CFG_PATH):
+            os.remove(cfgmod.LOCAL_CFG_PATH)
 
 
 class TestOneClickImport(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
         self.token = "boss-apply"
+        from boss_apply import secrets as secrets_mod
+        self.secrets_path = secrets_mod.SECRETS_PATH
+        self.secrets_backup = None
+        if os.path.exists(self.secrets_path):
+            with open(self.secrets_path, "rb") as f:
+                self.secrets_backup = f.read()
+
+        self.cfg_backup = None
+        if os.path.exists(cfgmod.LOCAL_CFG_PATH):
+            with open(cfgmod.LOCAL_CFG_PATH, "rb") as f:
+                self.cfg_backup = f.read()
+
+    def tearDown(self):
+        if self.secrets_backup is not None:
+            with open(self.secrets_path, "wb") as f:
+                f.write(self.secrets_backup)
+        elif os.path.exists(self.secrets_path):
+            os.remove(self.secrets_path)
+
+        if self.cfg_backup is not None:
+            with open(cfgmod.LOCAL_CFG_PATH, "wb") as f:
+                f.write(self.cfg_backup)
+        elif os.path.exists(cfgmod.LOCAL_CFG_PATH):
+            os.remove(cfgmod.LOCAL_CFG_PATH)
 
     def test_parse_cc_switch_single_json(self):
         from scripts.approval_web import parse_api_key_config
