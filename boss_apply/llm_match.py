@@ -123,6 +123,10 @@ def _call_once(batch, cfg, start_idx=0):
             "temperature": 0.3,
             "max_tokens": 8192,
         }
+        u_low = (url or "").lower()
+        m_low = (llm.get("model") or "").lower()
+        if "askdiandian" in u_low or "dots" in u_low or "dots" in m_low:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
         headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + llm["api_key"],
