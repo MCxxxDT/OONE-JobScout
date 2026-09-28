@@ -519,6 +519,22 @@ class QRLoginManager:
             sess._send("Network.enable", sid=sid)
             sess.events = []
 
+            # 默认后台静默执行，杜绝二维码抓取时弹窗抢占桌面焦点
+            is_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
+            is_min = bool((cfg.get("browser") or {}).get("minimize_on_start", True))
+            if is_silent:
+                try:
+                    from . import rawcdp
+                    rawcdp.set_win32_browser_visibility(port=9335, mode="hide")
+                except Exception:
+                    pass
+            elif is_min:
+                try:
+                    from . import rawcdp
+                    rawcdp.set_win32_browser_visibility(port=9335, mode="minimize")
+                except Exception:
+                    pass
+
             # 4. 轮询 DOM 渲染并触发切换到二维码登录界面
             deadline = time.time() + 15
             qr_clicked = False

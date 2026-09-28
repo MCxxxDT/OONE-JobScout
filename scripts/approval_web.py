@@ -892,9 +892,9 @@ async def api_browser_visibility(request: Request, token: str = ""):
         silent = (mode == "hide")
         is_min = (mode != "normal")
     else:
-        mode = "normal"
-        silent = False
-        is_min = False
+        silent = cur_silent
+        is_min = cur_min
+        mode = "hide" if silent else ("minimize" if is_min else "normal")
 
     if mode == "hide":
         msg = "Chrome 自动化窗口已彻底隐藏于后台（零可见、绝不弹窗打扰）"
