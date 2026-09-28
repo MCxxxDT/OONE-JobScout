@@ -41,7 +41,6 @@ def ensure_chrome_running(cfg=None) -> bool:
         is_silent = bool((cfg.get("browser") or {}).get("silent_mode", True))
         if is_silent:
             try:
-                from boss_apply import rawcdp
                 rawcdp.set_win32_browser_visibility(port=9335, mode="hide")
             except Exception:
                 pass
@@ -169,13 +168,11 @@ def ensure_chrome_running(cfg=None) -> bool:
             urlopen(cdp_http + "/json/version", timeout=1)
             if is_silent:
                 try:
-                    from boss_apply import rawcdp
                     rawcdp.set_win32_browser_visibility(port=9335, mode="hide")
                 except Exception:
                     pass
             elif is_min:
                 try:
-                    from boss_apply import rawcdp
                     rawcdp.set_win32_browser_visibility(port=9335, mode="minimize")
                 except Exception:
                     pass
@@ -524,13 +521,11 @@ class QRLoginManager:
             is_min = bool((cfg.get("browser") or {}).get("minimize_on_start", True))
             if is_silent:
                 try:
-                    from . import rawcdp
                     rawcdp.set_win32_browser_visibility(port=9335, mode="hide")
                 except Exception:
                     pass
             elif is_min:
                 try:
-                    from . import rawcdp
                     rawcdp.set_win32_browser_visibility(port=9335, mode="minimize")
                 except Exception:
                     pass
