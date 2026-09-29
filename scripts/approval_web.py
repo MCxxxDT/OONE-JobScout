@@ -7966,13 +7966,14 @@ function renderLedger() {
   fullLedger.forEach((r, idx) => { r._rawIdx = idx; });
 
   const filtered = fullLedger.filter(r => {
+    if (r.action === 'scan') return false; // 实时台账不展示岗位检索初筛日志
     if (ledgerFilter !== 'all') {
       if (ledgerFilter === 'wechat' && !r.action.includes('wechat')) return false;
       else if (ledgerFilter === 'resume' && !r.action.includes('resume')) return false;
       else if (ledgerFilter === 'reply' && r.action !== 'reply' && r.action !== 'dryrun_reply') return false;
       else if (ledgerFilter === 'alert' && !r.action.includes('alert') && r.action !== 'human_alert_card') return false;
       else if (ledgerFilter === 'gate' && r.action !== 'job_fit_gate') return false;
-      else if (ledgerFilter === 'scan' && !['daemon_cycle_summary', 'daemon_gate_sleep', 'daily_report', 'daemon_guard_paused', 'daemon_error', 'daily_apply_summary', 'daily_plan_generated', 'scan'].includes(r.action)) return false;
+      else if (ledgerFilter === 'scan' && !['daemon_cycle_summary', 'daemon_gate_sleep', 'daily_report', 'daemon_guard_paused', 'daemon_error', 'daily_apply_summary', 'daily_plan_generated'].includes(r.action)) return false;
     }
     if (kw) {
       const line = (r.ts + ' ' + r.action + ' ' + (r.company || '') + ' ' + (r.status || '') + ' ' + (r.last_msg || '') + ' ' + (r.suggested || '') + ' ' + (r.reason || '')).toLowerCase();
@@ -10447,6 +10448,9 @@ def api_overview(token: str = ""):
     enriched_ledger = []
     for r in reversed(rows[-120:]):
         act = r.get("action") or ""
+        # 实时台账聚焦真实招聘沟通/会话与系统运行事件，初筛丢弃日志不在此展示
+        if act == "scan":
+            continue
         comp = r.get("company") or r.get("title") or ""
         st = r.get("status") or r.get("reason") or r.get("text_head") or ""
         hr_text, ai_text = _extract_dialog_texts(r, None)
