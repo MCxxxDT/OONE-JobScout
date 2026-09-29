@@ -8130,7 +8130,40 @@ function renderLedger() {
       `;
     }
 
-    // 2.3 规则跳过 (Daemon Skip / Ignore)
+    // 2.3 岗位扫描初筛过滤 (Job Search Screening & Filtering)
+    if (r.action === 'scan') {
+      const skipReason = r.reason || '未命中硬性门禁规则';
+      const city = r.city || '';
+      const kw = r.keyword || '';
+      const jobTitle = r.title || '检索目标岗位';
+      const actDays = (r.boss_active !== undefined && r.boss_active >= 0) ? `${r.boss_active}天前活跃` : '';
+      return `
+        <div class="ledger-event-card p-3 mb-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+            <div class="d-flex align-items-center gap-2">
+              <span class="soft-badge badge-blue" style="font-size:11.5px;font-weight:700">🔍 检索初筛</span>
+              <strong style="font-size:14px;color:var(--txt)">${esc(r.company || '目标企业')}</strong>
+              <span class="soft-badge badge-rej" style="font-size:10.5px">已安全剔除（未发起沟通）</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--mut);font-weight:500">${esc(r.ts)}</div>
+          </div>
+          <div class="quote-box py-2 px-3" style="background:#f8fafc;border-left:4px solid #f59e0b;border-radius:8px;font-size:12.5px">
+            <div class="d-flex justify-content-between flex-wrap gap-1 mb-1">
+              <span style="color:#0f172a;font-weight:700">🎯 岗位: ${esc(jobTitle)}</span>
+              <span style="color:#64748b;font-size:11.5px">${esc(city)} · 搜索词: ${esc(kw)} ${actDays ? `· HR: ${esc(actDays)}` : ''}</span>
+            </div>
+            <div style="color:#b45309;line-height:1.5">
+              <strong>🛡️ 门禁剔除原因：</strong>${esc(skipReason)}
+            </div>
+            <div style="color:#64748b;font-size:11.5px;margin-top:5px;padding-top:4px;border-top:1px dashed #e2e8f0">
+              💡 <strong>安全透明说明</strong>：仅为公网在招岗位自动巡检初筛，<strong>未向对方发送任何消息或打招呼</strong>，杜绝浪费宝贵沟通额度。
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 2.4 规则跳过 (Daemon Skip / Ignore)
     if (r.action === 'daemon_skip' || r.action === 'card_ignore') {
       const skipReason = r.reason || (r.raw && r.raw.reason) || '规则策略跳过';
       return `
