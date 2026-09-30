@@ -68,4 +68,4 @@ python3 -B tests/integration_uninstall.py
 
 单元测试使用临时目录，覆盖范围预览、取消、误删保护、共享环境链接、旧 Profile、外部敏感数据链接、PID 复用、子进程、Worktree、锁定文件和 uv 按包命令。集成测试只启动并删除自行创建的临时安装和测试进程，覆盖虚拟环境自卸载、Unicode/空格路径、专属进程停止及无关进程保留，不启动真实浏览器或访问 BOSS。
 
-提供 GitHub Actions 的 macOS/Linux/Windows 测试矩阵。交付时已在 macOS 实测单元与集成测试；矩阵尚未提交运行，Windows/Linux 完整流程未在本次环境实测。
+GitHub Actions 的 macOS/Linux/Windows 测试矩阵已全部通过，包含 16 项单元测试（Windows 跳过 2 项 POSIX 符号链接用例）及隔离集成测试。Windows 集成测试使用实际 uninstall.bat 入口，并验证从待删除的虚拟环境直接卸载会被拒绝。验证记录：https://github.com/MCxxxDT/OONE-JobScout/actions/runs/36715332772 。
