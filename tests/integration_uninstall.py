@@ -30,20 +30,25 @@ with tempfile.TemporaryDirectory(prefix='oone-e2e-中文 ') as folder:
     unrelated = subprocess.Popen([sys.executable, '-B', '-c', 'import time; time.sleep(120)', '--remote-debugging-port=9335'])
     try:
         time.sleep(.3)
-        before = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--dry-run'], capture_output=True, text=True, encoding="utf-8")
+        runner = sys.executable if os.name == "nt" else str(python)
+        before = subprocess.run([runner, '-B', str(root / 'boss_apply/uninstall.py'), '--dry-run'], capture_output=True, text=True, encoding="utf-8")
         assert before.returncode == 0, before.stderr
         assert f'PID {service.pid}' in before.stdout, before.stdout
         assert f'PID {browser.pid}' in before.stdout, before.stdout
         assert f'PID {unrelated.pid}' not in before.stdout, before.stdout
         assert service.poll() is None and browser.poll() is None
-        completed = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--yes'], cwd=Path(folder), capture_output=True, text=True, encoding="utf-8", timeout=90)
+        if os.name == "nt":
+            blocked = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--yes'], capture_output=True, text=True, encoding='utf-8')
+            assert blocked.returncode == 1, blocked.stdout + blocked.stderr
+            assert root.exists() and service.poll() is None
+        completed = subprocess.run([runner, '-B', str(root / 'boss_apply/uninstall.py'), '--yes'], cwd=Path(folder), capture_output=True, text=True, encoding="utf-8", timeout=90)
         print(completed.stdout)
         assert completed.returncode == 0, completed.stderr
         assert not root.exists(), root
         assert service.wait(timeout=3) is not None
         assert browser.wait(timeout=3) is not None
         assert unrelated.poll() is None
-        print('PASS: .venv self-uninstall; path with spaces/Unicode; two scoped processes stopped; unrelated process preserved; no fixture files remain.')
+        print('PASS: installation and .venv removed; path with spaces/Unicode; two scoped processes stopped; unrelated process preserved; no fixture files remain.')
     finally:
         for process in (service, browser, unrelated):
             if process.poll() is None:

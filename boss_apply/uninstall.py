@@ -523,11 +523,14 @@ def main(argv: list[str] | None = None) -> int:
         if plan.uv_tool:
             deletion_roots.append(Path(plan.uv_tool))
         if not args.dry_run and any(inside(running_python, r) for r in deletion_roots):
+            if os.name == "nt":
+                raise UninstallError("Windows 请使用安装目录外的系统 Python 运行卸载脚本，"
+                                     "或双击 uninstall.bat；不能由将被删除的虚拟环境执行卸载。")
             base = Path(getattr(sys, "_base_executable", "")).resolve()
             if not base.is_file() or any(inside(base, r) for r in deletion_roots):
                 raise UninstallError("请使用安装目录外的系统 Python 3.10+ 运行卸载入口。")
-            # Replace this process; a waiting .venv Python would lock python.exe
-            # on Windows and prevent the external worker from removing it.
+            # POSIX exec replaces the interpreter. Windows venv redirectors
+            # remain alive, so Windows must use the external launcher above.
             os.execv(str(base), [str(base), "-B", str(Path(__file__).resolve()),
                                 *(sys.argv[1:] if argv is None else argv)])
         print("永久删除以下内容（包括目录内未提交代码、简历、密钥、登录态和 .venv）：")
