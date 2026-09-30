@@ -33,6 +33,37 @@
 
 ---
 
+## 🗑️ 一键卸载（永久删除）
+
+- **Windows**：双击根目录 `uninstall.bat`。
+- **macOS**：双击根目录 `uninstall.command`；如系统未允许执行，在终端运行 `bash uninstall.sh`。
+- **Linux**：终端运行 `bash uninstall.sh`。
+
+入口会列出安装目录、同一 Git 仓库的全部 Worktree（含外部目录）及要停止的专属进程；输入 `DELETE` 后永久删除。项目目录内的源码、`.git`、未提交修改、`.venv`、配置、API 密钥、简历、日志、台账和专属浏览器登录数据均会删除，请先把需要保留的内容移出这些目录。
+
+```bash
+# 只读预览，不停止进程、不删除文件
+python3 -B boss_apply/uninstall.py --dry-run
+
+# 如果旧版本用过 ~/chrome-cdp-profile，确认该目录只属于本项目后纳入删除
+python3 -B boss_apply/uninstall.py --include-legacy-profile
+
+# 同时处理 uv 全局工具和项目包缓存（先预览）
+python3 -B boss_apply/uninstall.py --include-legacy-profile --uv-tools --dry-run
+python3 -B boss_apply/uninstall.py --include-legacy-profile --uv-tools
+
+# 仅卸载 uv 工具，不删除源码副本（新版本提供此命令）
+oone-uninstall --uv-only --include-legacy-profile
+```
+
+Windows 命令行可用 `py -3 -B` 替换 `python3 -B`。自动化调用只有在审阅预览后才添加 `--yes`。旧版本全局安装若没有 `oone-uninstall`，可从本仓库运行 `boss_apply/uninstall.py --uv-only`；不要通过 uvx 下载卸载器，以免再次生成安装缓存。
+
+新版调试浏览器使用 `state/browser-profile`，工作台窗口使用 `state/console-profile`，首次启动需要重新扫码；旧目录不会自动迁移或删除。卸载器只停止已确认归属的进程，不按 Chrome 名称或端口杀进程，不跟随 `.venv` 符号链接或目录联接删除共享环境。
+
+**范围与结果**：该功能清除当前用户、预览清单内可识别的本项目安装和专属数据，并核验目录与进程。它不提供“整台电脑任何地方零痕迹”或磁盘安全擦除保证。旧浏览器目录、外部数据链接、uv 缓存等未覆盖项会明确显示；系统日志、备份、其他源码副本、手动添加的 MCP 配置、共享 Python/uv/浏览器/Tailscale，以及第三方账户中的记录需另行处理。详细说明与返回码见 [卸载说明](docs/UNINSTALL.md)。
+
+---
+
 ## 🛠️ 开发者手动安装（可选 / 进阶）
 
 - **Windows (PowerShell)**:

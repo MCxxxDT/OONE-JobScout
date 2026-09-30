@@ -78,7 +78,7 @@ def ensure_chrome_running(cfg=None) -> bool:
     if not chrome_exe:
         return False
 
-    profile_dir = os.path.expanduser("~/chrome-cdp-profile")
+    profile_dir = os.path.join(cfgmod.STATE_DIR, "browser-profile")
     if not os.path.exists(profile_dir):
         try:
             os.makedirs(profile_dir, exist_ok=True)

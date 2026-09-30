@@ -24,6 +24,7 @@ dependencies = [
 boss-apply = "boss_apply.web_server:main"
 oone-jobscout = "boss_apply.web_server:main"
 boss-mcp = "boss_apply.server:main"
+oone-uninstall = "boss_apply.uninstall:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["boss_apply", "scripts"]

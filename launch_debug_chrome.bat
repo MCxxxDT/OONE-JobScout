@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 set "PORT=9335"
-set "PROFILE=%USERPROFILE%\chrome-cdp-profile"
+set "PROFILE=%~dp0state\browser-profile"
 
 :: 1. 探测 Chrome / Edge / Brave 可执行文件
 set "BROWSER_BIN="

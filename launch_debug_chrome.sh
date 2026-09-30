@@ -1,11 +1,12 @@
 #!/bin/bash
 # ==============================================================================
 # boss-apply · macOS / Linux 专用调试 Chrome 启动脚本
-# 端口：9335 | 用户配置目录：~/chrome-cdp-profile
+# 端口：9335 | 用户配置目录：项目/state/browser-profile
 # ==============================================================================
 
 PORT=9335
-PROFILE="$HOME/chrome-cdp-profile"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROFILE="$ROOT_DIR/state/browser-profile"
 
 # 1. 探测 Chrome / Chromium 系列浏览器可执行文件路径
 CHROME_BIN=""
