@@ -200,6 +200,7 @@ def split_command(command: str) -> tuple[str, ...]:
             return (command,)
     argc = ctypes.c_int()
     shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    shell32.CommandLineToArgvW.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_int)]
     shell32.CommandLineToArgvW.restype = ctypes.POINTER(ctypes.c_wchar_p)
     argv = shell32.CommandLineToArgvW(command, ctypes.byref(argc))
     if not argv:
@@ -248,7 +249,8 @@ def processes() -> list[Process]:
         data = powershell("$ErrorActionPreference='Stop'; "
             "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); "
             "@(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,"
-            "CommandLine,@{n='Started';e={$_.CreationDate.ToUniversalTime().Ticks.ToString()}}) "
+            "CommandLine,@{n='Started';e={if ($_.CreationDate) {"
+            "$_.CreationDate.ToUniversalTime().Ticks.ToString()} else {''}}}) "
             "| ConvertTo-Json -Compress")
         rows = json.loads(data)
         return [Process(int(p["ProcessId"]), int(p["ParentProcessId"]), str(p["Started"]),

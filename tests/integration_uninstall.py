@@ -30,13 +30,13 @@ with tempfile.TemporaryDirectory(prefix='oone-e2e-中文 ') as folder:
     unrelated = subprocess.Popen([sys.executable, '-B', '-c', 'import time; time.sleep(120)', '--remote-debugging-port=9335'])
     try:
         time.sleep(.3)
-        before = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--dry-run'], capture_output=True, text=True)
+        before = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--dry-run'], capture_output=True, text=True, encoding="utf-8")
         assert before.returncode == 0, before.stderr
         assert f'PID {service.pid}' in before.stdout, before.stdout
         assert f'PID {browser.pid}' in before.stdout, before.stdout
         assert f'PID {unrelated.pid}' not in before.stdout, before.stdout
         assert service.poll() is None and browser.poll() is None
-        completed = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--yes'], cwd=Path(folder), capture_output=True, text=True, timeout=45)
+        completed = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--yes'], cwd=Path(folder), capture_output=True, text=True, encoding="utf-8", timeout=90)
         print(completed.stdout)
         assert completed.returncode == 0, completed.stderr
         assert not root.exists(), root

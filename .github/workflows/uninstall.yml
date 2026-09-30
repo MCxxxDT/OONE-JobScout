@@ -1,6 +1,7 @@
 name: Uninstaller safety
 on:
   push:
+    branches: [main]
     paths:
       - 'boss_apply/uninstall.py'
       - 'tests/*uninstall*'
@@ -15,6 +16,7 @@ on:
 jobs:
   disposable-installation:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
