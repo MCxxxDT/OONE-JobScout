@@ -7,12 +7,12 @@ cd /d "%TEMP%"
 where py >nul 2>&1
 if not errorlevel 1 (
     py -3 -B "%OONE_ROOT%boss_apply\uninstall.py" --root "%OONE_ROOT%." %*
-    goto done
+    exit /b
 )
 where python >nul 2>&1
 if not errorlevel 1 (
     python -B "%OONE_ROOT%boss_apply\uninstall.py" --root "%OONE_ROOT%." %*
-    goto done
+    exit /b
 )
 if exist "%OONE_ROOT%.venv\Scripts\python.exe" (
     for /f "usebackq delims=" %%P in (`"%OONE_ROOT%.venv\Scripts\python.exe" -c "import sys; print(sys._base_executable)"`) do set "OONE_BASE_PY=%%P"
@@ -24,12 +24,7 @@ exit /b 1
 :base_python
 if defined OONE_BASE_PY (
     "%OONE_BASE_PY%" -B "%OONE_ROOT%boss_apply\uninstall.py" --root "%OONE_ROOT%." %*
-    goto done
+    exit /b
 )
 echo [失败] 无法定位安装目录外的基础 Python。
 exit /b 1
-:done
-set "OONE_RESULT=%ERRORLEVEL%"
-echo.
-pause
-exit /b %OONE_RESULT%

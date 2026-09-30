@@ -7,6 +7,9 @@ import sys
 import tempfile
 import time
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 source = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
 with tempfile.TemporaryDirectory(prefix='oone-e2e-中文 ') as folder:
     root = Path(folder).resolve() / 'project with spaces'
@@ -22,6 +25,7 @@ with tempfile.TemporaryDirectory(prefix='oone-e2e-中文 ') as folder:
     (root / 'state/browser-profile/Cookies').write_text('fixture only')
     (root / 'config.local.json').write_text('fixture only')
     shutil.copyfile(source / 'boss_apply/uninstall.py', root / 'boss_apply/uninstall.py')
+    shutil.copyfile(source / 'uninstall.bat', root / 'uninstall.bat')
     subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(root / '.venv')], check=True)
     python = root / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     service = subprocess.Popen([str(python), '-B', '-m', 'boss_apply.fixture_service'], cwd=root)
@@ -41,7 +45,13 @@ with tempfile.TemporaryDirectory(prefix='oone-e2e-中文 ') as folder:
             blocked = subprocess.run([str(python), '-B', str(root / 'boss_apply/uninstall.py'), '--yes'], capture_output=True, text=True, encoding='utf-8')
             assert blocked.returncode == 1, blocked.stdout + blocked.stderr
             assert root.exists() and service.poll() is None
-        completed = subprocess.run([runner, '-B', str(root / 'boss_apply/uninstall.py'), '--yes'], cwd=Path(folder), capture_output=True, text=True, encoding="utf-8", timeout=90)
+        if os.name == "nt":
+            # Exercise the real double-click launcher; it must keep cmd outside
+            # the removed tree and use an external Python. No console input.
+            command = f'cmd.exe /d /s /c ""{root / "uninstall.bat"}" --yes"'
+        else:
+            command = [runner, '-B', str(root / 'boss_apply/uninstall.py'), '--yes']
+        completed = subprocess.run(command, cwd=Path(folder), stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", timeout=90)
         print(completed.stdout)
         assert completed.returncode == 0, completed.stderr
         assert not root.exists(), root
