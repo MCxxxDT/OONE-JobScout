@@ -1,4 +1,5 @@
 """Uninstaller tests use disposable installations, never the user's app/data."""
+import ast
 import contextlib
 import io
 import os
@@ -9,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from boss_apply import uninstall as u
 
@@ -141,10 +143,22 @@ class UninstallTests(unittest.TestCase):
                 u.matches(plan, set())
         self.assertTrue(self.root.exists())
 
+    def test_latest_console_launcher_uses_dedicated_visible_profile(self):
+        module = ast.parse((u.SOURCE / 'scripts/approval_web.py').read_text(encoding='utf-8'))
+        function = next(n for n in module.body if isinstance(n, ast.FunctionDef) and
+                        n.name == '_launch_browser_when_ready')
+        namespace = {'os': os, 'cfgmod': SimpleNamespace(STATE_DIR=str(self.root / 'state'))}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), '<console launcher>', 'exec'), namespace)
+        with patch('socket.create_connection'), patch('subprocess.Popen') as spawn, patch('os.path.exists', return_value=True), patch('os.makedirs') as mkdir:
+            namespace['_launch_browser_when_ready'](8788, 'fixture-token')
+        expected = str(self.root / 'state/console-profile')
+        self.assertIn('--user-data-dir=' + expected, spawn.call_args.args[0])
+        mkdir.assert_called_once_with(expected, exist_ok=True)
+
     def test_stop_descendants_and_exclude_uninstaller(self):
         plan = u.make_plan(self.root)
         parent = u.Process(10, 1, 'start', ('python', '-m', 'boss_apply.web_server'), str(self.root))
-        child = u.Process(11, 10, 'start', ('cloudflared', 'tunnel'))
+        child = u.Process(11, 10, 'start', ('python', '-m', 'boss_apply.web_server'))
         unrelated = u.Process(12, 1, 'start', ('cloudflared', 'tunnel'))
         with patch.object(u, 'processes', return_value=[parent, child, unrelated]):
             self.assertEqual({p.pid for p in u.matches(plan, set())}, {10, 11})

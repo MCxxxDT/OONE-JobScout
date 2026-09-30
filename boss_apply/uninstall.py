@@ -144,9 +144,10 @@ def make_plan(root: Path | None, legacy: bool = False, uv_tools: bool = False) -
                 sensitive = path / name
                 if is_link(sensitive) and not any(inside(sensitive.resolve(), p) for p in source_roots):
                     plan.warnings.append(f"外部数据链接目标保留: {sensitive} -> {sensitive.resolve()}")
-            profile = path / "state" / "browser-profile"
-            if is_link(profile) and not inside(profile.resolve(), path):
-                plan.warnings.append(f"外部浏览器数据链接目标保留: {profile.resolve()}")
+            for name in ("browser-profile", "console-profile"):
+                profile = path / "state" / name
+                if is_link(profile) and not inside(profile.resolve(), path):
+                    plan.warnings.append(f"外部浏览器数据链接目标保留: {profile.resolve()}")
     old_profile = Path.home() / "chrome-cdp-profile"
     if os.path.lexists(old_profile):
         if legacy:
@@ -325,14 +326,6 @@ def owned(process: Process, plan: Plan) -> bool:
 
 def matches(plan: Plan, exclude: set[int]) -> list[Process]:
     table = processes()
-    for p in table:
-        if p.pid in exclude or owned(p, plan) or p.cwd:
-            continue
-        if "-m" in p.argv:
-            index = p.argv.index("-m")
-            if index + 1 < len(p.argv) and p.argv[index + 1].startswith("boss_apply."):
-                raise UninstallError(f"PID {p.pid} 正在运行 boss_apply，但无法确定安装归属。"
-                                     "请先关闭该服务再卸载；不会按端口或模块名猜测并终止。")
     selected = {p.pid for p in table if p.pid not in exclude and owned(p, plan)}
     # Tunnel and browser helpers are descendants of an identified project process.
     changed = True
@@ -342,6 +335,14 @@ def matches(plan: Plan, exclude: set[int]) -> list[Process]:
             if p.parent in selected and p.pid not in selected and p.pid not in exclude:
                 selected.add(p.pid)
                 changed = True
+    for p in table:
+        if p.pid in exclude or p.pid in selected or p.cwd:
+            continue
+        if "-m" in p.argv:
+            index = p.argv.index("-m")
+            if index + 1 < len(p.argv) and p.argv[index + 1].startswith("boss_apply."):
+                raise UninstallError(f"PID {p.pid} 正在运行 boss_apply，但无法确定安装归属。"
+                                     "请先关闭该服务再卸载；不会按端口或模块名猜测并终止。")
     return [p for p in table if p.pid in selected]
 
 
