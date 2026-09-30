@@ -162,7 +162,7 @@ class UninstallTests(unittest.TestCase):
         unrelated = u.Process(12, 1, 'start', ('cloudflared', 'tunnel'))
         with patch.object(u, 'processes', return_value=[parent, child, unrelated]):
             self.assertEqual({p.pid for p in u.matches(plan, set())}, {10, 11})
-            self.assertEqual(u.matches(plan, {10}), [])
+            self.assertEqual(u.matches(plan, {10, 11}), [])
 
     def test_pid_reuse_is_not_killed(self):
         old = u.Process(123, 1, 'old', ('python',))
