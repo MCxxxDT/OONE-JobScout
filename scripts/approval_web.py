@@ -10972,7 +10972,9 @@ def _launch_browser_when_ready(port: int, token: str):
     for p in candidates:
         if os.path.exists(p):
             try:
-                subprocess.Popen([p, f"--app={url}"])
+                profile_dir = os.path.join(cfgmod.STATE_DIR, "console-profile")
+                os.makedirs(profile_dir, exist_ok=True)
+                subprocess.Popen([p, f"--user-data-dir={profile_dir}", f"--app={url}"])
                 return
             except Exception:
                 pass

@@ -72,9 +72,9 @@ echo "[访问] $WEB_URL"
 echo ""
 
 if [ -d "/Applications/Google Chrome.app" ]; then
-    open -na "Google Chrome" --args --app="$WEB_URL" || true
+    open -na "Google Chrome" --args --user-data-dir="$ROOT_DIR/state/console-profile" --app="$WEB_URL" || true
 elif [ -d "/Applications/Microsoft Edge.app" ]; then
-    open -na "Microsoft Edge" --args --app="$WEB_URL" || true
+    open -na "Microsoft Edge" --args --user-data-dir="$ROOT_DIR/state/console-profile" --app="$WEB_URL" || true
 elif command -v open >/dev/null 2>&1; then
     open "$WEB_URL" || true
 elif command -v xdg-open >/dev/null 2>&1; then

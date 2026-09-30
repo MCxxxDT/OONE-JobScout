@@ -34,3 +34,6 @@ state_dryrun/
 .worktrees/
 worktrees/
 
+# 项目专属浏览器登录数据
+state/browser-profile/
+state/console-profile/
